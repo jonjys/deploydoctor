@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DeployDoctor
 
-## Getting Started
+DeployDoctor scans a public GitHub repository for five common Vercel deployment failures and saves a shareable report in Supabase. It reads repository metadata and files through the GitHub REST API; it does not clone, install, build, or execute the target repository.
 
-First, run the development server:
+## Checks
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+1. Next.js is declared but no `app/` or `pages/` route folder exists.
+2. Relative or `@/` imports point to files missing from the repository tree.
+3. Playwright, Puppeteer, SQLite bindings, or filesystem writes appear in API routes.
+4. `process.env` variables are undocumented or secret-looking values use `NEXT_PUBLIC_`.
+5. Supabase browser clients cross into server code or a service role key crosses into client code.
+
+## Local setup
+
+Requirements: Node.js 22+, npm, and a Supabase project.
+
+```powershell
+npm install
+Copy-Item .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Fill in the four values in `.env.local`. `GITHUB_TOKEN` is optional, but raises GitHub's API limit and allows a broader source scan. Supabase's URL and publishable key are public values; keep `SUPABASE_SECRET_KEY` private.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Apply [`supabase/migrations/20260926072909_create_reports.sql`](supabase/migrations/20260926072909_create_reports.sql) to the Supabase project, then run:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```powershell
+npm run dev
+```
 
-## Learn More
+Open `http://localhost:3000`, paste a public GitHub repository URL, and the API will analyze and persist the report before redirecting to `/r/[id]`.
 
-To learn more about Next.js, take a look at the following resources:
+## Verification
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```powershell
+npm test
+npm run lint
+npm run build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The fixture test confirms that `https://github.com/manasvmoon/post-image-generator`'s current shape triggers checks 1 and 3 as red.
 
-## Deploy on Vercel
+## Vercel preview
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Add all four variables to the Preview environment, then deploy without `--prod`:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```powershell
+npx.cmd vercel@50.16.1 login
+npx.cmd vercel@50.16.1 link --yes
+npx.cmd vercel@50.16.1 env add GITHUB_TOKEN preview
+npx.cmd vercel@50.16.1 env add NEXT_PUBLIC_SUPABASE_URL preview
+npx.cmd vercel@50.16.1 env add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY preview
+npx.cmd vercel@50.16.1 env add SUPABASE_SECRET_KEY preview
+npx.cmd vercel@50.16.1 deploy --yes
+```
