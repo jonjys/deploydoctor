@@ -1,5 +1,6 @@
 import { RepoForm } from "@/components/repo-form";
 import Link from "next/link";
+import { activePlan, customerSession } from "@/lib/access";
 
 const checks = [
   "Next.js entrypoint",
@@ -18,7 +19,8 @@ function PulseMark() {
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  const plan = await activePlan(await customerSession());
   return (
     <main className="site-shell home-page">
       <nav className="topbar" aria-label="Primary navigation">
@@ -26,9 +28,7 @@ export default function Home() {
           <PulseMark />
           <span>DeployDoctor</span>
         </Link>
-        <span className="nav-note">
-          <span className="status-dot" /> GitHub repository preflight
-        </span>
+        <div className="nav-links"><Link href="/pricing">Pricing</Link><Link href="/account">My scans</Link></div>
       </nav>
 
       <section className="hero">
@@ -42,11 +42,11 @@ export default function Home() {
           most likely to fail after your push—without cloning or building it.
         </p>
 
-        <RepoForm />
+        <RepoForm privateAccess={plan?.plan === "private"} />
 
         <div className="trust-row" aria-label="Scanner characteristics">
           <span>
-            <span className="mini-check">✓</span> Public repos only
+            <span className="mini-check">✓</span> {plan ? "Unlimited scans" : "3 free scans / day"}
           </span>
           <span>
             <span className="mini-check">✓</span> No code execution

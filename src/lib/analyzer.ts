@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { CheckResult, CheckStatus, ReportResults } from "@/types/report";
+import type { CheckResult, CheckStatus, ReportResults, Finding } from "@/types/report";
 
 export type RepositorySnapshot = {
   owner: string;
@@ -10,6 +10,7 @@ export type RepositorySnapshot = {
   sourceFilesFound: number;
   sourceFilesRead: number;
   partial: boolean;
+  partialReasons?: string[];
 };
 
 const SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?|vue|svelte)$/i;
@@ -46,8 +47,22 @@ function makeCheck(
   explanation: string,
   fix: string,
   evidence: string[] = [],
+  findings: Finding[] = [],
 ): CheckResult {
-  return { id, title, status, explanation, fix, evidence: evidence.slice(0, 8) };
+  return { id, title, status, explanation, fix, evidence: evidence.slice(0, 8), findings };
+}
+
+function lineAt(source: string, index: number) { return source.slice(0, index).split("\n").length; }
+function shellQuote(value: string) { return "'" + value.replaceAll("'", "'\\''") + "'"; }
+function partialFix(snapshot: RepositorySnapshot) {
+  return !snapshot.partialReasons?.length || snapshot.partialReasons.includes("rate_limit")
+    ? "Lägg till GITHUB_TOKEN i Vercel > Settings > Environment Variables, deploya om och skanna igen."
+    : "Skanna igen; stora filer och stora repon kan behöva kontrolleras manuellt.";
+}
+function partialMessage(snapshot: RepositorySnapshot) {
+  const cause = snapshot.partialReasons?.includes("rate_limit") ? "sedan stoppade GitHub oss (rate limit)"
+    : "sedan nådde vi en fil-, tids- eller läsgräns";
+  return `Vi läste ${snapshot.sourceFilesRead} av ${snapshot.sourceFilesFound} filer; ${cause}.`;
 }
 
 function parsePackageJson(snapshot: RepositorySnapshot) {
@@ -99,28 +114,35 @@ function checkNextEntrypoint(snapshot: RepositorySnapshot): CheckResult {
     "Next.js entrypoint",
     "green",
     hasNext
-      ? "Next.js and a supported app/ or pages/ route folder are both present."
+      ? "✅ Next.js entrypoint found - no change needed"
       : "The root package.json does not declare Next.js, so this Next.js-specific failure does not apply.",
     "No change is needed for this check.",
     hasNext ? ["package.json → next", "Route folder found"] : [],
   );
 }
 
-function extractImports(source: string): string[] {
-  const imports = new Set<string>();
+function extractImports(source: string): Array<{ specifier: string; line: number }> {
+  const imports = new Map<string, { specifier: string; line: number }>();
   const staticImport = /(?:import|export)\s+(?:type\s+)?(?:[^"'`;]*?\s+from\s+)?["']([^"']+)["']/g;
   const callImport = /(?:require|import)\(\s*["']([^"']+)["']\s*\)/g;
 
   for (const matcher of [staticImport, callImport]) {
     let match: RegExpExecArray | null;
-    while ((match = matcher.exec(source))) imports.add(match[1]);
+    while ((match = matcher.exec(source))) {
+      const line = lineAt(source, match.index);
+      imports.set(`${line}:${match[1]}`, { specifier: match[1], line });
+    }
   }
-  return [...imports];
+  return [...imports.values()];
 }
 
 function possibleImportTargets(base: string): string[] {
   const clean = path.posix.normalize(base).replace(/^\.\//, "");
   const targets = [clean];
+  if (/\.[cm]?jsx?$/.test(clean)) {
+    targets.push(clean.replace(/\.js$/, ".ts"), clean.replace(/\.js$/, ".tsx"),
+      clean.replace(/\.mjs$/, ".mts"), clean.replace(/\.cjs$/, ".cts"), clean.replace(/\.jsx$/, ".tsx"));
+  }
   for (const extension of RESOLVABLE_EXTENSIONS) {
     targets.push(`${clean}${extension}`, `${clean}/index${extension}`);
   }
@@ -137,13 +159,14 @@ function aliasRoots(snapshot: RepositorySnapshot): string[] {
 function checkImports(snapshot: RepositorySnapshot): CheckResult {
   const files = new Set(snapshot.entries.filter((entry) => entry.type === "blob").map((entry) => entry.path));
   const aliases = aliasRoots(snapshot);
-  const missing = new Set<string>();
+  const missing: Finding[] = [];
 
   for (const [file, source] of snapshot.contents) {
     // next-env.d.ts intentionally references generated .next type files that are gitignored.
     if (!SOURCE_EXTENSION.test(file) || path.posix.basename(file) === "next-env.d.ts") continue;
 
-    for (const specifier of extractImports(source)) {
+    for (const { specifier: original, line } of extractImports(source)) {
+      const specifier = original.split(/[?#]/)[0];
       let candidates: string[] = [];
       if (specifier.startsWith("./") || specifier.startsWith("../")) {
         candidates = possibleImportTargets(path.posix.join(path.posix.dirname(file), specifier));
@@ -156,19 +179,22 @@ function checkImports(snapshot: RepositorySnapshot): CheckResult {
       }
 
       if (!candidates.some((candidate) => files.has(candidate))) {
-        missing.add(`${file} → ${specifier}`);
+        const target = candidates[0];
+        missing.push({ file, line, problem: `imports ${original} which doesn't exist in the repository`,
+          fix: `Lägg till ${target} om filen finns lokalt, eller ändra importen på rad ${line} till filens riktiga plats.`,
+          command: `git add -- ${shellQuote(target)}` });
       }
     }
   }
 
-  if (missing.size) {
+  if (missing.length) {
     return makeCheck(
       "imports",
       "Broken imports",
       "red",
-      `${missing.size} local import${missing.size === 1 ? "" : "s"} point to files that do not exist in the repository tree.`,
-      "Correct each import path or commit the missing file, preserving filename casing for Vercel's Linux filesystem.",
-      [...missing],
+      `${missing.length} import${missing.length === 1 ? "" : "er"} pekar på filer som saknas i GitHub-repot.`,
+      missing[0].fix,
+      missing.map((item) => `${item.file}:${item.line} → ${item.problem}`), missing,
     );
   }
 
@@ -177,8 +203,8 @@ function checkImports(snapshot: RepositorySnapshot): CheckResult {
       "imports",
       "Broken imports",
       "yellow",
-      "No broken local imports were found in the files read, but GitHub limits prevented a complete source scan.",
-      "Add GITHUB_TOKEN for a higher API limit and run the report again to scan more source files.",
+      partialMessage(snapshot),
+      partialFix(snapshot),
       [`Read ${snapshot.sourceFilesRead} of ${snapshot.sourceFilesFound} source files`],
     );
   }
@@ -228,8 +254,8 @@ function checkServerLibraries(snapshot: RepositorySnapshot): CheckResult {
       "server-libs",
       "Vercel-incompatible server code",
       "yellow",
-      "No risky server package was declared, but not every API route could be inspected for filesystem writes.",
-      "Add GITHUB_TOKEN and rescan, then replace any API-route filesystem writes with object storage.",
+      "Inga farliga paket hittade hittills, men vi kunde inte kolla alla API-routes.",
+      partialFix(snapshot),
     );
   }
 
@@ -246,6 +272,7 @@ function checkEnvironment(snapshot: RepositorySnapshot): CheckResult {
   const declared = new Set<string>();
   const used = new Set<string>();
   const exposed = new Set<string>();
+  const locations = new Map<string, { file: string; line: number }>();
 
   for (const [file, source] of snapshot.contents) {
     if (/(?:^|\/)\.env(?:\..+)?$/.test(file)) {
@@ -262,6 +289,7 @@ function checkEnvironment(snapshot: RepositorySnapshot): CheckResult {
     while ((match = envMatcher.exec(source))) {
       const name = match[1] || match[2];
       used.add(name);
+      if (!locations.has(name)) locations.set(name, { file, line: lineAt(source, match.index) });
       if (/^NEXT_PUBLIC_.*(?:SECRET|SERVICE_ROLE|PRIVATE|PASSWORD|TOKEN|ADMIN|DATABASE_URL)/.test(name)) {
         exposed.add(name);
       }
@@ -279,9 +307,15 @@ function checkEnvironment(snapshot: RepositorySnapshot): CheckResult {
       "env",
       "Environment variables",
       "red",
-      `${missing.length} environment variable${missing.length === 1 ? " is" : "s are"} undocumented and ${exposed.size} potentially secret variable${exposed.size === 1 ? " is" : "s are"} exposed to the browser.`,
-      "Document every required variable in .env.example and remove NEXT_PUBLIC_ from secrets before adding them to Vercel.",
+      [missing.length ? `${missing.length} env-variabler saknas i .env.example: ${missing.join(", ")}` : "",
+        exposed.size ? `${exposed.size} möjliga hemligheter exponeras i webbläsaren: ${[...exposed].join(", ")}` : ""].filter(Boolean).join("; ") + ".",
+      [missing.length ? `Lägg till tomma rader i .env.example i root: ${missing.map((name) => `${name}=`).join(" och ")}; pusha filen` : "",
+        exposed.size ? "ta bort NEXT_PUBLIC_ från hemligheterna och rotera exponerade nycklar" : ""].filter(Boolean).join("; ") + ".",
       evidence,
+      [...missing.map((name) => ({ ...locations.get(name)!, problem: `${name} saknas i .env.example`,
+        fix: `Lägg till ${name}= (tomt) i .env.example; sätt värdet privat i Vercel.`, command: "git add -- .env.example" })),
+        ...[...exposed].map((name) => ({ ...locations.get(name)!, problem: `${name} kan exponera en hemlighet`,
+          fix: `Använd ${name.replace(/^NEXT_PUBLIC_/, "")} enbart på servern och rotera den gamla nyckeln.` }))],
     );
   }
 
@@ -290,8 +324,8 @@ function checkEnvironment(snapshot: RepositorySnapshot): CheckResult {
       "env",
       "Environment variables",
       "yellow",
-      "The scanned variables are documented and server-safe, but the source scan was incomplete.",
-      "Add GITHUB_TOKEN and rescan to verify environment usage across the entire repository.",
+      "De env-variabler vi läste är dokumenterade, men scannen blev inte klar.",
+      partialFix(snapshot),
     );
   }
 
@@ -344,8 +378,8 @@ function checkSupabase(snapshot: RepositorySnapshot): CheckResult {
       "supabase",
       "Supabase server/client boundaries",
       "yellow",
-      "No Supabase boundary violation was found in the files read, but the source scan was incomplete.",
-      "Add GITHUB_TOKEN and rescan to verify every server and Client Component boundary.",
+      "Ingen Supabase-förväxling hittad, men scannen blev inte klar.",
+      partialFix(snapshot),
     );
   }
 
@@ -383,6 +417,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot): ReportResults {
       sourceFilesFound: snapshot.sourceFilesFound,
       sourceFilesRead: snapshot.sourceFilesRead,
       partial: snapshot.partial,
+      reasons: snapshot.partialReasons,
     },
     summary,
     overall: summary.red ? "red" : summary.yellow ? "yellow" : "green",

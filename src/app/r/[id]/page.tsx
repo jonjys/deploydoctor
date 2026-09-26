@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CopyFixesButton } from "@/components/copy-fixes-button";
 import { getReport } from "@/lib/reports";
 import type { CheckStatus } from "@/types/report";
+import { freeFixInstructions } from "@/lib/fix-instructions";
 
 const statusLabels: Record<CheckStatus, string> = {
   red: "Fail",
@@ -24,6 +25,7 @@ export async function generateMetadata({ params }: PageProps<"/r/[id]">): Promis
   return {
     title: `${report.results.repository.owner}/${report.results.repository.name} report — DeployDoctor`,
     description: `Vercel readiness report with ${report.results.summary.red} failed checks.`,
+    robots: { index: false, follow: false },
   };
 }
 
@@ -34,15 +36,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
 
   const { results } = report;
   const repoName = `${results.repository.owner}/${results.repository.name}`;
-  const fixes = results.checks
-    .filter((check) => check.status !== "green")
-    .map((check, index) => `${index + 1}. ${check.title}\n${check.fix}`)
-    .join("\n\n");
-  const instructions = [
-    `DeployDoctor fix instructions for ${report.repo_url}`,
-    "",
-    fixes || "All five checks passed; no fixes are required.",
-  ].join("\n");
+  const instructions = freeFixInstructions(report);
   const overallLabel =
     results.overall === "red"
       ? `${results.summary.red} ${results.summary.red === 1 ? "issue" : "issues"} to fix`
@@ -61,7 +55,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <span>DeployDoctor</span>
         </Link>
         <span className="nav-note">
-          <span className="status-dot" /> Saved report
+          <span className="status-dot" /> {report.is_private ? "Private report" : "Saved report · free to view"}
         </span>
       </nav>
 
@@ -114,6 +108,10 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
               <div className="fix-box">
                 <strong>Suggested fix:</strong> {check.fix}
               </div>
+              {check.status === "red" && <div className="repair-cta"><p>Vill du att vi fixar det?</p>
+                <Link href={`/checkout?plan=fix-one&report=${id}&check=${check.id}`}>Fixa den här $5</Link>
+                <Link href={`/checkout?plan=fix-all&report=${id}`}>Fixa allt $25</Link>
+              </div>}
             </div>
           </article>
         ))}
@@ -122,18 +120,16 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
       <section className="report-actions" aria-labelledby="action-heading">
         <div>
           <h2 id="action-heading">Want the red flags gone?</h2>
-          <p>Take the instructions or hand the repair off.</p>
+          <p>Exakta filer och steg är gratis. Beställ en kodpatch efter manuell granskning.</p>
         </div>
         <div className="action-buttons">
           <CopyFixesButton instructions={instructions} />
-          <a
+          {results.summary.red > 0 && <Link
             className="cta-button"
-            href="https://buy.stripe.com/5kQfZgcul1gy26cdzn8og1f"
-            target="_blank"
-            rel="noreferrer"
+            href={`/checkout?plan=fix-all&report=${id}`}
           >
-            Fix it for me – $15
-          </a>
+            Fixa allt $25
+          </Link>}
         </div>
       </section>
     </main>

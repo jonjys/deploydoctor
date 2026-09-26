@@ -1,22 +1,43 @@
-import { analyzeGitHubRepository, GitHubApiError } from "@/lib/github";
+import { analyzeGitHubRepository, GitHubApiError, parseGitHubRepoUrl } from "@/lib/github";
 import { saveReport } from "@/lib/reports";
+import { activePlan, customerSession, finishScan, reserveScan } from "@/lib/access";
+import { sameOrigin } from "@/lib/stripe";
 
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  if (!sameOrigin(request)) return Response.json({ error: "Invalid origin." }, { status: 403 });
+  let reservation: string | undefined;
+  let saved = false;
   try {
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 10_000) {
       return Response.json({ error: "Request body is too large." }, { status: 413 });
     }
 
-    const body = (await request.json()) as { repoUrl?: unknown };
+    const raw = await request.text();
+    if (raw.length > 10_000) return Response.json({ error: "Request body is too large." }, { status: 413 });
+    const body = JSON.parse(raw) as { repoUrl?: unknown; privateToken?: unknown };
     if (typeof body.repoUrl !== "string" || body.repoUrl.length > 300) {
       return Response.json({ error: "Enter a public GitHub repository URL." }, { status: 400 });
     }
 
-    const { canonicalUrl, results } = await analyzeGitHubRepository(body.repoUrl);
-    const report = await saveReport(canonicalUrl, results);
+    parseGitHubRepoUrl(body.repoUrl);
+    const customer = await customerSession();
+    const plan = await activePlan(customer);
+    const privateToken = typeof body.privateToken === "string" ? body.privateToken.trim() : undefined;
+    if (privateToken && (plan?.plan !== "private" || privateToken.length > 300)) {
+      return Response.json({ error: "Privata repon kräver Private ($19/månad).", paywall: true }, { status: 402 });
+    }
+    if (!plan) {
+      const quota = await reserveScan(request);
+      if (!quota.allowed) return Response.json({ error: "Du har använt dagens 3 gratis skanningar. Dina sparade rapporter är fortfarande gratis att läsa.",
+        paywall: true, resetsAt: quota.resetsAt }, { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((Date.parse(quota.resetsAt) - Date.now()) / 1000))) } });
+      reservation = quota.id;
+    }
+    const { canonicalUrl, results, isPrivate } = await analyzeGitHubRepository(body.repoUrl, { privateToken });
+    const report = await saveReport(canonicalUrl, results, customer?.customerId, isPrivate);
+    saved = true;
     return Response.json({ id: report.id, href: `/r/${report.id}` }, { status: 201 });
   } catch (error) {
     if (error instanceof SyntaxError) {
@@ -29,10 +50,12 @@ export async function POST(request: Request) {
       return Response.json({ error: "The repository scan timed out; try again." }, { status: 504 });
     }
 
-    console.error("Report generation failed:", error);
+    console.error("Report generation failed:", error instanceof Error ? error.name : "unknown");
     return Response.json(
-      { error: error instanceof Error ? error.message : "The report could not be generated." },
+      { error: "Skanningen kunde inte sparas just nu; försök igen. Den räknas inte mot din gräns." },
       { status: 500 },
     );
+  } finally {
+    if (reservation) await finishScan(reservation, saved).catch(() => console.error("Quota completion failed"));
   }
 }

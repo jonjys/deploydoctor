@@ -69,8 +69,7 @@ export function parseGitHubRepoUrl(input: string): {
   return { owner, name, canonicalUrl: `https://github.com/${owner}/${name}` };
 }
 
-async function githubRequest<T>(pathname: string): Promise<T> {
-  const token = process.env.GITHUB_TOKEN;
+async function githubRequest<T>(pathname: string, token?: string): Promise<T> {
   const response = await fetch(`${GITHUB_API}${pathname}`, {
     headers: {
       Accept: "application/vnd.github+json",
@@ -104,19 +103,21 @@ function priorityFor(pathname: string): number {
   return 5;
 }
 
-export async function analyzeGitHubRepository(repoUrl: string): Promise<{
+export async function analyzeGitHubRepository(repoUrl: string, options: { privateToken?: string } = {}): Promise<{
   canonicalUrl: string;
   results: ReportResults;
+  isPrivate: boolean;
 }> {
   const { owner, name, canonicalUrl } = parseGitHubRepoUrl(repoUrl);
   const repoPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
-  const repository = await githubRequest<GitHubRepository>(repoPath);
-  if (repository.private) {
+  const token = options.privateToken || process.env.GITHUB_TOKEN;
+  const repository = await githubRequest<GitHubRepository>(repoPath, token);
+  if (repository.private && !options.privateToken) {
     throw new GitHubApiError("DeployDoctor only scans public repositories.", 400);
   }
 
   const tree = await githubRequest<GitTree>(
-    `${repoPath}/git/trees/${encodeURIComponent(repository.default_branch)}?recursive=1`,
+    `${repoPath}/git/trees/${encodeURIComponent(repository.default_branch)}?recursive=1`, token,
   );
   const entries = tree.tree
     .filter((entry): entry is typeof entry & { type: "blob" | "tree" } =>
@@ -137,21 +138,29 @@ export async function analyzeGitHubRepository(repoUrl: string): Promise<{
           /(?:^|\/)\.env(?:\..+)?$/.test(entry.path)),
     )
     .sort((left, right) => priorityFor(left.path) - priorityFor(right.path) || left.path.localeCompare(right.path));
-  const requestLimit = process.env.GITHUB_TOKEN ? 180 : 48;
+  const requestLimit = token ? 180 : 48;
   const selected = interesting.slice(0, requestLimit);
   const contents = new Map<string, string>();
   let readFailures = 0;
+  const reasons = new Set<string>();
+  const started = Date.now();
+  if (tree.truncated) reasons.add("truncated_tree");
+  if (interesting.length > requestLimit) reasons.add("file_limit");
+  if (sourceFiles.some((entry) => (entry.size ?? 0) > MAX_FILE_BYTES)) reasons.add("file_size");
 
   for (let start = 0; start < selected.length; start += 8) {
+    if (Date.now() - started > 35_000) { reasons.add("time_limit"); break; }
+    if (reasons.has("rate_limit")) break;
     const batch = selected.slice(start, start + 8);
     const loaded = await Promise.all(
       batch.map(async (entry) => {
         try {
-          const blob = await githubRequest<GitBlob>(`${repoPath}/git/blobs/${entry.sha}`);
+          const blob = await githubRequest<GitBlob>(`${repoPath}/git/blobs/${entry.sha}`, token);
           if (blob.encoding !== "base64") throw new Error("Unsupported blob encoding");
           return [entry.path, Buffer.from(blob.content.replace(/\n/g, ""), "base64").toString("utf8")] as const;
-        } catch {
+        } catch (error) {
           readFailures += 1;
+          reasons.add(error instanceof GitHubApiError && error.status === 429 ? "rate_limit" : "read_error");
           return null;
         }
       }),
@@ -168,6 +177,7 @@ export async function analyzeGitHubRepository(repoUrl: string): Promise<{
     contents,
     sourceFilesFound: sourceFiles.length,
     sourceFilesRead,
+    partialReasons: [...reasons],
     partial:
       tree.truncated ||
       readFailures > 0 ||
@@ -175,5 +185,5 @@ export async function analyzeGitHubRepository(repoUrl: string): Promise<{
       sourceFiles.some((entry) => (entry.size ?? 0) > MAX_FILE_BYTES),
   };
 
-  return { canonicalUrl, results: analyzeSnapshot(snapshot) };
+  return { canonicalUrl, results: analyzeSnapshot(snapshot), isPrivate: repository.private };
 }

@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 function GitHubIcon() {
   return (
@@ -14,33 +15,39 @@ function GitHubIcon() {
   );
 }
 
-export function RepoForm() {
+export function RepoForm({ privateAccess = false }: { privateAccess?: boolean }) {
   const router = useRouter();
   const [repoUrl, setRepoUrl] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [paywall, setPaywall] = useState(false);
+  const [privateToken, setPrivateToken] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setPaywall(false);
     setIsLoading(true);
 
     try {
       const response = await fetch("/api/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl }),
+        body: JSON.stringify({ repoUrl, ...(privateToken ? { privateToken } : {}) }),
       });
       const payload = (await response.json()) as {
         id?: string;
         error?: string;
+        paywall?: boolean;
       };
 
       if (!response.ok || !payload.id) {
+        setPaywall(Boolean(payload.paywall));
         throw new Error(payload.error || "The scan could not be completed.");
       }
 
       router.push(`/r/${payload.id}`);
+      setPrivateToken("");
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -75,11 +82,20 @@ export function RepoForm() {
           <span aria-hidden="true">→</span>
         </button>
       </div>
+      {privateAccess && <details className="private-input"><summary>Skanna ett privat repo</summary>
+        <label htmlFor="private-token">GitHub-token för just det här repot (Contents: read)</label>
+        <input id="private-token" type="password" autoComplete="off" value={privateToken} onChange={(event) => setPrivateToken(event.target.value)} />
+        <p>Nyckeln används bara för denna skanning och sparas aldrig. Privata rapporter kan bara läsas i din betalningssession.</p>
+      </details>}
       {error ? (
         <p className="form-error" role="alert">
           {error}
         </p>
       ) : null}
+      {paywall && <div className="paywall" role="status"><strong>Fortsätt från $5</strong>
+        <p>7 dagar med obegränsade publika skanningar, eller vänta tills gränsen återställs vid midnatt UTC.</p>
+        <Link className="cta-button" href="/pricing">Se priser →</Link>
+      </div>}
     </form>
   );
 }

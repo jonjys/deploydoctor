@@ -1,4 +1,5 @@
 export type CheckStatus = "red" | "yellow" | "green";
+export type Finding = { file: string; line: number; problem: string; fix: string; command?: string };
 
 export type CheckResult = {
   id: "next-entry" | "imports" | "server-libs" | "env" | "supabase";
@@ -7,6 +8,7 @@ export type CheckResult = {
   explanation: string;
   fix: string;
   evidence: string[];
+  findings?: Finding[];
 };
 
 export type ReportResults = {
@@ -21,6 +23,7 @@ export type ReportResults = {
     sourceFilesFound: number;
     sourceFilesRead: number;
     partial: boolean;
+    reasons?: string[];
   };
   summary: Record<CheckStatus, number>;
   overall: CheckStatus;
@@ -32,4 +35,5 @@ export type StoredReport = {
   repo_url: string;
   results: ReportResults;
   created_at: string;
+  is_private?: boolean;
 };
