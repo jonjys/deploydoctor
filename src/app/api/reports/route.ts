@@ -2,6 +2,7 @@ import { analyzeGitHubRepository, GitHubApiError, parseGitHubRepoUrl } from "@/l
 import { saveReport } from "@/lib/reports";
 import { activePlan, customerSession, finishScan, reserveScan } from "@/lib/access";
 import { sameOrigin } from "@/lib/stripe";
+import { parseChecks } from "@/lib/categories";
 
 export const maxDuration = 60;
 
@@ -17,12 +18,15 @@ export async function POST(request: Request) {
 
     const raw = await request.text();
     if (raw.length > 10_000) return Response.json({ error: "Request body is too large." }, { status: 413 });
-    const body = JSON.parse(raw) as { repoUrl?: unknown; privateToken?: unknown };
+    const body = JSON.parse(raw) as { repoUrl?: unknown; privateToken?: unknown; checks?: unknown };
     if (typeof body.repoUrl !== "string" || body.repoUrl.length > 300) {
       return Response.json({ error: "Enter a public GitHub repository URL." }, { status: 400 });
     }
 
     parseGitHubRepoUrl(body.repoUrl);
+    // Validate before reserving a scan so a bad payload never costs one of the day's free scans.
+    const checks = parseChecks(body.checks);
+    if (checks === null) return Response.json({ error: "Välj minst en giltig kategori att skanna." }, { status: 400 });
     const customer = await customerSession();
     const plan = await activePlan(customer);
     const privateToken = typeof body.privateToken === "string" ? body.privateToken.trim() : undefined;
@@ -35,7 +39,7 @@ export async function POST(request: Request) {
         paywall: true, resetsAt: quota.resetsAt }, { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((Date.parse(quota.resetsAt) - Date.now()) / 1000))) } });
       reservation = quota.id;
     }
-    const { canonicalUrl, results, isPrivate } = await analyzeGitHubRepository(body.repoUrl, { privateToken });
+    const { canonicalUrl, results, isPrivate } = await analyzeGitHubRepository(body.repoUrl, { privateToken, checks });
     const report = await saveReport(canonicalUrl, results, customer?.customerId, isPrivate);
     saved = true;
     return Response.json({ id: report.id, href: `/r/${report.id}` }, { status: 201 });

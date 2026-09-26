@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeSnapshot, type RepositorySnapshot } from "../src/lib/analyzer";
+import { parseChecks } from "../src/lib/categories";
+import { defaultChecks, describeStack, detectStack } from "../src/lib/stack";
 
 function snapshot(
   entries: RepositorySnapshot["entries"],
@@ -105,4 +107,85 @@ test("environment and Supabase client boundary violations are reported", () => {
 
   assert.equal(results.checks.find((check) => check.id === "env")?.status, "red");
   assert.equal(results.checks.find((check) => check.id === "supabase")?.status, "red");
+});
+
+const nextEntries: RepositorySnapshot["entries"] = [
+  { path: "package.json", type: "blob" },
+  { path: "app", type: "tree" },
+  { path: "app/page.tsx", type: "blob" },
+];
+const page = { "app/page.tsx": "export default function Page() { return null }" };
+const ids = (results: ReturnType<typeof analyzeSnapshot>) => results.checks.map((check) => check.id);
+
+test("without a choice, a Next.js repo without Supabase never gets a Supabase check", () => {
+  const results = analyzeSnapshot(snapshot(nextEntries, {
+    "package.json": JSON.stringify({ dependencies: { next: "14.2.0", tailwindcss: "^3" } }), ...page,
+  }));
+  assert.deepEqual(ids(results), ["next-entry", "imports", "server-libs", "env"]);
+  assert.deepEqual(results.scope, { scanned: ["next", "vercel", "env"], ignored: ["supabase", "prisma"] });
+  assert.equal(results.stack?.hasSupabase, false);
+  assert.equal(results.stack?.hasTailwind, true);
+});
+
+test("Supabase is detected from a dependency, an env template or source usage", () => {
+  const files: Record<string, string> = { ...page };
+  const variants: Array<Record<string, string>> = [
+    { "package.json": JSON.stringify({ dependencies: { next: "15.0.0", "@supabase/supabase-js": "2" } }) },
+    { "package.json": JSON.stringify({ dependencies: { next: "15.0.0" } }), ".env.example": "NEXT_PUBLIC_SUPABASE_URL=\n" },
+    { "package.json": JSON.stringify({ dependencies: { next: "15.0.0" } }), "app/page.tsx": 'import { createClient } from "@supabase/supabase-js";' },
+  ];
+  for (const extra of variants) {
+    const results = analyzeSnapshot(snapshot(nextEntries, { ...files, ...extra }));
+    assert.equal(results.stack?.hasSupabase, true);
+    assert.ok(ids(results).includes("supabase"));
+  }
+});
+
+test("explicit checks run only the selected categories and record what was ignored", () => {
+  const results = analyzeSnapshot(snapshot(nextEntries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6", "@supabase/ssr": "1" } }),
+    "app/page.tsx": 'import { createBrowserClient } from "@supabase/ssr"; export default function Page() { return null }',
+  }), { checks: ["vercel", "env"] });
+  assert.deepEqual(ids(results), ["server-libs", "env"]);
+  assert.deepEqual(results.scope?.ignored, ["next", "supabase", "prisma"]);
+  assert.equal(results.checks.every((check) => check.category), true);
+  assert.equal(results.summary.red + results.summary.yellow + results.summary.green, 2);
+});
+
+test("Prisma check flags a missing generate step and SQLite, and is skipped when unselected", () => {
+  const files = {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6", "@prisma/client": "6" }, scripts: { build: "next build" } }),
+    "prisma/schema.prisma": 'datasource db {\n  provider = "sqlite"\n  url = "file:./dev.db"\n}\n',
+    ...page,
+  };
+  const entries = [...nextEntries, { path: "prisma/schema.prisma", type: "blob" as const }];
+  const selected = analyzeSnapshot(snapshot(entries, files), { checks: ["prisma"] });
+  const prisma = selected.checks[0];
+  assert.equal(prisma.id, "prisma");
+  assert.equal(prisma.status, "red");
+  assert.equal(prisma.findings?.length, 2);
+
+  assert.ok(ids(analyzeSnapshot(snapshot(entries, files))).includes("prisma")); // auto: Prisma detected
+  const fixed = analyzeSnapshot(snapshot(entries, {
+    ...files,
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6", "@prisma/client": "6" }, scripts: { postinstall: "prisma generate" } }),
+    "prisma/schema.prisma": 'datasource db {\n  provider = "postgresql"\n}\n',
+  }), { checks: ["prisma"] });
+  assert.equal(fixed.checks[0].status, "green");
+});
+
+test("parseChecks validates the checks payload", () => {
+  assert.equal(parseChecks(undefined), undefined);
+  assert.equal(parseChecks([]), null);
+  assert.equal(parseChecks(["next", "bogus"]), null);
+  assert.equal(parseChecks("next"), null);
+  assert.deepEqual(parseChecks(["env", "next", "env"]), ["next", "env"]);
+});
+
+test("defaultChecks and describeStack follow the detected stack", () => {
+  const stack = detectStack({ packageJson: JSON.stringify({ dependencies: { next: "^14.1.0", tailwindcss: "3" } }) });
+  assert.deepEqual(defaultChecks(stack), ["next", "vercel", "env"]);
+  assert.equal(describeStack(stack), "Next.js 14, Tailwind - No Supabase");
+  assert.deepEqual(defaultChecks(detectStack({ packageJson: JSON.stringify({ dependencies: { express: "4", prisma: "6" } }) })), ["vercel", "env", "prisma"]);
+  assert.deepEqual(defaultChecks(detectStack({ packageJson: null })), ["next", "vercel", "env"]);
 });

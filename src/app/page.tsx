@@ -8,6 +8,7 @@ const checks = [
   "Server dependencies",
   "Environment variables",
   "Supabase boundaries",
+  "Prisma / database",
 ];
 
 function PulseMark() {
@@ -38,7 +39,7 @@ export default async function Home() {
         </div>
         <h1>Works locally, breaks on Vercel? Find out why in 10 seconds.</h1>
         <p className="hero-copy">
-          Paste a public GitHub repository. DeployDoctor checks the code paths
+          Paste a public GitHub repository. DeployDoctor detects your stack and checks the code paths
           most likely to fail after your push—without cloning or building it.
         </p>
 
@@ -60,7 +61,7 @@ export default async function Home() {
       <section className="checks-panel" aria-labelledby="checks-heading">
         <div>
           <p className="section-kicker">THE PRE-FLIGHT</p>
-          <h2 id="checks-heading">Five checks. The failures that matter.</h2>
+          <h2 id="checks-heading">Only the checks your stack needs.</h2>
         </div>
         <ol className="check-list">
           {checks.map((check, index) => (

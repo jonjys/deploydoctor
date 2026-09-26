@@ -1,5 +1,7 @@
 import path from "node:path";
-import type { CheckResult, CheckStatus, ReportResults, Finding } from "@/types/report";
+import type { Category, CheckResult, CheckStatus, ReportResults, Finding } from "@/types/report";
+import { CATEGORIES, categoryOf } from "@/lib/categories";
+import { defaultChecks, detectStack } from "@/lib/stack";
 
 export type RepositorySnapshot = {
   owner: string;
@@ -49,7 +51,7 @@ function makeCheck(
   evidence: string[] = [],
   findings: Finding[] = [],
 ): CheckResult {
-  return { id, title, status, explanation, fix, evidence: evidence.slice(0, 8), findings };
+  return { id, category: categoryOf({ id }), title, status, explanation, fix, evidence: evidence.slice(0, 8), findings };
 }
 
 function lineAt(source: string, index: number) { return source.slice(0, index).split("\n").length; }
@@ -73,6 +75,7 @@ function parsePackageJson(snapshot: RepositorySnapshot) {
     return JSON.parse(raw) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
+      scripts?: Record<string, string>;
     };
   } catch {
     return null;
@@ -392,14 +395,68 @@ function checkSupabase(snapshot: RepositorySnapshot): CheckResult {
   );
 }
 
-export function analyzeSnapshot(snapshot: RepositorySnapshot): ReportResults {
-  const checks = [
-    checkNextEntrypoint(snapshot),
-    checkImports(snapshot),
-    checkServerLibraries(snapshot),
-    checkEnvironment(snapshot),
-    checkSupabase(snapshot),
-  ];
+function checkPrisma(snapshot: RepositorySnapshot): CheckResult {
+  const title = "Prisma / database";
+  const manifest = parsePackageJson(snapshot);
+  const packages = { ...manifest?.devDependencies, ...manifest?.dependencies };
+  const usesPrisma = "prisma" in packages || "@prisma/client" in packages;
+  const usesDrizzle = "drizzle-orm" in packages || "drizzle-kit" in packages;
+
+  if (!usesPrisma) {
+    return makeCheck("prisma", title, "green",
+      usesDrizzle
+        ? "Drizzle hittades. SQLite-drivrutiner fångas av kontrollen för Vercel-inkompatibel serverkod."
+        : "Varken Prisma eller Drizzle hittades i package.json, så det finns inget att kontrollera.",
+      "No change is needed for this check.");
+  }
+
+  const findings: Finding[] = [];
+  const buildScripts = ["postinstall", "build", "vercel-build"].map((name) => manifest?.scripts?.[name] ?? "").join("\n");
+  if (!/prisma\s+generate/.test(buildScripts)) {
+    findings.push({ file: "package.json", line: 1,
+      problem: "kör inte prisma generate vid installation eller bygge",
+      fix: 'Lägg till "postinstall": "prisma generate" under scripts i package.json; Vercel cachar node_modules och Prisma Client blir annars föråldrad.',
+      command: "git add -- package.json" });
+  }
+  for (const [file, source] of snapshot.contents) {
+    if (!/\.prisma$/.test(file)) continue;
+    const match = /datasource\s+\w+\s*\{[^}]*?provider\s*=\s*"sqlite"/.exec(source);
+    if (match) {
+      findings.push({ file, line: lineAt(source, match.index), problem: "använder SQLite, som inte fungerar på Vercel Functions",
+        fix: "Byt provider till en hostad databas (t.ex. postgresql) och sätt DATABASE_URL i Vercel." });
+    }
+  }
+
+  if (findings.length) {
+    return makeCheck("prisma", title, "red",
+      `${findings.length} Prisma-problem kan stoppa bygget eller databasen på Vercel.`,
+      findings[0].fix, findings.map((item) => `${item.file}:${item.line} → ${item.problem}`), findings);
+  }
+  if (snapshot.partial) {
+    return makeCheck("prisma", title, "yellow", "Inga Prisma-problem hittades i det vi läste, men scannen blev inte klar.", partialFix(snapshot));
+  }
+  return makeCheck("prisma", title, "green", "prisma generate körs vid bygge och ingen SQLite-databas hittades.", "No change is needed for this check.");
+}
+
+export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?: Category[] } = {}): ReportResults {
+  const envText: string[] = [];
+  const sources: string[] = [];
+  for (const [file, source] of snapshot.contents) {
+    if (/(?:^|\/)\.env(?:\..+)?$/.test(file)) envText.push(source);
+    else if (SOURCE_EXTENSION.test(file)) sources.push(source);
+  }
+  const stack = detectStack({ packageJson: snapshot.contents.get("package.json"), envText: envText.join("\n"), sources });
+  // Without an explicit choice, scan only what the detected stack needs.
+  const chosen = new Set(options.checks ?? defaultChecks(stack));
+  const runners: Record<Category, Array<(snapshot: RepositorySnapshot) => CheckResult>> = {
+    next: [checkNextEntrypoint, checkImports],
+    vercel: [checkServerLibraries],
+    env: [checkEnvironment],
+    supabase: [checkSupabase],
+    prisma: [checkPrisma],
+  };
+  const scanned = CATEGORIES.filter((category) => chosen.has(category));
+  const checks = scanned.flatMap((category) => runners[category].map((run) => run(snapshot)));
   const summary = checks.reduce<Record<CheckStatus, number>>(
     (counts, check) => ({ ...counts, [check.status]: counts[check.status] + 1 }),
     { red: 0, yellow: 0, green: 0 },
@@ -419,6 +476,8 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot): ReportResults {
       partial: snapshot.partial,
       reasons: snapshot.partialReasons,
     },
+    scope: { scanned, ignored: CATEGORIES.filter((category) => !chosen.has(category)) },
+    stack,
     summary,
     overall: summary.red ? "red" : summary.yellow ? "yellow" : "green",
     checks,

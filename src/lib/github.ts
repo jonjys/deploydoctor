@@ -1,7 +1,8 @@
 import "server-only";
 
 import { analyzeSnapshot, type RepositorySnapshot } from "@/lib/analyzer";
-import type { ReportResults } from "@/types/report";
+import { detectStack, type Stack } from "@/lib/stack";
+import type { Category, ReportResults } from "@/types/report";
 
 const GITHUB_API = "https://api.github.com";
 const SOURCE_FILE = /\.(?:[cm]?[jt]sx?|vue|svelte)$/i;
@@ -97,13 +98,13 @@ async function githubRequest<T>(pathname: string, token?: string): Promise<T> {
 function priorityFor(pathname: string): number {
   if (pathname === "package.json") return 0;
   if (/(?:^|\/)\.env(?:\..+)?$/.test(pathname)) return 1;
-  if (/^(?:tsconfig|jsconfig)\.json$/.test(pathname)) return 2;
+  if (/^(?:tsconfig|jsconfig)\.json$/.test(pathname) || /\.prisma$/.test(pathname)) return 2;
   if (API_ROUTE.test(pathname)) return 3;
   if (/(?:^|\/)(?:src\/)?app\/.*\/(?:page|layout|loading|default|not-found)\.[jt]sx$/i.test(pathname)) return 4;
   return 5;
 }
 
-export async function analyzeGitHubRepository(repoUrl: string, options: { privateToken?: string } = {}): Promise<{
+export async function analyzeGitHubRepository(repoUrl: string, options: { privateToken?: string; checks?: Category[] } = {}): Promise<{
   canonicalUrl: string;
   results: ReportResults;
   isPrivate: boolean;
@@ -135,6 +136,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
         (SOURCE_FILE.test(entry.path) ||
           entry.path === "package.json" ||
           /^(?:tsconfig|jsconfig)\.json$/.test(entry.path) ||
+          /\.prisma$/.test(entry.path) ||
           /(?:^|\/)\.env(?:\..+)?$/.test(entry.path)),
     )
     .sort((left, right) => priorityFor(left.path) - priorityFor(right.path) || left.path.localeCompare(right.path));
@@ -185,5 +187,33 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
       sourceFiles.some((entry) => (entry.size ?? 0) > MAX_FILE_BYTES),
   };
 
-  return { canonicalUrl, results: analyzeSnapshot(snapshot), isPrivate: repository.private };
+  return { canonicalUrl, results: analyzeSnapshot(snapshot, { checks: options.checks }), isPrivate: repository.private };
+}
+
+async function readRootFile(repoPath: string, file: string, token?: string): Promise<string | null> {
+  try {
+    const data = await githubRequest<{ content?: string; encoding?: string }>(`${repoPath}/contents/${file}`, token);
+    if (data.encoding !== "base64" || typeof data.content !== "string") return null;
+    return Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf8");
+  } catch (error) {
+    // A missing file is normal; rate limits and other failures must surface.
+    if (error instanceof GitHubApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/** Cheap pre-scan detection: repository metadata plus root package.json and .env.example only. */
+export async function detectRepositoryStack(repoUrl: string, options: { privateToken?: string } = {}): Promise<{ canonicalUrl: string; stack: Stack }> {
+  const { owner, name, canonicalUrl } = parseGitHubRepoUrl(repoUrl);
+  const repoPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+  const token = options.privateToken || process.env.GITHUB_TOKEN;
+  const repository = await githubRequest<GitHubRepository>(repoPath, token);
+  if (repository.private && !options.privateToken) {
+    throw new GitHubApiError("DeployDoctor only scans public repositories.", 400);
+  }
+  const [packageJson, envText] = await Promise.all([
+    readRootFile(repoPath, "package.json", token),
+    readRootFile(repoPath, ".env.example", token),
+  ]);
+  return { canonicalUrl, stack: detectStack({ packageJson, envText }) };
 }

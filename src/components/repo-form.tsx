@@ -1,8 +1,14 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { CATEGORIES, CATEGORY_OPTION_LABELS } from "@/lib/categories";
+import type { Category } from "@/types/report";
+
+const GITHUB_REPO_URL = /^https:\/\/(?:www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/i;
+const FALLBACK_CHECKS: Category[] = ["next", "vercel", "env"];
+type Detection = { status: "loading" } | { status: "ready"; summary: string } | { status: "error" };
 
 function GitHubIcon() {
   return (
@@ -22,18 +28,81 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
   const [isLoading, setIsLoading] = useState(false);
   const [paywall, setPaywall] = useState(false);
   const [privateToken, setPrivateToken] = useState("");
+  const [detection, setDetection] = useState<Detection | null>(null);
+  const [selected, setSelected] = useState<Set<Category>>(new Set());
+  const timer = useRef<number | undefined>(undefined);
+  const controller = useRef<AbortController | null>(null);
+  const tokenRef = useRef("");
+
+  useEffect(() => () => { window.clearTimeout(timer.current); controller.current?.abort(); }, []);
+
+  function cancelDetection() {
+    window.clearTimeout(timer.current);
+    controller.current?.abort();
+    controller.current = null;
+  }
+
+  async function detectStack(url: string) {
+    const current = new AbortController();
+    controller.current = current;
+    setDetection({ status: "loading" });
+    try {
+      const response = await fetch("/api/detect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl: url, ...(tokenRef.current ? { privateToken: tokenRef.current } : {}) }),
+        signal: current.signal,
+      });
+      const payload = (await response.json()) as { summary?: string; checks?: Category[] };
+      if (!response.ok || !payload.summary || !payload.checks) throw new Error("detect failed");
+      setSelected(new Set(payload.checks));
+      setDetection({ status: "ready", summary: payload.summary });
+    } catch {
+      if (current.signal.aborted) return;
+      setSelected(new Set(FALLBACK_CHECKS));
+      setDetection({ status: "error" });
+    }
+  }
+
+  function handleUrlChange(value: string) {
+    setRepoUrl(value);
+    cancelDetection();
+    setDetection(null);
+    if (GITHUB_REPO_URL.test(value.trim())) {
+      timer.current = window.setTimeout(() => void detectStack(value.trim()), 500);
+    }
+  }
+
+  function toggle(category: Category) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(category)) next.delete(category); else next.add(category);
+      return next;
+    });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setPaywall(false);
+    // Send the visible selection; while detection is still running the server picks the categories itself.
+    const sendChecks = detection?.status === "ready" || detection?.status === "error";
+    if (sendChecks && selected.size === 0) {
+      setError("Välj minst en kategori att skanna.");
+      return;
+    }
+    cancelDetection();
     setIsLoading(true);
 
     try {
       const response = await fetch("/api/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl, ...(privateToken ? { privateToken } : {}) }),
+        body: JSON.stringify({
+          repoUrl,
+          ...(sendChecks ? { checks: CATEGORIES.filter((category) => selected.has(category)) } : {}),
+          ...(privateToken ? { privateToken } : {}),
+        }),
       });
       const payload = (await response.json()) as {
         id?: string;
@@ -74,7 +143,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
           autoComplete="url"
           placeholder="https://github.com/owner/repository"
           value={repoUrl}
-          onChange={(event) => setRepoUrl(event.target.value)}
+          onChange={(event) => handleUrlChange(event.target.value)}
           required
         />
         <button className="scan-button" type="submit" disabled={isLoading}>
@@ -82,9 +151,29 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
           <span aria-hidden="true">→</span>
         </button>
       </div>
+      {detection && (
+        <fieldset className="stack-panel" disabled={isLoading}>
+          <legend className="sr-only">Vad ska skannas</legend>
+          <p className="stack-summary" aria-live="polite">
+            {detection.status === "loading" ? "Detecting stack…"
+              : detection.status === "ready" ? <>Stack detected: <strong>{detection.summary}</strong></>
+              : "Kunde inte läsa stacken automatiskt. Välj vad som ska skannas:"}
+          </p>
+          {detection.status !== "loading" && (
+            <div className="check-options">
+              {CATEGORIES.map((category) => (
+                <label key={category}>
+                  <input type="checkbox" checked={selected.has(category)} onChange={() => toggle(category)} />
+                  {CATEGORY_OPTION_LABELS[category]}
+                </label>
+              ))}
+            </div>
+          )}
+        </fieldset>
+      )}
       {privateAccess && <details className="private-input"><summary>Skanna ett privat repo</summary>
         <label htmlFor="private-token">GitHub-token för just det här repot (Contents: read)</label>
-        <input id="private-token" type="password" autoComplete="off" value={privateToken} onChange={(event) => setPrivateToken(event.target.value)} />
+        <input id="private-token" type="password" autoComplete="off" value={privateToken} onChange={(event) => { setPrivateToken(event.target.value); tokenRef.current = event.target.value.trim(); }} />
         <p>Nyckeln används bara för denna skanning och sparas aldrig. Privata rapporter kan bara läsas i din betalningssession.</p>
       </details>}
       {error ? (
