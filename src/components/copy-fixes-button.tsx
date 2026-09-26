@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/components/lang";
 
 export function CopyFixesButton({ instructions }: { instructions: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -17,7 +19,7 @@ export function CopyFixesButton({ instructions }: { instructions: string }) {
 
   return (
     <div><button className="copy-button" type="button" onClick={copyInstructions}>
-      {copied ? "Copied" : "Copy free"}
-    </button>{failed && <textarea aria-label="Select and copy free instructions" readOnly value={instructions} />}</div>
+      {copied ? t("report.copied") : t("report.copy")}
+    </button>{failed && <textarea aria-label={t("report.copyAria")} readOnly value={instructions} />}</div>
   );
 }

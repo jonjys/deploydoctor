@@ -2,6 +2,7 @@ import "server-only";
 
 import { analyzeSnapshot, type RepositorySnapshot } from "@/lib/analyzer";
 import { detectStack, type Stack } from "@/lib/stack";
+import { t, type Lang, type MessageKey } from "@/lib/i18n";
 import type { Category, ReportResults } from "@/types/report";
 
 const GITHUB_API = "https://api.github.com";
@@ -33,9 +34,15 @@ export class GitHubApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly key?: MessageKey,
   ) {
     super(message);
     this.name = "GitHubApiError";
+  }
+
+  /** The message in the visitor's language; the English `message` stays for logs. */
+  localized(lang: Lang) {
+    return this.key ? t(lang, this.key, { status: this.status }) : this.message;
   }
 }
 
@@ -48,23 +55,23 @@ export function parseGitHubRepoUrl(input: string): {
   try {
     url = new URL(input.trim());
   } catch {
-    throw new GitHubApiError("Enter a full public GitHub repository URL.", 400);
+    throw new GitHubApiError("Enter a full public GitHub repository URL.", 400, "gh.urlInvalid");
   }
 
   if (url.protocol !== "https:" || !["github.com", "www.github.com"].includes(url.hostname.toLowerCase())) {
-    throw new GitHubApiError("Enter an https://github.com/owner/repository URL.", 400);
+    throw new GitHubApiError("Enter an https://github.com/owner/repository URL.", 400, "gh.urlHost");
   }
 
   const segments = url.pathname.split("/").filter(Boolean);
   if (segments.length !== 2) {
-    throw new GitHubApiError("Enter the repository URL, without a branch or file path.", 400);
+    throw new GitHubApiError("Enter the repository URL, without a branch or file path.", 400, "gh.urlPath");
   }
 
   const owner = segments[0];
   const name = segments[1].replace(/\.git$/i, "");
   const validPart = /^[A-Za-z0-9_.-]+$/;
   if (!owner || !name || !validPart.test(owner) || !validPart.test(name)) {
-    throw new GitHubApiError("That GitHub repository URL is not valid.", 400);
+    throw new GitHubApiError("That GitHub repository URL is not valid.", 400, "gh.urlPart");
   }
 
   return { owner, name, canonicalUrl: `https://github.com/${owner}/${name}` };
@@ -84,12 +91,12 @@ async function githubRequest<T>(pathname: string, token?: string): Promise<T> {
 
   if (!response.ok) {
     if (response.status === 404) {
-      throw new GitHubApiError("Repository not found; make sure it is public and the URL is correct.", 404);
+      throw new GitHubApiError("Repository not found; make sure it is public and the URL is correct.", 404, "gh.notFound");
     }
     if (response.status === 403 || response.status === 429) {
-      throw new GitHubApiError("GitHub's API rate limit was reached; add GITHUB_TOKEN or try again later.", 429);
+      throw new GitHubApiError("GitHub's API rate limit was reached; add GITHUB_TOKEN or try again later.", 429, "gh.rateLimit");
     }
-    throw new GitHubApiError(`GitHub returned an unexpected ${response.status} response.`, 502);
+    throw new GitHubApiError(`GitHub returned an unexpected ${response.status} response.`, 502, "gh.unexpected");
   }
 
   return (await response.json()) as T;
@@ -104,7 +111,7 @@ function priorityFor(pathname: string): number {
   return 5;
 }
 
-export async function analyzeGitHubRepository(repoUrl: string, options: { privateToken?: string; checks?: Category[] } = {}): Promise<{
+export async function analyzeGitHubRepository(repoUrl: string, options: { privateToken?: string; checks?: Category[]; lang?: Lang } = {}): Promise<{
   canonicalUrl: string;
   results: ReportResults;
   isPrivate: boolean;
@@ -114,7 +121,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
   const token = options.privateToken || process.env.GITHUB_TOKEN;
   const repository = await githubRequest<GitHubRepository>(repoPath, token);
   if (repository.private && !options.privateToken) {
-    throw new GitHubApiError("DeployDoctor only scans public repositories.", 400);
+    throw new GitHubApiError("DeployDoctor only scans public repositories.", 400, "gh.privateOnly");
   }
 
   const tree = await githubRequest<GitTree>(
@@ -187,7 +194,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
       sourceFiles.some((entry) => (entry.size ?? 0) > MAX_FILE_BYTES),
   };
 
-  return { canonicalUrl, results: analyzeSnapshot(snapshot, { checks: options.checks }), isPrivate: repository.private };
+  return { canonicalUrl, results: analyzeSnapshot(snapshot, { checks: options.checks, lang: options.lang }), isPrivate: repository.private };
 }
 
 async function readRootFile(repoPath: string, file: string, token?: string): Promise<string | null> {
@@ -209,7 +216,7 @@ export async function detectRepositoryStack(repoUrl: string, options: { privateT
   const token = options.privateToken || process.env.GITHUB_TOKEN;
   const repository = await githubRequest<GitHubRepository>(repoPath, token);
   if (repository.private && !options.privateToken) {
-    throw new GitHubApiError("DeployDoctor only scans public repositories.", 400);
+    throw new GitHubApiError("DeployDoctor only scans public repositories.", 400, "gh.privateOnly");
   }
   const [packageJson, envText] = await Promise.all([
     readRootFile(repoPath, "package.json", token),

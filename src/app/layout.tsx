@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { LangProvider } from "@/components/lang";
+import { getT } from "@/lib/lang";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,16 +14,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "DeployDoctor — Vercel readiness scanner",
-  description:
-    "Scan a public GitHub repository for the code issues most likely to break a Vercel deployment.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return { title: t("meta.title"), description: t("meta.desc") };
+}
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const { lang } = await getT();
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+    <html lang={lang} className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body><LangProvider lang={lang}>{children}</LangProvider></body>
     </html>
   );
 }

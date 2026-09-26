@@ -2,6 +2,8 @@ import path from "node:path";
 import type { Category, CheckResult, CheckStatus, ReportResults, Finding } from "@/types/report";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { defaultChecks, detectStack } from "@/lib/stack";
+import { analysisText, type AnalysisText } from "@/lib/analysis-text";
+import type { Lang } from "@/lib/i18n";
 
 export type RepositorySnapshot = {
   owner: string;
@@ -56,15 +58,11 @@ function makeCheck(
 
 function lineAt(source: string, index: number) { return source.slice(0, index).split("\n").length; }
 function shellQuote(value: string) { return "'" + value.replaceAll("'", "'\\''") + "'"; }
-function partialFix(snapshot: RepositorySnapshot) {
-  return !snapshot.partialReasons?.length || snapshot.partialReasons.includes("rate_limit")
-    ? "Lägg till GITHUB_TOKEN i Vercel > Settings > Environment Variables, deploya om och skanna igen."
-    : "Skanna igen; stora filer och stora repon kan behöva kontrolleras manuellt.";
+function partialFix(snapshot: RepositorySnapshot, x: AnalysisText) {
+  return !snapshot.partialReasons?.length || snapshot.partialReasons.includes("rate_limit") ? x.partialFixToken : x.partialFixRetry;
 }
-function partialMessage(snapshot: RepositorySnapshot) {
-  const cause = snapshot.partialReasons?.includes("rate_limit") ? "sedan stoppade GitHub oss (rate limit)"
-    : "sedan nådde vi en fil-, tids- eller läsgräns";
-  return `Vi läste ${snapshot.sourceFilesRead} av ${snapshot.sourceFilesFound} filer; ${cause}.`;
+function partialMessage(snapshot: RepositorySnapshot, x: AnalysisText) {
+  return x.partialMessage(snapshot.sourceFilesRead, snapshot.sourceFilesFound, Boolean(snapshot.partialReasons?.includes("rate_limit")));
 }
 
 function parsePackageJson(snapshot: RepositorySnapshot) {
@@ -82,7 +80,7 @@ function parsePackageJson(snapshot: RepositorySnapshot) {
   }
 }
 
-function checkNextEntrypoint(snapshot: RepositorySnapshot): CheckResult {
+function checkNextEntrypoint(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const manifest = parsePackageJson(snapshot);
   const packages = { ...manifest?.devDependencies, ...manifest?.dependencies };
   const hasNext = Boolean(packages.next);
@@ -90,38 +88,17 @@ function checkNextEntrypoint(snapshot: RepositorySnapshot): CheckResult {
   const hasRouteFolder = snapshot.entries.some((entry) =>
     routeRoots.some((root) => entry.path === root || entry.path.startsWith(`${root}/`)),
   );
+  const title = x.titles.nextEntry;
 
   if (hasNext && !hasRouteFolder) {
-    return makeCheck(
-      "next-entry",
-      "Next.js entrypoint",
-      "red",
-      "Next.js is declared in package.json, but the repository has no app/, pages/, src/app/, or src/pages/ folder.",
-      "Add an App Router app/ directory with a root layout and page, or restore the Pages Router pages/ directory before deploying.",
-      ["package.json → next", "No Next.js route folder found"],
-    );
+    return makeCheck("next-entry", title, "red", x.next.missingFolder, x.next.missingFolderFix,
+      ["package.json → next", x.next.noRouteEvidence]);
   }
-
   if (!manifest) {
-    return makeCheck(
-      "next-entry",
-      "Next.js entrypoint",
-      "yellow",
-      "DeployDoctor could not read a valid root package.json, so it could not confirm the Next.js entrypoint.",
-      "Commit a valid package.json at the repository root or point deployment tooling at the application root.",
-    );
+    return makeCheck("next-entry", title, "yellow", x.next.unreadable, x.next.unreadableFix);
   }
-
-  return makeCheck(
-    "next-entry",
-    "Next.js entrypoint",
-    "green",
-    hasNext
-      ? "✅ Next.js entrypoint found - no change needed"
-      : "The root package.json does not declare Next.js, so this Next.js-specific failure does not apply.",
-    "No change is needed for this check.",
-    hasNext ? ["package.json → next", "Route folder found"] : [],
-  );
+  return makeCheck("next-entry", title, "green", hasNext ? x.next.found : x.next.notNext, x.noChange,
+    hasNext ? ["package.json → next", x.next.routeFound] : []);
 }
 
 function extractImports(source: string): Array<{ specifier: string; line: number }> {
@@ -159,7 +136,7 @@ function aliasRoots(snapshot: RepositorySnapshot): string[] {
   return ["src", ""];
 }
 
-function checkImports(snapshot: RepositorySnapshot): CheckResult {
+function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const files = new Set(snapshot.entries.filter((entry) => entry.type === "blob").map((entry) => entry.path));
   const aliases = aliasRoots(snapshot);
   const missing: Finding[] = [];
@@ -183,8 +160,7 @@ function checkImports(snapshot: RepositorySnapshot): CheckResult {
 
       if (!candidates.some((candidate) => files.has(candidate))) {
         const target = candidates[0];
-        missing.push({ file, line, problem: `imports ${original} which doesn't exist in the repository`,
-          fix: `Lägg till ${target} om filen finns lokalt, eller ändra importen på rad ${line} till filens riktiga plats.`,
+        missing.push({ file, line, problem: x.imports.problem(original), fix: x.imports.fix(target, line),
           command: `git add -- ${shellQuote(target)}` });
       }
     }
@@ -193,9 +169,9 @@ function checkImports(snapshot: RepositorySnapshot): CheckResult {
   if (missing.length) {
     return makeCheck(
       "imports",
-      "Broken imports",
+      x.titles.imports,
       "red",
-      `${missing.length} import${missing.length === 1 ? "" : "er"} pekar på filer som saknas i GitHub-repot.`,
+      x.imports.summary(missing.length),
       missing[0].fix,
       missing.map((item) => `${item.file}:${item.line} → ${item.problem}`), missing,
     );
@@ -204,25 +180,18 @@ function checkImports(snapshot: RepositorySnapshot): CheckResult {
   if (snapshot.partial) {
     return makeCheck(
       "imports",
-      "Broken imports",
+      x.titles.imports,
       "yellow",
-      partialMessage(snapshot),
-      partialFix(snapshot),
-      [`Read ${snapshot.sourceFilesRead} of ${snapshot.sourceFilesFound} source files`],
+      partialMessage(snapshot, x),
+      partialFix(snapshot, x),
+      [`${x.imports.read(snapshot.sourceFilesRead)} / ${snapshot.sourceFilesFound}`],
     );
   }
 
-  return makeCheck(
-    "imports",
-    "Broken imports",
-    "green",
-    "Every relative and @/ import found resolves to a file in the repository tree.",
-    "No change is needed for this check.",
-    [`Read ${snapshot.sourceFilesRead} source files`],
-  );
+  return makeCheck("imports", x.titles.imports, "green", x.imports.ok, x.noChange, [x.imports.read(snapshot.sourceFilesRead)]);
 }
 
-function checkServerLibraries(snapshot: RepositorySnapshot): CheckResult {
+function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const manifest = parsePackageJson(snapshot);
   const packages = { ...manifest?.devDependencies, ...manifest?.dependencies };
   const riskyPackages = Object.keys(packages).filter((name) =>
@@ -239,39 +208,15 @@ function checkServerLibraries(snapshot: RepositorySnapshot): CheckResult {
 
   const evidence = [
     ...riskyPackages.map((name) => `package.json → ${name}`),
-    ...fsWrites.map((file) => `${file} → filesystem write`),
+    ...fsWrites.map((file) => x.server.write(file)),
   ];
-  if (evidence.length) {
-    return makeCheck(
-      "server-libs",
-      "Vercel-incompatible server code",
-      "red",
-      "The repository includes a heavyweight browser, SQLite binding, or API-route filesystem write that is unsafe for Vercel Functions.",
-      "Move browser work to an external worker, replace SQLite with a hosted database, and write generated files to object storage instead of the function filesystem.",
-      evidence,
-    );
-  }
-
-  if (snapshot.partial) {
-    return makeCheck(
-      "server-libs",
-      "Vercel-incompatible server code",
-      "yellow",
-      "Inga farliga paket hittade hittills, men vi kunde inte kolla alla API-routes.",
-      partialFix(snapshot),
-    );
-  }
-
-  return makeCheck(
-    "server-libs",
-    "Vercel-incompatible server code",
-    "green",
-    "No Playwright, Puppeteer, SQLite binding, or filesystem write in an API route was found.",
-    "No change is needed for this check.",
-  );
+  const title = x.titles.serverLibs;
+  if (evidence.length) return makeCheck("server-libs", title, "red", x.server.red, x.server.fix, evidence);
+  if (snapshot.partial) return makeCheck("server-libs", title, "yellow", x.server.partial, partialFix(snapshot, x));
+  return makeCheck("server-libs", title, "green", x.server.ok, x.noChange);
 }
 
-function checkEnvironment(snapshot: RepositorySnapshot): CheckResult {
+function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const declared = new Set<string>();
   const used = new Set<string>();
   const exposed = new Set<string>();
@@ -301,53 +246,33 @@ function checkEnvironment(snapshot: RepositorySnapshot): CheckResult {
 
   const missing = [...used].filter((name) => !declared.has(name) && !BUILT_IN_ENV.has(name)).sort();
   const evidence = [
-    ...missing.map((name) => `${name} → missing from committed env template`),
-    ...[...exposed].map((name) => `${name} → potentially secret NEXT_PUBLIC_ variable`),
+    ...missing.map((name) => x.env.evidenceMissing(name)),
+    ...[...exposed].map((name) => x.env.evidenceExposed(name)),
   ];
+  const title = x.titles.env;
 
   if (evidence.length) {
-    return makeCheck(
-      "env",
-      "Environment variables",
-      "red",
-      [missing.length ? `${missing.length} env-variabler saknas i .env.example: ${missing.join(", ")}` : "",
-        exposed.size ? `${exposed.size} möjliga hemligheter exponeras i webbläsaren: ${[...exposed].join(", ")}` : ""].filter(Boolean).join("; ") + ".",
-      [missing.length ? `Lägg till tomma rader i .env.example i root: ${missing.map((name) => `${name}=`).join(" och ")}; pusha filen` : "",
-        exposed.size ? "ta bort NEXT_PUBLIC_ från hemligheterna och rotera exponerade nycklar" : ""].filter(Boolean).join("; ") + ".",
+    return makeCheck("env", title, "red",
+      [missing.length ? x.env.missing(missing.length, missing.join(", ")) : "",
+        exposed.size ? x.env.exposed(exposed.size, [...exposed].join(", ")) : ""].filter(Boolean).join("; ") + ".",
+      [missing.length ? x.env.fixMissing(missing.map((name) => `${name}=`).join(" + ")) : "",
+        exposed.size ? x.env.fixExposed : ""].filter(Boolean).join("; ") + ".",
       evidence,
-      [...missing.map((name) => ({ ...locations.get(name)!, problem: `${name} saknas i .env.example`,
-        fix: `Lägg till ${name}= (tomt) i .env.example; sätt värdet privat i Vercel.`, command: "git add -- .env.example" })),
-        ...[...exposed].map((name) => ({ ...locations.get(name)!, problem: `${name} kan exponera en hemlighet`,
-          fix: `Använd ${name.replace(/^NEXT_PUBLIC_/, "")} enbart på servern och rotera den gamla nyckeln.` }))],
+      [...missing.map((name) => ({ ...locations.get(name)!, problem: x.env.missingProblem(name),
+        fix: x.env.missingFix(name), command: "git add -- .env.example" })),
+        ...[...exposed].map((name) => ({ ...locations.get(name)!, problem: x.env.exposedProblem(name),
+          fix: x.env.exposedFix(name.replace(/^NEXT_PUBLIC_/, "")) }))],
     );
   }
-
-  if (snapshot.partial) {
-    return makeCheck(
-      "env",
-      "Environment variables",
-      "yellow",
-      "De env-variabler vi läste är dokumenterade, men scannen blev inte klar.",
-      partialFix(snapshot),
-    );
-  }
-
-  return makeCheck(
-    "env",
-    "Environment variables",
-    "green",
-    used.size
-      ? "Every process.env variable found is documented and no secret-looking value uses NEXT_PUBLIC_."
-      : "No process.env usage or browser-exposed secret was found.",
-    "No change is needed for this check.",
-  );
+  if (snapshot.partial) return makeCheck("env", title, "yellow", x.env.partial, partialFix(snapshot, x));
+  return makeCheck("env", title, "green", used.size ? x.env.okUsed : x.env.okNone, x.noChange);
 }
 
 function hasUseClient(source: string): boolean {
   return /^\s*["']use client["']\s*;?/.test(source);
 }
 
-function checkSupabase(snapshot: RepositorySnapshot): CheckResult {
+function checkSupabase(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const violations = new Set<string>();
   const browserClient = /\bcreateBrowserClient\b|["'][^"']*supabase\/(?:client|browser)["']/;
   const serviceRole = /\b(?:NEXT_PUBLIC_[A-Z0-9_]*(?:SERVICE_ROLE|SECRET)[A-Z0-9_]*|SUPABASE_(?:SERVICE_ROLE|SECRET)_KEY)\b/;
@@ -358,87 +283,49 @@ function checkSupabase(snapshot: RepositorySnapshot): CheckResult {
     const serverContext = API_ROUTE.test(file) || (SERVER_COMPONENT.test(file) && !clientFile);
 
     if (serverContext && browserClient.test(source)) {
-      violations.add(`${file} → browser Supabase client in server code`);
+      violations.add(x.supabase.serverBrowser(file));
     }
     if (clientFile && serviceRole.test(source)) {
-      violations.add(`${file} → service role key referenced by client code`);
+      violations.add(x.supabase.clientKey(file));
     }
   }
 
-  if (violations.size) {
-    return makeCheck(
-      "supabase",
-      "Supabase server/client boundaries",
-      "red",
-      "Supabase browser credentials are used in server code or the service role key is referenced from a Client Component.",
-      "Use Supabase credentials only in server-only modules, and keep SUPABASE_SECRET_KEY or the legacy service role key out of Client Components.",
-      [...violations],
-    );
-  }
-
-  if (snapshot.partial) {
-    return makeCheck(
-      "supabase",
-      "Supabase server/client boundaries",
-      "yellow",
-      "Ingen Supabase-förväxling hittad, men scannen blev inte klar.",
-      partialFix(snapshot),
-    );
-  }
-
-  return makeCheck(
-    "supabase",
-    "Supabase server/client boundaries",
-    "green",
-    "No Supabase browser client is used in server code and no service role key is referenced in client code.",
-    "No change is needed for this check.",
-  );
+  const title = x.titles.supabase;
+  if (violations.size) return makeCheck("supabase", title, "red", x.supabase.red, x.supabase.fix, [...violations]);
+  if (snapshot.partial) return makeCheck("supabase", title, "yellow", x.supabase.partial, partialFix(snapshot, x));
+  return makeCheck("supabase", title, "green", x.supabase.ok, x.noChange);
 }
 
-function checkPrisma(snapshot: RepositorySnapshot): CheckResult {
-  const title = "Prisma / database";
+function checkPrisma(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
+  const title = x.titles.prisma;
   const manifest = parsePackageJson(snapshot);
   const packages = { ...manifest?.devDependencies, ...manifest?.dependencies };
   const usesPrisma = "prisma" in packages || "@prisma/client" in packages;
   const usesDrizzle = "drizzle-orm" in packages || "drizzle-kit" in packages;
 
-  if (!usesPrisma) {
-    return makeCheck("prisma", title, "green",
-      usesDrizzle
-        ? "Drizzle hittades. SQLite-drivrutiner fångas av kontrollen för Vercel-inkompatibel serverkod."
-        : "Varken Prisma eller Drizzle hittades i package.json, så det finns inget att kontrollera.",
-      "No change is needed for this check.");
-  }
+  if (!usesPrisma) return makeCheck("prisma", title, "green", usesDrizzle ? x.prisma.okDrizzle : x.prisma.okNone, x.noChange);
 
   const findings: Finding[] = [];
   const buildScripts = ["postinstall", "build", "vercel-build"].map((name) => manifest?.scripts?.[name] ?? "").join("\n");
   if (!/prisma\s+generate/.test(buildScripts)) {
-    findings.push({ file: "package.json", line: 1,
-      problem: "kör inte prisma generate vid installation eller bygge",
-      fix: 'Lägg till "postinstall": "prisma generate" under scripts i package.json; Vercel cachar node_modules och Prisma Client blir annars föråldrad.',
-      command: "git add -- package.json" });
+    findings.push({ file: "package.json", line: 1, problem: x.prisma.noGenerate, fix: x.prisma.noGenerateFix, command: "git add -- package.json" });
   }
   for (const [file, source] of snapshot.contents) {
     if (!/\.prisma$/.test(file)) continue;
     const match = /datasource\s+\w+\s*\{[^}]*?provider\s*=\s*"sqlite"/.exec(source);
-    if (match) {
-      findings.push({ file, line: lineAt(source, match.index), problem: "använder SQLite, som inte fungerar på Vercel Functions",
-        fix: "Byt provider till en hostad databas (t.ex. postgresql) och sätt DATABASE_URL i Vercel." });
-    }
+    if (match) findings.push({ file, line: lineAt(source, match.index), problem: x.prisma.sqlite, fix: x.prisma.sqliteFix });
   }
 
   if (findings.length) {
-    return makeCheck("prisma", title, "red",
-      `${findings.length} Prisma-problem kan stoppa bygget eller databasen på Vercel.`,
-      findings[0].fix, findings.map((item) => `${item.file}:${item.line} → ${item.problem}`), findings);
+    return makeCheck("prisma", title, "red", x.prisma.red(findings.length), findings[0].fix,
+      findings.map((item) => `${item.file}:${item.line} → ${item.problem}`), findings);
   }
-  if (snapshot.partial) {
-    return makeCheck("prisma", title, "yellow", "Inga Prisma-problem hittades i det vi läste, men scannen blev inte klar.", partialFix(snapshot));
-  }
-  return makeCheck("prisma", title, "green", "prisma generate körs vid bygge och ingen SQLite-databas hittades.", "No change is needed for this check.");
+  if (snapshot.partial) return makeCheck("prisma", title, "yellow", x.prisma.partial, partialFix(snapshot, x));
+  return makeCheck("prisma", title, "green", x.prisma.ok, x.noChange);
 }
 
-export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?: Category[] } = {}): ReportResults {
+export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?: Category[]; lang?: Lang } = {}): ReportResults {
+  const x = analysisText(options.lang ?? "en");
   const envText: string[] = [];
   const sources: string[] = [];
   for (const [file, source] of snapshot.contents) {
@@ -448,7 +335,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
   const stack = detectStack({ packageJson: snapshot.contents.get("package.json"), envText: envText.join("\n"), sources });
   // Without an explicit choice, scan only what the detected stack needs.
   const chosen = new Set(options.checks ?? defaultChecks(stack));
-  const runners: Record<Category, Array<(snapshot: RepositorySnapshot) => CheckResult>> = {
+  const runners: Record<Category, Array<(snapshot: RepositorySnapshot, x: AnalysisText) => CheckResult>> = {
     next: [checkNextEntrypoint, checkImports],
     vercel: [checkServerLibraries],
     env: [checkEnvironment],
@@ -456,7 +343,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
     prisma: [checkPrisma],
   };
   const scanned = CATEGORIES.filter((category) => chosen.has(category));
-  const checks = scanned.flatMap((category) => runners[category].map((run) => run(snapshot)));
+  const checks = scanned.flatMap((category) => runners[category].map((run) => run(snapshot, x)));
   const summary = checks.reduce<Record<CheckStatus, number>>(
     (counts, check) => ({ ...counts, [check.status]: counts[check.status] + 1 }),
     { red: 0, yellow: 0, green: 0 },

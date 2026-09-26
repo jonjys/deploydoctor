@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { countStatuses, overallLabel, overallOf } from "@/lib/report-summary";
 import { joinFixParts, type freeFixParts } from "@/lib/fix-instructions";
 import { CopyFixesButton as CopyButton } from "@/components/copy-fixes-button";
+import { useLang, useT } from "@/components/lang";
 import type { CheckStatus } from "@/types/report";
 
 type IgnoreState = { ignored: ReadonlySet<string>; toggle: (id: string) => void };
@@ -37,11 +38,13 @@ export function IgnoreProvider({ reportId, children }: { reportId: string; child
 
 export function ScoreCard({ checks }: { checks: Array<{ id: string; status: CheckStatus }> }) {
   const { ignored } = useContext(IgnoreContext);
+  const lang = useLang();
+  const t = useT();
   const summary = countStatuses(checks.filter((check) => !ignored.has(check.id)));
   return (
     <div className={`score-card is-${overallOf(summary)}`}>
-      <span>OVERALL RESULT</span>
-      <strong>{overallLabel(summary)}</strong>
+      <span>{t("report.overall")}</span>
+      <strong>{overallLabel(summary, lang)}</strong>
     </div>
   );
 }
@@ -50,11 +53,12 @@ export function IssueCard({ id, title, status, symbol, label, children }: {
   id: string; title: string; status: CheckStatus; symbol: string; label: string; children: ReactNode;
 }) {
   const { ignored, toggle } = useContext(IgnoreContext);
+  const t = useT();
   if (status !== "green" && ignored.has(id)) {
     return (
       <article className="result-card is-ignored">
         <div className="result-body">
-          <p><strong>{title}</strong> ignorerad <button className="ignore-button" type="button" onClick={() => toggle(id)}>Ångra</button></p>
+          <p>{t("report.ignoredTitle", { title })} <button className="ignore-button" type="button" onClick={() => toggle(id)}>{t("report.undo")}</button></p>
         </div>
       </article>
     );
@@ -67,7 +71,7 @@ export function IssueCard({ id, title, status, symbol, label, children }: {
       </div>
       <div className="result-body">
         {children}
-        {status !== "green" && <button className="ignore-button" type="button" onClick={() => toggle(id)}>Ignore</button>}
+        {status !== "green" && <button className="ignore-button" type="button" onClick={() => toggle(id)}>{t("report.ignore")}</button>}
       </div>
     </article>
   );

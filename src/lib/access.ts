@@ -23,7 +23,7 @@ export async function activePlan(session: CustomerSession | null): Promise<Entit
 export function hashRequestIp(request: Request) {
   // Vercel overwrites this header at its trusted edge; never trust client x-forwarded-for.
   const ip = process.env.VERCEL ? request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() : "local-development";
-  if (!ip) throw new Error("Kunde inte kontrollera dagens skanningar; försök igen.");
+  if (!ip) throw new Error("Could not check today's scan allowance; try again.");
   return digest(`ip:${ip}`);
 }
 export async function reserveScan(request: Request) {

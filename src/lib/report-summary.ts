@@ -1,4 +1,5 @@
 import type { CheckStatus } from "@/types/report";
+import { t, type Lang } from "@/lib/i18n";
 
 export function countStatuses(checks: Array<{ status: CheckStatus }>): Record<CheckStatus, number> {
   return checks.reduce<Record<CheckStatus, number>>(
@@ -11,10 +12,10 @@ export function overallOf(summary: Record<CheckStatus, number>): CheckStatus {
   return summary.red ? "red" : summary.yellow ? "yellow" : "green";
 }
 
-export function overallLabel(summary: Record<CheckStatus, number>): string {
+export function overallLabel(summary: Record<CheckStatus, number>, lang: Lang = "en"): string {
   return summary.red
-    ? `${summary.red} ${summary.red === 1 ? "issue" : "issues"} to fix`
+    ? summary.red === 1 ? t(lang, "report.issue1") : t(lang, "report.issues", { n: summary.red })
     : summary.yellow
-      ? `${summary.yellow} ${summary.yellow === 1 ? "item" : "items"} to review`
-      : "Ready to deploy";
+      ? summary.yellow === 1 ? t(lang, "report.item1") : t(lang, "report.items", { n: summary.yellow })
+      : t(lang, "report.ready");
 }

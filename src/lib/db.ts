@@ -12,7 +12,7 @@ export async function db<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (!response.ok) {
     console.error("Database request failed", path.split("?")[0], response.status);
-    throw new Error("Det gick inte att spara eller läsa just nu; försök igen om en stund.");
+    throw new Error("Could not save or read data right now; try again in a moment.");
   }
   const body = await response.text();
   return (body ? JSON.parse(body) : null) as T;

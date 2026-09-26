@@ -392,3 +392,10 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .result-card.is-ignored { grid-template-columns: 1fr; opacity: 0.65; }
 .result-card.is-ignored p { margin: 0; font-size: 14px; }
 .result-card.is-ignored .ignore-button { margin: 0 0 0 10px; }
+
+/* Language switch */
+.lang-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.lang-switch button { background: transparent; border: 0; padding: 5px 10px; font-size: 12px; font-weight: 650; color: var(--muted); cursor: pointer; }
+.lang-switch button[aria-pressed="true"] { background: var(--ink); color: white; }
+.lang-switch button:hover:not([aria-pressed="true"]) { background: var(--panel); color: var(--ink); }
+.nav-links { align-items: center; }

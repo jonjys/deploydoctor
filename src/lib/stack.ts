@@ -1,4 +1,5 @@
 import type { Category } from "@/types/report";
+import { t, type Lang } from "@/lib/i18n";
 
 export type Stack = {
   hasPackageJson: boolean;
@@ -66,14 +67,14 @@ function nextMajor(version?: string) {
   return version?.match(/\d+/)?.[0];
 }
 
-export function describeStack(stack: Stack): string {
+export function describeStack(stack: Stack, lang: Lang = "en"): string {
+  if (!stack.hasPackageJson) return t(lang, "stack.noPackage");
   const found: string[] = [];
   if (stack.hasNext) found.push(`Next.js${nextMajor(stack.nextVersion) ? ` ${nextMajor(stack.nextVersion)}` : ""}`);
   if (stack.hasTailwind) found.push("Tailwind");
   if (stack.hasPrisma) found.push("Prisma");
   if (stack.hasDrizzle) found.push("Drizzle");
   if (stack.hasSupabase) found.push("Supabase");
-  const missing = [stack.hasSupabase ? "" : "No Supabase", stack.hasPrisma || stack.hasDrizzle ? "" : "No Prisma/Drizzle"].filter(Boolean);
-  if (!stack.hasPackageJson) return "No readable package.json at the repository root";
-  return [found.join(", ") || "No known framework", ...missing.slice(0, 1)].join(" - ");
+  const missing = !stack.hasSupabase ? t(lang, "stack.noSupabase") : !(stack.hasPrisma || stack.hasDrizzle) ? t(lang, "stack.noDb") : "";
+  return [found.join(", ") || t(lang, "stack.noFramework"), missing].filter(Boolean).join(" - ");
 }

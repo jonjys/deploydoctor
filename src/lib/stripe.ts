@@ -1,21 +1,22 @@
 import "server-only";
 import Stripe from "stripe";
 import { plans, type Plan } from "@/lib/plans";
+import { t, type Lang } from "@/lib/i18n";
 
 export function stripeClient() {
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new Error("Betalning är inte aktiverad ännu; gratisrapporter fungerar som vanligt.");
+  if (!key) throw new Error("Payments are not enabled yet; free reports work as usual.");
   return new Stripe(key, { maxNetworkRetries: 2, timeout: 15_000 });
 }
-export function priceFor(plan: Plan): Stripe.Checkout.SessionCreateParams.LineItem {
+export function priceFor(plan: Plan, lang: Lang = "en"): Stripe.Checkout.SessionCreateParams.LineItem {
   const item = plans[plan];
   if (item.env) {
     const price = process.env[item.env];
-    if (!price?.startsWith("price_")) throw new Error("Det här priset är inte aktiverat ännu.");
+    if (!price?.startsWith("price_")) throw new Error("This price is not enabled yet.");
     return { price, quantity: 1 };
   }
   return { quantity: 1, price_data: { currency: "usd", unit_amount: item.amount,
-    product_data: { name: `DeployDoctor — ${item.name}`, description: "Manuell granskning och kodpatch för den valda rapporten; leverans efter granskning." } } };
+    product_data: { name: `DeployDoctor — ${t(lang, `plan.${plan}.name` as "plan.fix-one.name")}`, description: t(lang, "pay.productDescription") } } };
 }
 export function scanPlanForPrice(price: string) {
   return (["week", "public", "private"] as const).find((plan) => process.env[plans[plan].env] === price);

@@ -3,12 +3,14 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CATEGORIES, CATEGORY_OPTION_LABELS } from "@/lib/categories";
+import { CATEGORIES } from "@/lib/categories";
+import { describeStack, type Stack } from "@/lib/stack";
+import { useLang, useT } from "@/components/lang";
 import type { Category } from "@/types/report";
 
 const GITHUB_REPO_URL = /^https:\/\/(?:www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/i;
 const FALLBACK_CHECKS: Category[] = ["next", "vercel", "env"];
-type Detection = { status: "loading" } | { status: "ready"; summary: string } | { status: "error" };
+type Detection = { status: "loading" } | { status: "ready"; stack: Stack } | { status: "error" };
 
 function GitHubIcon() {
   return (
@@ -23,6 +25,8 @@ function GitHubIcon() {
 
 export function RepoForm({ privateAccess = false }: { privateAccess?: boolean }) {
   const router = useRouter();
+  const lang = useLang();
+  const t = useT();
   const [repoUrl, setRepoUrl] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -53,10 +57,10 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         body: JSON.stringify({ repoUrl: url, ...(tokenRef.current ? { privateToken: tokenRef.current } : {}) }),
         signal: current.signal,
       });
-      const payload = (await response.json()) as { summary?: string; checks?: Category[] };
-      if (!response.ok || !payload.summary || !payload.checks) throw new Error("detect failed");
+      const payload = (await response.json()) as { stack?: Stack; checks?: Category[] };
+      if (!response.ok || !payload.stack || !payload.checks) throw new Error("detect failed");
       setSelected(new Set(payload.checks));
-      setDetection({ status: "ready", summary: payload.summary });
+      setDetection({ status: "ready", stack: payload.stack });
     } catch {
       if (current.signal.aborted) return;
       setSelected(new Set(FALLBACK_CHECKS));
@@ -88,7 +92,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
     // Send the visible selection; while detection is still running the server picks the categories itself.
     const sendChecks = detection?.status === "ready" || detection?.status === "error";
     if (sendChecks && selected.size === 0) {
-      setError("Välj minst en kategori att skanna.");
+      setError(t("form.pickOne"));
       return;
     }
     cancelDetection();
@@ -112,7 +116,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
 
       if (!response.ok || !payload.id) {
         setPaywall(Boolean(payload.paywall));
-        throw new Error(payload.error || "The scan could not be completed.");
+        throw new Error(payload.error || t("form.scanFailed"));
       }
 
       router.push(`/r/${payload.id}`);
@@ -121,7 +125,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
       setError(
         caught instanceof Error
           ? caught.message
-          : "The scan could not be completed.",
+          : t("form.scanFailed"),
       );
       setIsLoading(false);
     }
@@ -132,7 +136,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
       <div className="input-shell">
         <GitHubIcon />
         <label className="sr-only" htmlFor="repo-url">
-          Public GitHub repository URL
+          {t("form.urlLabel")}
         </label>
         <input
           className="repo-input"
@@ -147,43 +151,43 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
           required
         />
         <button className="scan-button" type="submit" disabled={isLoading}>
-          {isLoading ? "Scanning…" : "Scan repository"}
+          {isLoading ? t("form.scanning") : t("form.scan")}
           <span aria-hidden="true">→</span>
         </button>
       </div>
       {detection && (
         <fieldset className="stack-panel" disabled={isLoading}>
-          <legend className="sr-only">Vad ska skannas</legend>
+          <legend className="sr-only">{t("form.whatToScan")}</legend>
           <p className="stack-summary" aria-live="polite">
-            {detection.status === "loading" ? "Detecting stack…"
-              : detection.status === "ready" ? <>Stack detected: <strong>{detection.summary}</strong></>
-              : "Kunde inte läsa stacken automatiskt. Välj vad som ska skannas:"}
+            {detection.status === "loading" ? t("form.detecting")
+              : detection.status === "ready" ? <>{t("form.detected")} <strong>{describeStack(detection.stack, lang)}</strong></>
+              : t("form.detectFailed")}
           </p>
           {detection.status !== "loading" && (
             <div className="check-options">
               {CATEGORIES.map((category) => (
                 <label key={category}>
                   <input type="checkbox" checked={selected.has(category)} onChange={() => toggle(category)} />
-                  {CATEGORY_OPTION_LABELS[category]}
+                  {t(`catopt.${category}`)}
                 </label>
               ))}
             </div>
           )}
         </fieldset>
       )}
-      {privateAccess && <details className="private-input"><summary>Skanna ett privat repo</summary>
-        <label htmlFor="private-token">GitHub-token för just det här repot (Contents: read)</label>
+      {privateAccess && <details className="private-input"><summary>{t("form.private.summary")}</summary>
+        <label htmlFor="private-token">{t("form.private.label")}</label>
         <input id="private-token" type="password" autoComplete="off" value={privateToken} onChange={(event) => { setPrivateToken(event.target.value); tokenRef.current = event.target.value.trim(); }} />
-        <p>Nyckeln används bara för denna skanning och sparas aldrig. Privata rapporter kan bara läsas i din betalningssession.</p>
+        <p>{t("form.private.note")}</p>
       </details>}
       {error ? (
         <p className="form-error" role="alert">
           {error}
         </p>
       ) : null}
-      {paywall && <div className="paywall" role="status"><strong>Fortsätt från $5</strong>
-        <p>7 dagar med obegränsade publika skanningar, eller vänta tills gränsen återställs vid midnatt UTC.</p>
-        <Link className="cta-button" href="/pricing">Se priser →</Link>
+      {paywall && <div className="paywall" role="status"><strong>{t("paywall.title")}</strong>
+        <p>{t("paywall.body")}</p>
+        <Link className="cta-button" href="/pricing">{t("paywall.cta")}</Link>
       </div>}
     </form>
   );

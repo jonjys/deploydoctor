@@ -2,23 +2,6 @@ import type { Category, CheckId, CheckResult } from "@/types/report";
 
 export const CATEGORIES: readonly Category[] = ["next", "vercel", "env", "supabase", "prisma"];
 
-export const CATEGORY_LABELS: Record<Category, string> = {
-  next: "Next.js",
-  vercel: "Vercel",
-  env: "Env",
-  supabase: "Supabase",
-  prisma: "Prisma/DB",
-};
-
-/** Longer labels for the checkboxes shown before a scan. */
-export const CATEGORY_OPTION_LABELS: Record<Category, string> = {
-  next: "Next.js / App Router",
-  vercel: "Vercel limits",
-  env: "Env vars",
-  supabase: "Supabase",
-  prisma: "Prisma/DB",
-};
-
 const CATEGORY_OF_CHECK: Record<CheckId, Category> = {
   "next-entry": "next",
   imports: "next",

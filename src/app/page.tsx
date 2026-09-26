@@ -1,15 +1,9 @@
 import { RepoForm } from "@/components/repo-form";
 import Link from "next/link";
 import { activePlan, customerSession } from "@/lib/access";
-
-const checks = [
-  "Next.js entrypoint",
-  "Broken imports",
-  "Server dependencies",
-  "Environment variables",
-  "Supabase boundaries",
-  "Prisma / database",
-];
+import { LangSwitch } from "@/components/lang";
+import { analysisText } from "@/lib/analysis-text";
+import { getT } from "@/lib/lang";
 
 function PulseMark() {
   return (
@@ -22,6 +16,9 @@ function PulseMark() {
 
 export default async function Home() {
   const plan = await activePlan(await customerSession());
+  const { lang, t } = await getT();
+  const { titles } = analysisText(lang);
+  const checks = [titles.nextEntry, titles.imports, titles.serverLibs, titles.env, titles.supabase, titles.prisma];
   return (
     <main className="site-shell home-page">
       <nav className="topbar" aria-label="Primary navigation">
@@ -29,39 +26,36 @@ export default async function Home() {
           <PulseMark />
           <span>DeployDoctor</span>
         </Link>
-        <div className="nav-links"><Link href="/pricing">Pricing</Link><Link href="/account">My scans</Link></div>
+        <div className="nav-links"><Link href="/pricing">{t("nav.pricing")}</Link><Link href="/account">{t("nav.myScans")}</Link><LangSwitch /></div>
       </nav>
 
       <section className="hero">
         <div className="eyebrow">
           <span className="eyebrow-icon">✦</span>
-          VERCEL READINESS SCANNER
+          {t("home.eyebrow")}
         </div>
-        <h1>Works locally, breaks on Vercel? Find out why in 10 seconds.</h1>
-        <p className="hero-copy">
-          Paste a public GitHub repository. DeployDoctor detects your stack and checks the code paths
-          most likely to fail after your push—without cloning or building it.
-        </p>
+        <h1>{t("home.h1")}</h1>
+        <p className="hero-copy">{t("home.copy")}</p>
 
         <RepoForm privateAccess={plan?.plan === "private"} />
 
-        <div className="trust-row" aria-label="Scanner characteristics">
+        <div className="trust-row" aria-label={t("home.trust.aria")}>
           <span>
-            <span className="mini-check">✓</span> {plan ? "Unlimited scans" : "3 free scans / day"}
+            <span className="mini-check">✓</span> {plan ? t("home.trust.unlimited") : t("home.trust.free")}
           </span>
           <span>
-            <span className="mini-check">✓</span> No code execution
+            <span className="mini-check">✓</span> {t("home.trust.noexec")}
           </span>
           <span>
-            <span className="mini-check">✓</span> Shareable report
+            <span className="mini-check">✓</span> {t("home.trust.share")}
           </span>
         </div>
       </section>
 
       <section className="checks-panel" aria-labelledby="checks-heading">
         <div>
-          <p className="section-kicker">THE PRE-FLIGHT</p>
-          <h2 id="checks-heading">Only the checks your stack needs.</h2>
+          <p className="section-kicker">{t("home.preflight")}</p>
+          <h2 id="checks-heading">{t("home.checksHeading")}</h2>
         </div>
         <ol className="check-list">
           {checks.map((check, index) => (
@@ -75,7 +69,7 @@ export default async function Home() {
 
       <footer className="footer">
         <span>DeployDoctor</span>
-        <span>Reads metadata and source through the GitHub REST API.</span>
+        <span>{t("home.footerNote")}</span>
       </footer>
     </main>
   );

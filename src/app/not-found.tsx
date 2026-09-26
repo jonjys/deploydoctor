@@ -1,14 +1,16 @@
 import Link from "next/link";
+import { getT } from "@/lib/lang";
 
-export default function NotFound() {
+export default async function NotFound() {
+  const { t } = await getT();
   return (
     <main className="site-shell">
       <div className="not-found-card">
-        <p className="section-kicker">404 / REPORT NOT FOUND</p>
-        <h1>This report is off the chart.</h1>
-        <p>The link may be incomplete, or the saved report is no longer available.</p>
+        <p className="section-kicker">{t("nf.kicker")}</p>
+        <h1>{t("nf.title")}</h1>
+        <p>{t("nf.body")}</p>
         <Link className="cta-button" href="/">
-          Scan a repository
+          {t("nf.cta")}
         </Link>
       </div>
     </main>

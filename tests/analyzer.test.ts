@@ -3,6 +3,7 @@ import test from "node:test";
 import { analyzeSnapshot, type RepositorySnapshot } from "../src/lib/analyzer";
 import { parseChecks } from "../src/lib/categories";
 import { defaultChecks, describeStack, detectStack } from "../src/lib/stack";
+import { langFromCookieHeader, messages, parseLang, t } from "../src/lib/i18n";
 
 function snapshot(
   entries: RepositorySnapshot["entries"],
@@ -188,4 +189,36 @@ test("defaultChecks and describeStack follow the detected stack", () => {
   assert.equal(describeStack(stack), "Next.js 14, Tailwind - No Supabase");
   assert.deepEqual(defaultChecks(detectStack({ packageJson: JSON.stringify({ dependencies: { express: "4", prisma: "6" } }) })), ["vercel", "env", "prisma"]);
   assert.deepEqual(defaultChecks(detectStack({ packageJson: null })), ["next", "vercel", "env"]);
+});
+
+test("English is the default language and Swedish is opt-in", () => {
+  assert.equal(parseLang(undefined), "en");
+  assert.equal(parseLang("fr"), "en");
+  assert.equal(parseLang("sv"), "sv");
+  assert.equal(langFromCookieHeader(null), "en");
+  assert.equal(langFromCookieHeader("a=1; dd_lang=sv; b=2"), "sv");
+  assert.equal(langFromCookieHeader("dd_lang=xx"), "en");
+  assert.equal(t("en", "err.dailyLimit"), "You have used today's 3 free scans. Your saved reports are still free to read.");
+  assert.match(t("sv", "err.dailyLimit"), /dagens 3 gratis/);
+  assert.equal(t("en", "report.issues", { n: 3 }), "3 issues to fix");
+});
+
+test("every message exists in both languages with the same placeholders", () => {
+  const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort().join(",");
+  for (const key of Object.keys(messages.en) as Array<keyof typeof messages.en>) {
+    assert.ok(messages.sv[key], `missing sv: ${key}`);
+    assert.equal(placeholders(messages.sv[key]), placeholders(messages.en[key]), `placeholders differ: ${key}`);
+  }
+  assert.equal(Object.keys(messages.sv).length, Object.keys(messages.en).length);
+});
+
+test("analysis text is English by default and Swedish on request", () => {
+  const files = { "package.json": JSON.stringify({ dependencies: { next: "16.3.6", playwright: "1" } }), ...page };
+  const english = analyzeSnapshot(snapshot(nextEntries, files));
+  const swedish = analyzeSnapshot(snapshot(nextEntries, files), { lang: "sv" });
+  assert.equal(english.checks.find((check) => check.id === "server-libs")?.title, "Vercel-incompatible server code");
+  assert.match(english.checks.find((check) => check.id === "server-libs")?.explanation ?? "", /heavyweight browser/);
+  assert.equal(swedish.checks.find((check) => check.id === "server-libs")?.title, "Vercel-inkompatibel serverkod");
+  assert.deepEqual(english.checks.map((check) => check.status), swedish.checks.map((check) => check.status));
+  assert.equal(describeStack(detectStack({ packageJson: JSON.stringify({ dependencies: { next: "14" } }) }), "sv"), "Next.js 14 - Ingen Supabase");
 });
