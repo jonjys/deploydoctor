@@ -44,11 +44,11 @@ The fixture test confirms that `https://github.com/manasvmoon/post-image-generat
 Add all four variables to the Preview environment, then deploy without `--prod`:
 
 ```powershell
-npx.cmd vercel@50.16.1 login
-npx.cmd vercel@50.16.1 link --yes
-npx.cmd vercel@50.16.1 env add GITHUB_TOKEN preview
-npx.cmd vercel@50.16.1 env add NEXT_PUBLIC_SUPABASE_URL preview
-npx.cmd vercel@50.16.1 env add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY preview
-npx.cmd vercel@50.16.1 env add SUPABASE_SECRET_KEY preview
-npx.cmd vercel@50.16.1 deploy --yes
+npx.cmd vercel@60.1.3 login
+npx.cmd vercel@60.1.3 link --yes
+npx.cmd vercel@60.1.3 env add GITHUB_TOKEN preview
+npx.cmd vercel@60.1.3 env add NEXT_PUBLIC_SUPABASE_URL preview
+npx.cmd vercel@60.1.3 env add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY preview
+npx.cmd vercel@60.1.3 env add SUPABASE_SECRET_KEY preview
+npx.cmd vercel@60.1.3 deploy --yes
 ```
