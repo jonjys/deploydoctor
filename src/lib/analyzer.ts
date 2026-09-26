@@ -18,6 +18,8 @@ export type RepositorySnapshot = {
 };
 
 const SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?|vue|svelte)$/i;
+// Test files hold fixture strings that look like imports and env usage; they never run on Vercel.
+const TEST_FILE = /(?:^|\/)(?:tests?|__tests__|__mocks__|fixtures|spec)\/|\.(?:test|spec|stories)\.[cm]?[jt]sx?$/i;
 const RESOLVABLE_EXTENSIONS = [
   ".ts",
   ".tsx",
@@ -143,7 +145,7 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
 
   for (const [file, source] of snapshot.contents) {
     // next-env.d.ts intentionally references generated .next type files that are gitignored.
-    if (!SOURCE_EXTENSION.test(file) || path.posix.basename(file) === "next-env.d.ts") continue;
+    if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file) || path.posix.basename(file) === "next-env.d.ts") continue;
 
     for (const { specifier: original, line } of extractImports(source)) {
       const specifier = original.split(/[?#]/)[0];
@@ -231,7 +233,7 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
       continue;
     }
 
-    if (!SOURCE_EXTENSION.test(file)) continue;
+    if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file)) continue;
     const envMatcher = /process\.env(?:\.([A-Z][A-Z0-9_]*)|\[["']([A-Z][A-Z0-9_]*)["']\])/g;
     let match: RegExpExecArray | null;
     while ((match = envMatcher.exec(source))) {

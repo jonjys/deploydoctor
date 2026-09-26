@@ -222,3 +222,17 @@ test("analysis text is English by default and Swedish on request", () => {
   assert.deepEqual(english.checks.map((check) => check.status), swedish.checks.map((check) => check.status));
   assert.equal(describeStack(detectStack({ packageJson: JSON.stringify({ dependencies: { next: "14" } }) }), "sv"), "Next.js 14 - Ingen Supabase");
 });
+
+test("fixture strings inside test files are not reported as broken imports or env usage", () => {
+  const results = analyzeSnapshot(snapshot(
+    [...nextEntries, { path: "tests", type: "tree" }, { path: "tests/app.test.ts", type: "blob" }, { path: "app/x.spec.tsx", type: "blob" }],
+    {
+      "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+      ...page,
+      "tests/app.test.ts": 'const src = \'import x from "./missing"; process.env.MISSING\';',
+      "app/x.spec.tsx": 'import "./nope"; const k = process.env.NEXT_PUBLIC_SECRET_KEY;',
+    },
+  ), { checks: ["next", "env"] });
+  assert.equal(results.checks.find((check) => check.id === "imports")?.status, "green");
+  assert.equal(results.checks.find((check) => check.id === "env")?.status, "green");
+});
