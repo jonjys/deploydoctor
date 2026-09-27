@@ -140,6 +140,8 @@ const en = {
   "pricing.history": "Personal scan history",
   "pricing.expires": "Expires after 7 days; no renewal",
   "pricing.privateRepos": "Private repos with your read-only GitHub token",
+  "pricing.privateToken": "Paste a fine-grained GitHub token (Contents: read) for each scan. Takes a minute to create; never stored",
+  "pricing.privateSession": "Private reports open only in the browser you paid in",
   "pricing.cancel": "Cancel anytime in the billing portal",
   "pricing.cta.week": "Get 7 days",
   "pricing.cta.choose": "Choose plan",
@@ -183,6 +185,7 @@ const en = {
   "account.download": "Download code patch",
   "account.noOrders": "No fix orders yet.",
   "account.manage": "Manage / cancel subscription",
+  "account.passNote": "One-time payment. The pass ends on its own; there is nothing to cancel.",
   "account.private": "Private",
   "account.public": "Public",
 
@@ -355,6 +358,8 @@ const sv: Record<MessageKey, string> = {
   "pricing.history": "Personlig skanningshistorik",
   "pricing.expires": "Går ut efter 7 dagar; förnyas inte",
   "pricing.privateRepos": "Privata repon med din skrivskyddade GitHub-token",
+  "pricing.privateToken": "Klistra in en fine-grained GitHub-token (Contents: read) vid varje skanning. Tar en minut att skapa; sparas aldrig",
+  "pricing.privateSession": "Privata rapporter öppnas bara i webbläsaren du betalade i",
   "pricing.cancel": "Avsluta när som helst i faktureringsportalen",
   "pricing.cta.week": "Köp 7 dagar",
   "pricing.cta.choose": "Välj plan",
@@ -398,6 +403,7 @@ const sv: Record<MessageKey, string> = {
   "account.download": "Ladda ner kodpatch",
   "account.noOrders": "Inga fixbeställningar ännu.",
   "account.manage": "Hantera / avsluta abonnemang",
+  "account.passNote": "Engångsbetalning. Passet går ut av sig självt; det finns inget att avsluta.",
   "account.private": "Privat",
   "account.public": "Publik",
 

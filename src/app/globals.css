@@ -399,3 +399,4 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .lang-switch button[aria-pressed="true"] { background: var(--ink); color: white; }
 .lang-switch button:hover:not([aria-pressed="true"]) { background: var(--panel); color: var(--ink); }
 .nav-links { align-items: center; }
+.price-card li.plan-note { font-size: 12.5px; line-height: 1.45; list-style: "↳ "; opacity: 0.85; }

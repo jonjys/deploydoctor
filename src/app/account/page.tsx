@@ -19,8 +19,9 @@ export default async function Account() {
     stripe_customer_id: `eq.${customer.customerId}`, select: "id,plan,status,report_id", order: "created_at.desc", limit: "100",
   }));
   return <main className="site-shell"><SiteNav /><header className="pricing-header"><h1>{t("nav.myScans")}</h1><p>{customer.email}</p>
-    <p>{plan ? t("account.active", { plan: plan.plan, date: new Date(plan.current_period_end).toLocaleDateString(dateLocale(lang)) }) : t("account.noPlan")}</p>
-    <BillingPortalButton /></header><section className="account-list"><h2>{t("account.history")}</h2>
+    <p>{plan ? t("account.active", { plan: t(`plan.${plan.plan}.name`), date: new Date(plan.current_period_end).toLocaleDateString(dateLocale(lang)) }) : t("account.noPlan")}</p>
+    {/* A 7-day pass is a one-time payment: there is no subscription to manage or cancel. */}
+    {plan?.plan === "week" ? <p>{t("account.passNote")}</p> : <BillingPortalButton />}</header><section className="account-list"><h2>{t("account.history")}</h2>
     {!plan || plan.plan === "week" ? <p>{t("account.historyNote")}</p> : history.length ? history.map((report) => <Link key={report.report_id} href={`/r/${report.report_id}`}>
       {report.repo_url} <small>{report.is_private ? t("account.private") : t("account.public")} · {new Date(report.created_at).toLocaleString(dateLocale(lang))}</small></Link>) : <p>{t("account.nextScan")}</p>}
     <h2>{t("account.orders")}</h2>{orders.length ? orders.map((order) => <div key={order.id}><Link href={`/r/${order.report_id}`}>{order.plan === "fix-one" ? t("account.orderOne") : t("account.orderAll")}</Link>
