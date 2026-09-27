@@ -6,6 +6,7 @@ import { isPlan, isScanPlan, plans } from "@/lib/plans";
 import { getReport } from "@/lib/reports";
 import { priceFor, sameOrigin, stripeClient } from "@/lib/stripe";
 import { langFromRequest, t } from "@/lib/i18n";
+import { appOrigin } from "@/lib/site";
 
 export async function POST(request: Request) {
   const lang = langFromRequest(request);
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     const stripe = stripeClient();
     const existing = await customerSession();
     const nonce = randomBytes(32).toString("hex");
-    const origin = new URL(request.url).origin;
+    const origin = appOrigin(request);
     const metadata = { app: "deploydoctor", plan, reportId, checkId,
       context: typeof body.context === "string" ? body.context.slice(0, 300) : "",
       browser: digest(`checkout:${nonce}`) };

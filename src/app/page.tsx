@@ -70,6 +70,7 @@ export default async function Home() {
       <footer className="footer">
         <span>DeployDoctor</span>
         <span>{t("home.footerNote")}</span>
+        <a href="https://github.com/jonjys/deploydoctor/blob/master/LICENSE" rel="noopener">{t("footer.license")}</a>
       </footer>
     </main>
   );

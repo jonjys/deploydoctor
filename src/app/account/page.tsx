@@ -10,7 +10,7 @@ export default async function Account() {
   const { lang, t } = await getT();
   const customer = await customerSession();
   if (!customer) return <main className="site-shell"><SiteNav /><section className="checkout-card"><h1>{t("nav.myScans")}</h1>
-    <p>{t("account.needBrowser")}</p><Link href="/pricing">{t("account.seePricing")}</Link></section></main>;
+    <p>{t("account.needBrowser")}</p><p><Link href="/restore">{t("account.restore")}</Link></p><Link href="/pricing">{t("account.seePricing")}</Link></section></main>;
   const plan = await activePlan(customer);
   const history = plan && plan.plan !== "week" ? await db<Array<{ report_id: string; repo_url: string; is_private: boolean; created_at: string }>>(query("report_history", {
     stripe_customer_id: `eq.${customer.customerId}`, select: "report_id,repo_url,is_private,created_at", order: "created_at.desc", limit: "100",
