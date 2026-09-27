@@ -54,7 +54,10 @@ export async function POST(request: Request) {
     return Response.json({ url: session.url });
   } catch (error) {
     if (error instanceof SyntaxError) return Response.json({ error: t(lang, "pay.invalidJson") }, { status: 400 });
-    console.error("Checkout creation failed", error instanceof Error ? error.name : "unknown");
+    console.error(
+      "Checkout creation failed",
+      error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+    );
     return Response.json({ error: t(lang, "pay.startFailed") }, { status: 503 });
   }
 }
