@@ -16,7 +16,7 @@ export function priceFor(plan: Plan, lang: Lang = "en"): Stripe.Checkout.Session
     return { price, quantity: 1 };
   }
   return { quantity: 1, price_data: { currency: "usd", unit_amount: item.amount,
-    product_data: { name: `DeployDoctor — ${t(lang, `plan.${plan}.name` as "plan.fix-one.name")}`, description: t(lang, "pay.productDescription") } } };
+    product_data: { name: `DeployDoctor: ${t(lang, `plan.${plan}.name` as "plan.fix-one.name")}`, description: t(lang, "pay.productDescription") } } };
 }
 export function scanPlanForPrice(price: string) {
   return (["week", "public", "private"] as const).find((plan) => process.env[plans[plan].env] === price);

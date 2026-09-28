@@ -9,6 +9,8 @@ const CATEGORY_OF_CHECK: Record<CheckId, Category> = {
   env: "env",
   supabase: "supabase",
   prisma: "prisma",
+  "build-config": "vercel",
+  secrets: "env",
 };
 
 export function categoryOf(check: Pick<CheckResult, "id" | "category">): Category {

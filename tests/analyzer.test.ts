@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeSnapshot, type RepositorySnapshot } from "../src/lib/analyzer";
+import { analyzeSnapshot, extractEnvReads, type RepositorySnapshot } from "../src/lib/analyzer";
 import { parseChecks } from "../src/lib/categories";
+import { freeFixInstructions } from "../src/lib/fix-instructions";
 import { defaultChecks, describeStack, detectStack } from "../src/lib/stack";
 import { langFromCookieHeader, messages, parseLang, t } from "../src/lib/i18n";
 
@@ -122,7 +123,7 @@ test("without a choice, a Next.js repo without Supabase never gets a Supabase ch
   const results = analyzeSnapshot(snapshot(nextEntries, {
     "package.json": JSON.stringify({ dependencies: { next: "14.2.0", tailwindcss: "^3" } }), ...page,
   }));
-  assert.deepEqual(ids(results), ["next-entry", "imports", "server-libs", "env"]);
+  assert.deepEqual(ids(results), ["next-entry", "imports", "server-libs", "build-config", "env", "secrets"]);
   assert.deepEqual(results.scope, { scanned: ["next", "vercel", "env"], ignored: ["supabase", "prisma"] });
   assert.equal(results.stack?.hasSupabase, false);
   assert.equal(results.stack?.hasTailwind, true);
@@ -147,10 +148,10 @@ test("explicit checks run only the selected categories and record what was ignor
     "package.json": JSON.stringify({ dependencies: { next: "16.3.6", "@supabase/ssr": "1" } }),
     "app/page.tsx": 'import { createBrowserClient } from "@supabase/ssr"; export default function Page() { return null }',
   }), { checks: ["vercel", "env"] });
-  assert.deepEqual(ids(results), ["server-libs", "env"]);
+  assert.deepEqual(ids(results), ["server-libs", "build-config", "env", "secrets"]);
   assert.deepEqual(results.scope?.ignored, ["next", "supabase", "prisma"]);
   assert.equal(results.checks.every((check) => check.category), true);
-  assert.equal(results.summary.red + results.summary.yellow + results.summary.green, 2);
+  assert.equal(results.summary.red + results.summary.yellow + results.summary.green, 4);
 });
 
 test("Prisma check flags a missing generate step and SQLite, and is skipped when unselected", () => {
@@ -235,4 +236,239 @@ test("fixture strings inside test files are not reported as broken imports or en
   ), { checks: ["next", "env"] });
   assert.equal(results.checks.find((check) => check.id === "imports")?.status, "green");
   assert.equal(results.checks.find((check) => check.id === "env")?.status, "green");
+});
+
+test("Vercel system env variables are built in, but custom variables must be documented", () => {
+  const results = analyzeSnapshot(snapshot(nextEntries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "app/page.tsx": "const a = process.env.NEXT_PUBLIC_VERCEL_URL; const b = process.env.VERCEL_GIT_COMMIT_SHA;"
+      + " const c = process.env.VERCEL_ENV; const d = process.env.MY_SECRET; export default function Page() { return null }",
+  }), { checks: ["env"] });
+  const env = results.checks[0];
+  assert.equal(env.status, "red");
+  assert.deepEqual(env.findings?.map((finding) => finding.problem), ["MY_SECRET is missing from .env.example"]);
+});
+
+test("an import that only matches a file with different letter case is red with the exact name", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries,
+    { path: "components", type: "tree" }, { path: "components/ui", type: "tree" },
+    { path: "components/button.tsx", type: "blob" }, { path: "components/ui/Card.tsx", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "app/page.tsx": 'import Button from "../components/Button";\nimport { Card } from "@/components/UI/card";\nexport default function Page() { return null }',
+  }), { checks: ["next"] });
+  const imports = results.checks.find((check) => check.id === "imports");
+  assert.equal(imports?.status, "red");
+  assert.equal(imports?.findings?.length, 2);
+  assert.match(imports?.findings?.[0].problem ?? "", /components\/button\.tsx/);
+  assert.match(imports?.findings?.[0].fix ?? "", /"\.\.\/components\/button"/);
+  assert.match(imports?.findings?.[1].fix ?? "", /"@\/components\/ui\/Card"/);
+  assert.equal(imports?.findings?.[0].command, undefined);
+});
+
+test("imports with exactly matching letter case are not flagged", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries,
+    { path: "components", type: "tree" }, { path: "components/Button.tsx", type: "blob" }, { path: "components/button.css", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "app/page.tsx": 'import Button from "../components/Button";\nimport "@/components/button.css";\nexport default function Page() { return null }',
+  }), { checks: ["next"] });
+  assert.equal(results.checks.find((check) => check.id === "imports")?.status, "green");
+});
+
+test("env reads through destructuring and optional chaining are found", () => {
+  const source = [
+    'const { DATABASE_URL, API_KEY: apiKey, "QUOTED_NAME": quoted, WITH_DEFAULT = "x", ...rest } = process.env;',
+    "const a = process.env?.OPTIONAL_READ; const b = process.env?.['OPTIONAL_BRACKET']; const c = process.env['BRACKET'];",
+  ].join("\n");
+  assert.deepEqual(extractEnvReads(source).map((read) => read.name),
+    ["DATABASE_URL", "API_KEY", "QUOTED_NAME", "WITH_DEFAULT", "OPTIONAL_READ", "OPTIONAL_BRACKET", "BRACKET"]);
+
+  const results = analyzeSnapshot(snapshot([...nextEntries, { path: ".env.example", type: "blob" }], {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "DATABASE_URL=\n",
+    "app/page.tsx": "const { DATABASE_URL, API_KEY: key } = process.env;\nexport default function Page() { return null }",
+  }), { checks: ["env"] });
+  assert.equal(results.checks[0].status, "red");
+  assert.deepEqual(results.checks[0].findings?.map((finding) => [finding.problem, finding.line]), [["API_KEY is missing from .env.example", 1]]);
+});
+
+test("look-alikes of env destructuring are not treated as env reads", () => {
+  const source = [
+    "const { A, B } = process.envelope;",
+    "const { C } = process.env.NESTED;",
+    "const { d, e } = process.env;",
+    "const f = process.env.lowercase;",
+  ].join("\n");
+  // Only the plain property read on line 2 counts; nothing is destructured from process.env itself.
+  assert.deepEqual(extractEnvReads(source).map((read) => read.name), ["NESTED"]);
+});
+
+test("a .gitignore that hides .env.example gives a yellow env check with the line to add", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".gitignore", type: "blob" }, { path: ".env.local.example", type: "blob" }];
+  const files = {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.local.example": "API_KEY=\n",
+    "app/page.tsx": "const key = process.env.API_KEY; export default function Page() { return null }",
+  };
+  const env = analyzeSnapshot(snapshot(entries, { ...files, ".gitignore": "node_modules\n# env\n.env*\n" }), { checks: ["env"] }).checks[0];
+  assert.equal(env.status, "yellow");
+  assert.equal(env.findings?.[0].file, ".gitignore");
+  assert.equal(env.findings?.[0].line, 3);
+  assert.match(env.fix, /!\.env\.example/);
+
+  // Missing variables stay red, and the .gitignore line is part of the fix.
+  const red = analyzeSnapshot(snapshot(entries, { ...files, ".env.local.example": "", ".gitignore": ".env*\n!.env.example\n.env*\n" }), { checks: ["env"] }).checks[0];
+  assert.equal(red.status, "red");
+  assert.match(red.fix, /!\.env\.example/);
+});
+
+test("a .gitignore with the .env.example exception, or a tracked .env.example, is not flagged", () => {
+  const files = {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "API_KEY=\n",
+    "app/page.tsx": "const key = process.env.API_KEY; export default function Page() { return null }",
+  };
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".gitignore", type: "blob" }, { path: ".env.example", type: "blob" }];
+  assert.equal(analyzeSnapshot(snapshot(entries, { ...files, ".gitignore": ".env*\n!.env.example\n" }), { checks: ["env"] }).checks[0].status, "green");
+  // Tracked files stay tracked even if a rule matches them.
+  assert.equal(analyzeSnapshot(snapshot(entries, { ...files, ".gitignore": ".env*\n" }), { checks: ["env"] }).checks[0].status, "green");
+  // No env reads: no template is needed, so the rule does not matter.
+  assert.equal(analyzeSnapshot(snapshot([...nextEntries, { path: ".gitignore", type: "blob" }], {
+    ...page, "package.json": files["package.json"], ".gitignore": ".env*\n" }), { checks: ["env"] }).checks[0].status, "green");
+});
+
+test("build configuration: several lockfiles, no build script and an unsupported engines.node are yellow", () => {
+  const packageJson = JSON.stringify({ packageManager: "pnpm@9.0.0", engines: { node: "18.x" },
+    dependencies: { next: "16.3.6" }, scripts: { dev: "next dev" } }, null, 2);
+  const entries: RepositorySnapshot["entries"] = [...nextEntries,
+    { path: "package-lock.json", type: "blob" }, { path: "pnpm-lock.yaml", type: "blob" }];
+  const build = analyzeSnapshot(snapshot(entries, { ...page, "package.json": packageJson }), { checks: ["vercel"] })
+    .checks.find((check) => check.id === "build-config");
+  assert.equal(build?.status, "yellow");
+  assert.equal(build?.category, "vercel");
+  assert.deepEqual(build?.findings?.map((finding) => finding.file), ["package-lock.json", "package.json", "package.json"]);
+  assert.equal(build?.findings?.[0].command, "git rm -- 'package-lock.json'");
+  assert.match(build?.findings?.[2].problem ?? "", /"18\.x"/);
+});
+
+test("build configuration: one lockfile, a build script and supported Node ranges are green", () => {
+  for (const node of [">=18", "^20.11.0", "20.x || 22.x", ">= 22.0.0 < 23", "18 - 20", "24", "*", "lts/*"]) {
+    const packageJson = JSON.stringify({ engines: { node }, dependencies: { next: "16.3.6" }, scripts: { build: "next build" } });
+    const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "pnpm-lock.yaml", type: "blob" }, { path: "sub/package-lock.json", type: "blob" }];
+    const build = analyzeSnapshot(snapshot(entries, { ...page, "package.json": packageJson }), { checks: ["vercel"] })
+      .checks.find((check) => check.id === "build-config");
+    assert.equal(build?.status, "green", node);
+  }
+  // vercel.json can supply the build command instead of package.json.
+  const viaVercel = analyzeSnapshot(snapshot([...nextEntries, { path: "vercel.json", type: "blob" }], { ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), "vercel.json": '{ "buildCommand": "next build" }' }), { checks: ["vercel"] });
+  assert.equal(viaVercel.checks.find((check) => check.id === "build-config")?.status, "green");
+});
+
+test("Node-only imports in Edge runtime code are red in server-libs", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries,
+    { path: "middleware.ts", type: "blob" }, { path: "app/api/og/route.ts", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "15.1.0" } }),
+    "middleware.ts": 'import { NextResponse } from "next/server";\nimport { readFileSync } from "node:fs";\nexport function middleware() { return NextResponse.next() }',
+    "app/api/og/route.ts": 'export const runtime = "edge";\nconst { exec } = require("child_process");\nexport async function GET() { return new Response("ok") }',
+  }), { checks: ["vercel"] });
+  const server = results.checks.find((check) => check.id === "server-libs");
+  assert.equal(server?.status, "red");
+  assert.deepEqual(server?.findings?.map((finding) => `${finding.file}:${finding.line}`).sort(), ["app/api/og/route.ts:2", "middleware.ts:2"]);
+  assert.match(server?.findings?.find((finding) => finding.file === "middleware.ts")?.fix ?? "", /proxy\.ts/);
+});
+
+test("Edge-safe code, Node.js middleware, proxy.ts and type-only imports are not flagged", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries,
+    { path: "src/middleware.ts", type: "blob" }, { path: "proxy.ts", type: "blob" }, { path: "app/api/a/route.ts", type: "blob" }, { path: "app/api/b/route.ts", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "src/middleware.ts": 'import fs from "fs";\nexport const config = { runtime: "nodejs", matcher: "/" };\nexport function middleware() {}',
+    "proxy.ts": 'import { readFile } from "node:fs/promises";\nexport function proxy() {}',
+    "app/api/a/route.ts": 'export const runtime = "edge";\nimport type { Stats } from "fs";\nimport { type Socket } from "net";\n// import fs from "fs";\nimport { NextResponse } from "next/server";',
+    "app/api/b/route.ts": '// export const runtime = "edge";\nimport fs from "fs";\nexport async function GET() { return new Response(String(fs)) }',
+  }), { checks: ["vercel"] });
+  assert.equal(results.checks.find((check) => check.id === "server-libs")?.status, "green");
+});
+
+// Built by concatenation so no complete key-shaped string is ever committed in this file.
+const fakeBody = "Qm7Rk2Vt9Lp4Xw8Zn3Jc6Hb1Fg5Ds0Ay";
+const liveStripe = "sk_" + "live_" + fakeBody;
+
+test("hardcoded live secrets in current source files are red and always masked", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "lib/pay.ts", type: "blob" }, { path: ".env", type: "blob" }, { path: "lib/key.ts", type: "blob" }];
+  const pem = "-----BEGIN RSA " + "PRIVATE KEY-----\\n" + "MIIEowIBAAKCAQEA7bq9" + fakeBody + "Tz\\n-----END RSA PRIVATE KEY-----";
+  const results = analyzeSnapshot(snapshot(entries, {
+    ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "lib/pay.ts": `export const stripe = new Stripe("${liveStripe}");`,
+    ".env": `AWS_ACCESS_KEY_ID=${"AKIA" + "Q4ZT7NR2WX5KLM3B"}\nGITHUB_TOKEN=${"ghp_" + fakeBody + "a1B2"}\n`,
+    "lib/key.ts": `const key = "${pem}";`,
+  }), { checks: ["env"] });
+  const secrets = results.checks.find((check) => check.id === "secrets");
+  assert.equal(secrets?.status, "red");
+  assert.equal(secrets?.category, "env");
+  assert.deepEqual(secrets?.findings?.map((finding) => `${finding.file}:${finding.line}`).sort(), [".env:1", ".env:2", "lib/key.ts:1", "lib/pay.ts:1"]);
+  const everything = JSON.stringify(results);
+  assert.ok(!everything.includes(fakeBody), "no secret body may appear anywhere in the report");
+  assert.ok(everything.includes("sk_live_…" + fakeBody.slice(-4)));
+  assert.ok(everything.includes("-----BEGIN RSA PRIVATE KEY-----…"));
+});
+
+test("placeholders, test files, empty templates and test-mode keys are not reported as secrets", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }, { path: "lib/docs.ts", type: "blob" }, { path: "tests/pay.test.ts", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "STRIPE_SECRET_KEY=\nSTRIPE_WEBHOOK_SECRET=whsec_...\nAWS_ACCESS_KEY_ID=" + "AKIA" + "IOSFODNN7EXAMPLE\n",
+    "lib/docs.ts": [
+      "// Stripe keys look like " + "sk_" + "live_xxxxxxxxxxxxxxxxxxxxxxxx",
+      "const hint = \"" + "sk_" + "live_" + "your_key_here_0000000000000\";",
+      "const test = \"sk_" + "test_" + fakeBody + "\";",
+      "const strip = key.replace(\"-----BEGIN PRIVATE " + "KEY-----\", \"\");",
+      "const pat = \"" + "ghp_" + "0".repeat(36) + "\";",
+    ].join("\n"),
+    "tests/pay.test.ts": `const key = "${liveStripe}";`,
+  }), { checks: ["env"] });
+  assert.equal(results.checks.find((check) => check.id === "secrets")?.status, "green");
+});
+
+test("missing env variables come with a complete .env.example that is also in the free instructions", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }];
+  const stripeLine = "STRIPE_SECRET_KEY=" + "sk_" + "live_" + "Qm7Rk2Vt9Lp4Xw8Zn3Jc6Hb1Fg5Ds0Ay";
+  const results = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": `# Database\nDATABASE_URL=postgres://localhost/dev\n${stripeLine}\n`,
+    "app/page.tsx": "const a = process.env.DATABASE_URL; const b = process.env.ZED; const c = process.env.ALPHA;\nexport default function Page() { return null }",
+  }), { checks: ["env"] });
+  const env = results.checks[0];
+  assert.equal(env.status, "red");
+  assert.deepEqual(env.suggestedFile, {
+    path: ".env.example",
+    content: "# Database\nDATABASE_URL=postgres://localhost/dev\nSTRIPE_SECRET_KEY=\nALPHA=\nZED=\n",
+    command: "git add -- .env.example",
+  });
+  const text = freeFixInstructions({ id: "r", repo_url: "https://github.com/example/repo", created_at: "", results });
+  assert.equal(text.match(/git add -- \.env\.example/g)?.length, 1);
+  assert.match(text, /```\n# Database\nDATABASE_URL=postgres:\/\/localhost\/dev\nSTRIPE_SECRET_KEY=\nALPHA=\nZED=\n```/);
+  assert.ok(!text.includes("Qm7Rk2Vt9Lp4"));
+});
+
+test("no complete file is suggested when nothing is missing, and old reports without it still format", () => {
+  const results = analyzeSnapshot(snapshot([...nextEntries, { path: ".env.example", type: "blob" }], {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "API_KEY=\nNEXT_PUBLIC_ADMIN_TOKEN=\n",
+    "app/page.tsx": "const a = process.env.API_KEY; const b = process.env.NEXT_PUBLIC_ADMIN_TOKEN;\nexport default function Page() { return null }",
+  }), { checks: ["env"] });
+  assert.equal(results.checks[0].status, "red"); // exposed NEXT_PUBLIC_ secret, nothing missing
+  assert.equal(results.checks[0].suggestedFile, undefined);
+
+  const oldReport = { id: "r", repo_url: "https://github.com/example/repo", created_at: "", results: {
+    ...results, checks: [{ id: "env" as const, title: "Environment variables", status: "red" as const, explanation: "1 env variable is missing.",
+      fix: "Add X=.", evidence: [], findings: [{ file: "a.ts", line: 1, problem: "X is missing", fix: "Add X=", command: "git add -- .env.example" }] }] } };
+  assert.match(freeFixInstructions(oldReport), /File: a\.ts:1 - X is missing\.\nFix: Add X=\nCommand \(after making the change\): git add -- \.env\.example/);
 });

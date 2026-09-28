@@ -104,8 +104,8 @@ async function githubRequest<T>(pathname: string, token?: string): Promise<T> {
 
 function priorityFor(pathname: string): number {
   if (pathname === "package.json") return 0;
-  if (/(?:^|\/)\.env(?:\..+)?$/.test(pathname)) return 1;
-  if (/^(?:tsconfig|jsconfig)\.json$/.test(pathname) || /\.prisma$/.test(pathname)) return 2;
+  if (/(?:^|\/)\.env(?:\..+)?$/.test(pathname) || pathname === ".gitignore") return 1;
+  if (/^(?:tsconfig|jsconfig|vercel)\.json$/.test(pathname) || /\.prisma$/.test(pathname)) return 2;
   if (API_ROUTE.test(pathname)) return 3;
   if (/(?:^|\/)(?:src\/)?app\/.*\/(?:page|layout|loading|default|not-found)\.[jt]sx$/i.test(pathname)) return 4;
   return 5;
@@ -142,6 +142,8 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
         (entry.size ?? 0) <= MAX_FILE_BYTES &&
         (SOURCE_FILE.test(entry.path) ||
           entry.path === "package.json" ||
+          entry.path === ".gitignore" ||
+          entry.path === "vercel.json" ||
           /^(?:tsconfig|jsconfig)\.json$/.test(entry.path) ||
           /\.prisma$/.test(entry.path) ||
           /(?:^|\/)\.env(?:\..+)?$/.test(entry.path)),

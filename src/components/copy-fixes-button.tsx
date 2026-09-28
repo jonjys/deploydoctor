@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useT } from "@/components/lang";
 
-export function CopyFixesButton({ instructions }: { instructions: string }) {
+/** Copies the free instructions, or with `file` a complete file shown on the report. */
+export function CopyFixesButton({ instructions, file = false }: { instructions: string; file?: boolean }) {
   const t = useT();
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -18,8 +19,8 @@ export function CopyFixesButton({ instructions }: { instructions: string }) {
   }
 
   return (
-    <div><button className="copy-button" type="button" onClick={copyInstructions}>
-      {copied ? t("report.copied") : t("report.copy")}
-    </button>{failed && <textarea aria-label={t("report.copyAria")} readOnly value={instructions} />}</div>
+    <div><button className={file ? "copy-button file-copy-button" : "copy-button"} type="button" onClick={copyInstructions}>
+      {copied ? t("report.copied") : t(file ? "report.copyFile" : "report.copy")}
+    </button>{failed && <textarea aria-label={t(file ? "report.copyFileAria" : "report.copyAria")} readOnly value={instructions} />}</div>
   );
 }

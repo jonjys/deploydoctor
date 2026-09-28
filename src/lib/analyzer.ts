@@ -4,6 +4,9 @@ import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { defaultChecks, detectStack } from "@/lib/stack";
 import { analysisText, type AnalysisText } from "@/lib/analysis-text";
 import type { Lang } from "@/lib/i18n";
+import { ignoringRule } from "@/lib/gitignore";
+import { nodeRangeAllowsMajor } from "@/lib/node-range";
+import { findSecrets } from "@/lib/secrets";
 
 export type RepositorySnapshot = {
   owner: string;
@@ -45,6 +48,12 @@ const BUILT_IN_ENV = new Set([
   "VERCEL_PROJECT_PRODUCTION_URL",
   "CI",
 ]);
+// Vercel's system env vars (VERCEL_URL, VERCEL_GIT_COMMIT_SHA, NEXT_PUBLIC_VERCEL_ENV, ...) are set by the platform.
+const VERCEL_SYSTEM_ENV = /^(?:NEXT_PUBLIC_)?VERCEL(?:_[A-Z0-9_]+)?$/;
+
+function isBuiltInEnv(name: string): boolean {
+  return BUILT_IN_ENV.has(name) || VERCEL_SYSTEM_ENV.test(name);
+}
 
 function makeCheck(
   id: CheckResult["id"],
@@ -76,6 +85,9 @@ function parsePackageJson(snapshot: RepositorySnapshot) {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
       scripts?: Record<string, string>;
+      engines?: Record<string, unknown>;
+      workspaces?: unknown;
+      packageManager?: string;
     };
   } catch {
     return null;
@@ -138,10 +150,18 @@ function aliasRoots(snapshot: RepositorySnapshot): string[] {
   return ["src", ""];
 }
 
+/** Rebuilds `wanted` with the letter case of `actual` wherever the two only differ in case. */
+function withCaseOf(wanted: string, actual: string): string {
+  return [...wanted].map((char, index) => actual[index]?.toLowerCase() === char.toLowerCase() ? actual[index] : char).join("");
+}
+
 function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const files = new Set(snapshot.entries.filter((entry) => entry.type === "blob").map((entry) => entry.path));
+  // Linux file systems (and so Vercel builds) are case-sensitive; macOS and Windows are not.
+  const filesByLowerCase = new Map([...files].map((file) => [file.toLowerCase(), file]));
   const aliases = aliasRoots(snapshot);
   const missing: Finding[] = [];
+  let caseMismatches = 0;
 
   for (const [file, source] of snapshot.contents) {
     // next-env.d.ts intentionally references generated .next type files that are gitignored.
@@ -149,18 +169,31 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
 
     for (const { specifier: original, line } of extractImports(source)) {
       const specifier = original.split(/[?#]/)[0];
-      let candidates: string[] = [];
+      let bases: Array<{ base: string; toSpecifier: (resolved: string) => string }> = [];
       if (specifier.startsWith("./") || specifier.startsWith("../")) {
-        candidates = possibleImportTargets(path.posix.join(path.posix.dirname(file), specifier));
+        const directory = path.posix.dirname(file);
+        bases = [{ base: path.posix.join(directory, specifier), toSpecifier: (resolved) => {
+          const relative = path.posix.relative(directory, resolved);
+          return relative.startsWith("../") ? relative : `./${relative}`;
+        } }];
       } else if (specifier.startsWith("@/")) {
-        candidates = aliases.flatMap((root) =>
-          possibleImportTargets(path.posix.join(root, specifier.slice(2))),
-        );
+        bases = aliases.map((root) => ({ base: path.posix.join(root, specifier.slice(2)),
+          toSpecifier: (resolved: string) => `@/${root ? resolved.slice(root.length + 1) : resolved}` }));
       } else {
         continue;
       }
+      const candidates = bases.flatMap(({ base }) => possibleImportTargets(base));
 
       if (!candidates.some((candidate) => files.has(candidate))) {
+        const caseMatch = bases.flatMap(({ base, toSpecifier }) => possibleImportTargets(base).map((candidate) => ({
+          base: path.posix.normalize(base).replace(/^\.\//, ""), toSpecifier, actual: filesByLowerCase.get(candidate.toLowerCase()) })))
+          .find((item) => item.actual);
+        if (caseMatch?.actual) {
+          const exact = caseMatch.toSpecifier(withCaseOf(caseMatch.base, caseMatch.actual));
+          missing.push({ file, line, problem: x.imports.caseProblem(original, caseMatch.actual), fix: x.imports.caseFix(exact, line) });
+          caseMismatches += 1;
+          continue;
+        }
         const target = candidates[0];
         missing.push({ file, line, problem: x.imports.problem(original), fix: x.imports.fix(target, line),
           command: `git add -- ${shellQuote(target)}` });
@@ -173,7 +206,7 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
       "imports",
       x.titles.imports,
       "red",
-      x.imports.summary(missing.length),
+      x.imports.summary(missing.length, caseMismatches),
       missing[0].fix,
       missing.map((item) => `${item.file}:${item.line} → ${item.problem}`), missing,
     );
@@ -193,6 +226,50 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
   return makeCheck("imports", x.titles.imports, "green", x.imports.ok, x.noChange, [x.imports.read(snapshot.sourceFilesRead)]);
 }
 
+// Node built-ins and packages that cannot load in the Edge runtime, matched by exact module name.
+const NODE_ONLY_MODULES = new Set([
+  "fs", "fs/promises", "child_process", "net", "tls", "dgram", "dns", "dns/promises", "cluster", "worker_threads",
+  "readline", "http2", "v8", "vm", "inspector", "repl",
+  "better-sqlite3", "sqlite3", "bcrypt", "argon2", "sharp", "canvas", "nodemailer",
+  "puppeteer", "puppeteer-core", "playwright", "playwright-core",
+]);
+const EDGE_RUNTIME = /^\s*export\s+const\s+(?:runtime\s*=\s*["'](?:experimental-)?edge["']|config\s*=\s*\{[^}]*\bruntime\s*:\s*["'](?:experimental-)?edge["'])/m;
+// middleware.ts runs on the Edge runtime unless it opts into Node.js (Next.js 15.5+); proxy.ts always runs on Node.js.
+const MIDDLEWARE = /^(?:src\/)?middleware\.[cm]?[jt]s$/;
+const NODE_RUNTIME_CONFIG = /^\s*export\s+const\s+config\s*=\s*\{[^}]*\bruntime\s*:\s*["']nodejs["']/m;
+
+/** Imports that exist at runtime: type-only imports and commented-out lines are skipped. */
+function runtimeImports(source: string): Array<{ specifier: string; line: number }> {
+  const found: Array<{ specifier: string; line: number }> = [];
+  source.split("\n").forEach((text, index) => {
+    if (/^\s*(?:\/\/|\/?\*)/.test(text)) return;
+    const matchers = [/^\s*(?:import|export)\s+(type\s+)?(?:([^"'`;]*?)\s+from\s+)?["']([^"']+)["']/g,
+      /\b(?:require|import)\(\s*["']([^"']+)["']\s*\)/g];
+    for (const match of text.matchAll(matchers[0])) {
+      const clause = match[2] ?? "";
+      const onlyTypes = /^\{\s*(?:type\s+[^,}]+,?\s*)+\}$/.test(clause.trim());
+      if (!match[1] && !onlyTypes) found.push({ specifier: match[3], line: index + 1 });
+    }
+    for (const match of text.matchAll(matchers[1])) found.push({ specifier: match[1], line: index + 1 });
+  });
+  return found;
+}
+
+function edgeRuntimeFindings(snapshot: RepositorySnapshot, x: AnalysisText): Finding[] {
+  const findings: Finding[] = [];
+  for (const [file, source] of snapshot.contents) {
+    if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file)) continue;
+    const middleware = MIDDLEWARE.test(file) && !NODE_RUNTIME_CONFIG.test(source);
+    if (!middleware && !EDGE_RUNTIME.test(source)) continue;
+    for (const { specifier, line } of runtimeImports(source)) {
+      const name = specifier.replace(/^node:/, "");
+      if (!NODE_ONLY_MODULES.has(name)) continue;
+      findings.push({ file, line, problem: x.server.edgeProblem(name), fix: middleware ? x.server.edgeMiddlewareFix(name) : x.server.edgeFix(name) });
+    }
+  }
+  return findings;
+}
+
 function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const manifest = parsePackageJson(snapshot);
   const packages = { ...manifest?.devDependencies, ...manifest?.dependencies };
@@ -207,15 +284,93 @@ function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): Ch
       fsWrites.push(file);
     }
   }
+  const edge = edgeRuntimeFindings(snapshot, x);
 
   const evidence = [
+    ...edge.map((item) => `${item.file}:${item.line} → ${item.problem}`),
     ...riskyPackages.map((name) => `package.json → ${name}`),
     ...fsWrites.map((file) => x.server.write(file)),
   ];
   const title = x.titles.serverLibs;
-  if (evidence.length) return makeCheck("server-libs", title, "red", x.server.red, x.server.fix, evidence);
+  if (evidence.length) {
+    const other = riskyPackages.length + fsWrites.length > 0;
+    return makeCheck("server-libs", title, "red",
+      [edge.length ? x.server.edgeRed(edge.length) : "", other ? x.server.red : ""].filter(Boolean).join(" "),
+      [edge.length ? edge[0].fix : "", other ? x.server.fix : ""].filter(Boolean).join(" "),
+      evidence,
+      // Findings replace the evidence in the copied instructions, so list the other problems too when there are any.
+      edge.length ? [...edge,
+        ...riskyPackages.map((name) => ({ file: "package.json", line: 1, problem: x.server.packageProblem(name), fix: x.server.fix })),
+        ...fsWrites.map((file) => ({ file, line: 1, problem: x.server.writeProblem, fix: x.server.fix }))] : undefined);
+  }
   if (snapshot.partial) return makeCheck("server-libs", title, "yellow", x.server.partial, partialFix(snapshot, x));
   return makeCheck("server-libs", title, "green", x.server.ok, x.noChange);
+}
+
+const ENV_NAME = /^[A-Z][A-Z0-9_]*$/;
+
+/** process.env.X, process.env?.X, process.env["X"], process.env?.["X"] and `const { X, Y: y = "" } = process.env`. */
+export function extractEnvReads(source: string): Array<{ name: string; index: number }> {
+  const reads: Array<{ name: string; index: number }> = [];
+  const access = /process\.env(?:\??\.([A-Z][A-Z0-9_]*)\b|(?:\?\.)?\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\])/g;
+  let match: RegExpExecArray | null;
+  while ((match = access.exec(source))) reads.push({ name: match[1] || match[2], index: match.index });
+
+  const destructure = /\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*process\.env\b(?!\s*(?:\?\.|\.|\[))/g;
+  while ((match = destructure.exec(source))) {
+    for (const part of match[1].split(",")) {
+      const key = part.trim().replace(/^["']|["']?\s*(?::[\s\S]*|=[\s\S]*)?$/g, "").trim();
+      if (!part.trim().startsWith("...") && ENV_NAME.test(key)) reads.push({ name: key, index: match.index });
+    }
+  }
+  return reads.sort((left, right) => left.index - right.index);
+}
+
+const LOCKFILES: Record<string, string> = {
+  "package-lock.json": "npm",
+  "pnpm-lock.yaml": "pnpm",
+  "yarn.lock": "yarn",
+  "bun.lockb": "bun",
+  "bun.lock": "bun",
+};
+const SUPPORTED_NODE_MAJORS = [20, 22, 24];
+
+function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
+  const title = x.titles.buildConfig;
+  const manifest = parsePackageJson(snapshot);
+  const raw = snapshot.contents.get("package.json") ?? "";
+  const lineOf = (needle: string) => Math.max(1, lineAt(raw, Math.max(0, raw.indexOf(needle))));
+  const findings: Finding[] = [];
+
+  const lockfiles = snapshot.entries.filter((entry) => entry.type === "blob" && entry.path in LOCKFILES).map((entry) => entry.path).sort();
+  const managers = new Set(lockfiles.map((file) => LOCKFILES[file]));
+  if (managers.size > 1) {
+    const keep = manifest?.packageManager?.split("@")[0];
+    const extra = lockfiles.filter((file) => LOCKFILES[file] !== keep);
+    findings.push({ file: lockfiles[0], line: 1, problem: x.build.lockfiles(lockfiles.join(", ")),
+      fix: x.build.lockfilesFix(keep && managers.has(keep) ? keep : undefined, lockfiles),
+      ...(keep && managers.has(keep) ? { command: `git rm -- ${extra.map(shellQuote).join(" ")}` } : {}) });
+  }
+
+  const packages = { ...manifest?.devDependencies, ...manifest?.dependencies };
+  // vercel.json can set its own build command; workspaces roots usually build through a workspace package.
+  const vercelBuild = /"buildCommand"\s*:/.test(snapshot.contents.get("vercel.json") ?? "");
+  if (manifest && packages.next && !manifest.scripts?.build && !vercelBuild && !manifest.workspaces) {
+    findings.push({ file: "package.json", line: lineOf('"scripts"'), problem: x.build.noBuild, fix: x.build.noBuildFix,
+      command: "git add -- package.json" });
+  }
+
+  const node = manifest?.engines?.node;
+  if (typeof node === "string" && nodeRangeAllowsMajor(node, SUPPORTED_NODE_MAJORS) === false) {
+    findings.push({ file: "package.json", line: lineOf('"engines"'), problem: x.build.engines(node), fix: x.build.enginesFix,
+      command: "git add -- package.json" });
+  }
+
+  if (findings.length) {
+    return makeCheck("build-config", title, "yellow", x.build.yellow(findings.length), findings[0].fix,
+      findings.map((item) => `${item.file}:${item.line} → ${item.problem}`), findings);
+  }
+  return makeCheck("build-config", title, "green", x.build.ok, x.noChange);
 }
 
 function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
@@ -234,40 +389,95 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
     }
 
     if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file)) continue;
-    const envMatcher = /process\.env(?:\.([A-Z][A-Z0-9_]*)|\[["']([A-Z][A-Z0-9_]*)["']\])/g;
-    let match: RegExpExecArray | null;
-    while ((match = envMatcher.exec(source))) {
-      const name = match[1] || match[2];
+    for (const { name, index } of extractEnvReads(source)) {
       used.add(name);
-      if (!locations.has(name)) locations.set(name, { file, line: lineAt(source, match.index) });
+      if (!locations.has(name)) locations.set(name, { file, line: lineAt(source, index) });
       if (/^NEXT_PUBLIC_.*(?:SECRET|SERVICE_ROLE|PRIVATE|PASSWORD|TOKEN|ADMIN|DATABASE_URL)/.test(name)) {
         exposed.add(name);
       }
     }
   }
 
-  const missing = [...used].filter((name) => !declared.has(name) && !BUILT_IN_ENV.has(name) && !/^(NEXT_PUBLIC_)?VERCEL(_[A-Z0-9_]+)?$/.test(name)).sort();
+  const missing = [...used].filter((name) => !declared.has(name) && !isBuiltInEnv(name)).sort();
+  const ignored = envExampleIgnoreRule(snapshot, [...used].some((name) => !isBuiltInEnv(name)));
   const evidence = [
     ...missing.map((name) => x.env.evidenceMissing(name)),
     ...[...exposed].map((name) => x.env.evidenceExposed(name)),
   ];
   const title = x.titles.env;
+  const gitignoreFinding: Finding[] = ignored ? [{ file: ".gitignore", line: ignored.line, problem: x.env.gitignoreProblem(ignored.pattern),
+    fix: x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION), command: "git add -- .gitignore .env.example" }] : [];
 
   if (evidence.length) {
-    return makeCheck("env", title, "red",
+    const check = makeCheck("env", title, "red",
       [missing.length ? x.env.missing(missing.length, missing.join(", ")) : "",
-        exposed.size ? x.env.exposed(exposed.size, [...exposed].join(", ")) : ""].filter(Boolean).join("; ") + ".",
-      [missing.length ? x.env.fixMissing(missing.map((name) => `${name}=`).join(" + ")) : "",
+        exposed.size ? x.env.exposed(exposed.size, [...exposed].join(", ")) : "",
+        ignored ? x.env.gitignore(ignored.pattern) : ""].filter(Boolean).join("; ") + ".",
+      [ignored ? x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION) : "",
+        missing.length ? x.env.fixMissing(missing.map((name) => `${name}=`).join(" + ")) : "",
         exposed.size ? x.env.fixExposed : ""].filter(Boolean).join("; ") + ".",
-      evidence,
-      [...missing.map((name) => ({ ...locations.get(name)!, problem: x.env.missingProblem(name),
-        fix: x.env.missingFix(name), command: "git add -- .env.example" })),
+      [...(ignored ? [x.env.evidenceGitignore(ignored.pattern)] : []), ...evidence],
+      [...gitignoreFinding,
+        ...missing.map((name) => ({ ...locations.get(name)!, problem: x.env.missingProblem(name),
+          fix: x.env.missingFix(name), command: "git add -- .env.example" })),
         ...[...exposed].map((name) => ({ ...locations.get(name)!, problem: x.env.exposedProblem(name),
           fix: x.env.exposedFix(name.replace(/^NEXT_PUBLIC_/, "")) }))],
     );
+    if (missing.length) {
+      check.suggestedFile = { path: ".env.example", content: completeEnvExample(snapshot.contents.get(".env.example"), missing),
+        command: "git add -- .env.example" };
+    }
+    return check;
+  }
+  if (ignored) {
+    return makeCheck("env", title, "yellow", x.env.gitignore(ignored.pattern) + ".", x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION),
+      [x.env.evidenceGitignore(ignored.pattern)], gitignoreFinding);
   }
   if (snapshot.partial) return makeCheck("env", title, "yellow", x.env.partial, partialFix(snapshot, x));
   return makeCheck("env", title, "green", used.size ? x.env.okUsed : x.env.okNone, x.noChange);
+}
+
+/**
+ * The committed .env.example plus an empty line for every missing variable. A value that looks like a
+ * real secret is emptied, so the suggested file never repeats one (the secrets check reports it).
+ */
+function completeEnvExample(existing: string | undefined, missing: string[]): string {
+  const text = (existing ?? "").replace(/\r\n/g, "\n").replace(/\n+$/, "");
+  const lines = (text ? text.split("\n") : []).map((line) => findSecrets(line).length ? line.replace(/=.*$/, "=") : line);
+  return [...lines, ...missing.map((name) => `${name}=`)].join("\n") + "\n";
+}
+
+const ENV_EXAMPLE_EXCEPTION = "!.env.example";
+
+/**
+ * The root .gitignore rule that would stop a new .env.example from being committed. Only reported when the
+ * repository reads its own env variables and .env.example is not already tracked (tracked files stay tracked).
+ */
+function envExampleIgnoreRule(snapshot: RepositorySnapshot, readsCustomEnv: boolean) {
+  const gitignore = snapshot.contents.get(".gitignore");
+  if (!gitignore || !readsCustomEnv || snapshot.entries.some((entry) => entry.path === ".env.example")) return null;
+  const rule = ignoringRule(gitignore, ".env.example");
+  // Only report it when appending the exception line really fixes it.
+  if (!rule || ignoringRule(`${gitignore}\n${ENV_EXAMPLE_EXCEPTION}\n`, ".env.example")) return null;
+  return rule;
+}
+
+function checkSecrets(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
+  const title = x.titles.secrets;
+  const findings: Finding[] = [];
+  for (const [file, source] of snapshot.contents) {
+    if (TEST_FILE.test(file)) continue;
+    for (const secret of findSecrets(source)) {
+      findings.push({ file, line: lineAt(source, secret.index), problem: x.secrets.problem(x.secrets.kinds[secret.kind], secret.masked),
+        fix: x.secrets.fix(x.secrets.kinds[secret.kind]) });
+    }
+  }
+  if (findings.length) {
+    return makeCheck("secrets", title, "red", x.secrets.red(findings.length), x.secrets.summaryFix,
+      findings.map((item) => `${item.file}:${item.line} → ${item.problem}`), findings);
+  }
+  if (snapshot.partial) return makeCheck("secrets", title, "yellow", x.secrets.partial, partialFix(snapshot, x));
+  return makeCheck("secrets", title, "green", x.secrets.ok, x.noChange);
 }
 
 function hasUseClient(source: string): boolean {
@@ -339,8 +549,8 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
   const chosen = new Set(options.checks ?? defaultChecks(stack));
   const runners: Record<Category, Array<(snapshot: RepositorySnapshot, x: AnalysisText) => CheckResult>> = {
     next: [checkNextEntrypoint, checkImports],
-    vercel: [checkServerLibraries],
-    env: [checkEnvironment],
+    vercel: [checkServerLibraries, checkBuildConfig],
+    env: [checkEnvironment, checkSecrets],
     supabase: [checkSupabase],
     prisma: [checkPrisma],
   };
