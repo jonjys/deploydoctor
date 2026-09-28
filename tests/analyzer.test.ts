@@ -302,3 +302,37 @@ test("look-alikes of env destructuring are not treated as env reads", () => {
   // Only the plain property read on line 2 counts; nothing is destructured from process.env itself.
   assert.deepEqual(extractEnvReads(source).map((read) => read.name), ["NESTED"]);
 });
+
+test("a .gitignore that hides .env.example gives a yellow env check with the line to add", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".gitignore", type: "blob" }, { path: ".env.local.example", type: "blob" }];
+  const files = {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.local.example": "API_KEY=\n",
+    "app/page.tsx": "const key = process.env.API_KEY; export default function Page() { return null }",
+  };
+  const env = analyzeSnapshot(snapshot(entries, { ...files, ".gitignore": "node_modules\n# env\n.env*\n" }), { checks: ["env"] }).checks[0];
+  assert.equal(env.status, "yellow");
+  assert.equal(env.findings?.[0].file, ".gitignore");
+  assert.equal(env.findings?.[0].line, 3);
+  assert.match(env.fix, /!\.env\.example/);
+
+  // Missing variables stay red, and the .gitignore line is part of the fix.
+  const red = analyzeSnapshot(snapshot(entries, { ...files, ".env.local.example": "", ".gitignore": ".env*\n!.env.example\n.env*\n" }), { checks: ["env"] }).checks[0];
+  assert.equal(red.status, "red");
+  assert.match(red.fix, /!\.env\.example/);
+});
+
+test("a .gitignore with the .env.example exception, or a tracked .env.example, is not flagged", () => {
+  const files = {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "API_KEY=\n",
+    "app/page.tsx": "const key = process.env.API_KEY; export default function Page() { return null }",
+  };
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".gitignore", type: "blob" }, { path: ".env.example", type: "blob" }];
+  assert.equal(analyzeSnapshot(snapshot(entries, { ...files, ".gitignore": ".env*\n!.env.example\n" }), { checks: ["env"] }).checks[0].status, "green");
+  // Tracked files stay tracked even if a rule matches them.
+  assert.equal(analyzeSnapshot(snapshot(entries, { ...files, ".gitignore": ".env*\n" }), { checks: ["env"] }).checks[0].status, "green");
+  // No env reads: no template is needed, so the rule does not matter.
+  assert.equal(analyzeSnapshot(snapshot([...nextEntries, { path: ".gitignore", type: "blob" }], {
+    ...page, "package.json": files["package.json"], ".gitignore": ".env*\n" }), { checks: ["env"] }).checks[0].status, "green");
+});

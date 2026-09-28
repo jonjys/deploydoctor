@@ -22,6 +22,8 @@ export type AnalysisText = {
     missingProblem: (name: string) => string; missingFix: (name: string) => string;
     exposedProblem: (name: string) => string; exposedFix: (name: string) => string;
     evidenceMissing: (name: string) => string; evidenceExposed: (name: string) => string;
+    gitignore: (rule: string) => string; gitignoreProblem: (rule: string) => string;
+    gitignoreFix: (line: string) => string; evidenceGitignore: (rule: string) => string;
     partial: string; okUsed: string; okNone: string;
   };
   supabase: {
@@ -81,6 +83,10 @@ const en: AnalysisText = {
     exposedFix: (name) => `Use ${name} on the server only and rotate the old key.`,
     evidenceMissing: (name) => `${name} → missing from committed env template`,
     evidenceExposed: (name) => `${name} → potentially secret NEXT_PUBLIC_ variable`,
+    gitignore: (rule) => `.gitignore ignores .env.example (rule "${rule}"), so the template cannot be committed`,
+    gitignoreProblem: (rule) => `the rule "${rule}" makes git ignore .env.example`,
+    gitignoreFix: (line) => `Add this line at the end of .gitignore: ${line}`,
+    evidenceGitignore: (rule) => `.gitignore → "${rule}" ignores .env.example`,
     partial: "The env variables we read are documented, but the scan did not finish.",
     okUsed: "Every process.env variable found is documented and no secret-looking value uses NEXT_PUBLIC_.",
     okNone: "No process.env usage or browser-exposed secret was found.",
@@ -153,6 +159,10 @@ const sv: AnalysisText = {
     exposedFix: (name) => `Använd ${name} enbart på servern och rotera den gamla nyckeln.`,
     evidenceMissing: (name) => `${name} → saknas i den committade env-mallen`,
     evidenceExposed: (name) => `${name} → möjligen hemlig NEXT_PUBLIC_-variabel`,
+    gitignore: (rule) => `.gitignore ignorerar .env.example (regeln "${rule}"), så mallen kan inte committas`,
+    gitignoreProblem: (rule) => `regeln "${rule}" gör att git ignorerar .env.example`,
+    gitignoreFix: (line) => `Lägg till den här raden sist i .gitignore: ${line}`,
+    evidenceGitignore: (rule) => `.gitignore → "${rule}" ignorerar .env.example`,
     partial: "De env-variabler vi läste är dokumenterade, men skanningen blev inte klar.",
     okUsed: "Alla process.env-variabler som hittades är dokumenterade och inget hemligt-liknande värde använder NEXT_PUBLIC_.",
     okNone: "Ingen process.env-användning eller webbläsarexponerad hemlighet hittades.",

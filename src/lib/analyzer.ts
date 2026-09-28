@@ -4,6 +4,7 @@ import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { defaultChecks, detectStack } from "@/lib/stack";
 import { analysisText, type AnalysisText } from "@/lib/analysis-text";
 import type { Lang } from "@/lib/i18n";
+import { ignoringRule } from "@/lib/gitignore";
 
 export type RepositorySnapshot = {
   owner: string;
@@ -290,27 +291,52 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
   }
 
   const missing = [...used].filter((name) => !declared.has(name) && !isBuiltInEnv(name)).sort();
+  const ignored = envExampleIgnoreRule(snapshot, [...used].some((name) => !isBuiltInEnv(name)));
   const evidence = [
     ...missing.map((name) => x.env.evidenceMissing(name)),
     ...[...exposed].map((name) => x.env.evidenceExposed(name)),
   ];
   const title = x.titles.env;
+  const gitignoreFinding: Finding[] = ignored ? [{ file: ".gitignore", line: ignored.line, problem: x.env.gitignoreProblem(ignored.pattern),
+    fix: x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION), command: "git add -- .gitignore .env.example" }] : [];
 
   if (evidence.length) {
     return makeCheck("env", title, "red",
       [missing.length ? x.env.missing(missing.length, missing.join(", ")) : "",
-        exposed.size ? x.env.exposed(exposed.size, [...exposed].join(", ")) : ""].filter(Boolean).join("; ") + ".",
-      [missing.length ? x.env.fixMissing(missing.map((name) => `${name}=`).join(" + ")) : "",
+        exposed.size ? x.env.exposed(exposed.size, [...exposed].join(", ")) : "",
+        ignored ? x.env.gitignore(ignored.pattern) : ""].filter(Boolean).join("; ") + ".",
+      [ignored ? x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION) : "",
+        missing.length ? x.env.fixMissing(missing.map((name) => `${name}=`).join(" + ")) : "",
         exposed.size ? x.env.fixExposed : ""].filter(Boolean).join("; ") + ".",
-      evidence,
-      [...missing.map((name) => ({ ...locations.get(name)!, problem: x.env.missingProblem(name),
-        fix: x.env.missingFix(name), command: "git add -- .env.example" })),
+      [...(ignored ? [x.env.evidenceGitignore(ignored.pattern)] : []), ...evidence],
+      [...gitignoreFinding,
+        ...missing.map((name) => ({ ...locations.get(name)!, problem: x.env.missingProblem(name),
+          fix: x.env.missingFix(name), command: "git add -- .env.example" })),
         ...[...exposed].map((name) => ({ ...locations.get(name)!, problem: x.env.exposedProblem(name),
           fix: x.env.exposedFix(name.replace(/^NEXT_PUBLIC_/, "")) }))],
     );
   }
+  if (ignored) {
+    return makeCheck("env", title, "yellow", x.env.gitignore(ignored.pattern) + ".", x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION),
+      [x.env.evidenceGitignore(ignored.pattern)], gitignoreFinding);
+  }
   if (snapshot.partial) return makeCheck("env", title, "yellow", x.env.partial, partialFix(snapshot, x));
   return makeCheck("env", title, "green", used.size ? x.env.okUsed : x.env.okNone, x.noChange);
+}
+
+const ENV_EXAMPLE_EXCEPTION = "!.env.example";
+
+/**
+ * The root .gitignore rule that would stop a new .env.example from being committed. Only reported when the
+ * repository reads its own env variables and .env.example is not already tracked (tracked files stay tracked).
+ */
+function envExampleIgnoreRule(snapshot: RepositorySnapshot, readsCustomEnv: boolean) {
+  const gitignore = snapshot.contents.get(".gitignore");
+  if (!gitignore || !readsCustomEnv || snapshot.entries.some((entry) => entry.path === ".env.example")) return null;
+  const rule = ignoringRule(gitignore, ".env.example");
+  // Only report it when appending the exception line really fixes it.
+  if (!rule || ignoringRule(`${gitignore}\n${ENV_EXAMPLE_EXCEPTION}\n`, ".env.example")) return null;
+  return rule;
 }
 
 function hasUseClient(source: string): boolean {
