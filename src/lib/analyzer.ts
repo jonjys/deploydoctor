@@ -245,6 +245,25 @@ function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): Ch
   return makeCheck("server-libs", title, "green", x.server.ok, x.noChange);
 }
 
+const ENV_NAME = /^[A-Z][A-Z0-9_]*$/;
+
+/** process.env.X, process.env?.X, process.env["X"], process.env?.["X"] and `const { X, Y: y = "" } = process.env`. */
+export function extractEnvReads(source: string): Array<{ name: string; index: number }> {
+  const reads: Array<{ name: string; index: number }> = [];
+  const access = /process\.env(?:\??\.([A-Z][A-Z0-9_]*)\b|(?:\?\.)?\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\])/g;
+  let match: RegExpExecArray | null;
+  while ((match = access.exec(source))) reads.push({ name: match[1] || match[2], index: match.index });
+
+  const destructure = /\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*process\.env\b(?!\s*(?:\?\.|\.|\[))/g;
+  while ((match = destructure.exec(source))) {
+    for (const part of match[1].split(",")) {
+      const key = part.trim().replace(/^["']|["']?\s*(?::[\s\S]*|=[\s\S]*)?$/g, "").trim();
+      if (!part.trim().startsWith("...") && ENV_NAME.test(key)) reads.push({ name: key, index: match.index });
+    }
+  }
+  return reads.sort((left, right) => left.index - right.index);
+}
+
 function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const declared = new Set<string>();
   const used = new Set<string>();
@@ -261,12 +280,9 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
     }
 
     if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file)) continue;
-    const envMatcher = /process\.env(?:\.([A-Z][A-Z0-9_]*)|\[["']([A-Z][A-Z0-9_]*)["']\])/g;
-    let match: RegExpExecArray | null;
-    while ((match = envMatcher.exec(source))) {
-      const name = match[1] || match[2];
+    for (const { name, index } of extractEnvReads(source)) {
       used.add(name);
-      if (!locations.has(name)) locations.set(name, { file, line: lineAt(source, match.index) });
+      if (!locations.has(name)) locations.set(name, { file, line: lineAt(source, index) });
       if (/^NEXT_PUBLIC_.*(?:SECRET|SERVICE_ROLE|PRIVATE|PASSWORD|TOKEN|ADMIN|DATABASE_URL)/.test(name)) {
         exposed.add(name);
       }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeSnapshot, type RepositorySnapshot } from "../src/lib/analyzer";
+import { analyzeSnapshot, extractEnvReads, type RepositorySnapshot } from "../src/lib/analyzer";
 import { parseChecks } from "../src/lib/categories";
 import { defaultChecks, describeStack, detectStack } from "../src/lib/stack";
 import { langFromCookieHeader, messages, parseLang, t } from "../src/lib/i18n";
@@ -273,4 +273,32 @@ test("imports with exactly matching letter case are not flagged", () => {
     "app/page.tsx": 'import Button from "../components/Button";\nimport "@/components/button.css";\nexport default function Page() { return null }',
   }), { checks: ["next"] });
   assert.equal(results.checks.find((check) => check.id === "imports")?.status, "green");
+});
+
+test("env reads through destructuring and optional chaining are found", () => {
+  const source = [
+    'const { DATABASE_URL, API_KEY: apiKey, "QUOTED_NAME": quoted, WITH_DEFAULT = "x", ...rest } = process.env;',
+    "const a = process.env?.OPTIONAL_READ; const b = process.env?.['OPTIONAL_BRACKET']; const c = process.env['BRACKET'];",
+  ].join("\n");
+  assert.deepEqual(extractEnvReads(source).map((read) => read.name),
+    ["DATABASE_URL", "API_KEY", "QUOTED_NAME", "WITH_DEFAULT", "OPTIONAL_READ", "OPTIONAL_BRACKET", "BRACKET"]);
+
+  const results = analyzeSnapshot(snapshot([...nextEntries, { path: ".env.example", type: "blob" }], {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "DATABASE_URL=\n",
+    "app/page.tsx": "const { DATABASE_URL, API_KEY: key } = process.env;\nexport default function Page() { return null }",
+  }), { checks: ["env"] });
+  assert.equal(results.checks[0].status, "red");
+  assert.deepEqual(results.checks[0].findings?.map((finding) => [finding.problem, finding.line]), [["API_KEY is missing from .env.example", 1]]);
+});
+
+test("look-alikes of env destructuring are not treated as env reads", () => {
+  const source = [
+    "const { A, B } = process.envelope;",
+    "const { C } = process.env.NESTED;",
+    "const { d, e } = process.env;",
+    "const f = process.env.lowercase;",
+  ].join("\n");
+  // Only the plain property read on line 2 counts; nothing is destructured from process.env itself.
+  assert.deepEqual(extractEnvReads(source).map((read) => read.name), ["NESTED"]);
 });
