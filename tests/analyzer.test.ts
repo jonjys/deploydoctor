@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeSnapshot, extractEnvReads, type RepositorySnapshot } from "../src/lib/analyzer";
 import { parseChecks } from "../src/lib/categories";
+import { freeFixInstructions } from "../src/lib/fix-instructions";
 import { defaultChecks, describeStack, detectStack } from "../src/lib/stack";
 import { langFromCookieHeader, messages, parseLang, t } from "../src/lib/i18n";
 
@@ -434,4 +435,40 @@ test("placeholders, test files, empty templates and test-mode keys are not repor
     "tests/pay.test.ts": `const key = "${liveStripe}";`,
   }), { checks: ["env"] });
   assert.equal(results.checks.find((check) => check.id === "secrets")?.status, "green");
+});
+
+test("missing env variables come with a complete .env.example that is also in the free instructions", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }];
+  const stripeLine = "STRIPE_SECRET_KEY=" + "sk_" + "live_" + "Qm7Rk2Vt9Lp4Xw8Zn3Jc6Hb1Fg5Ds0Ay";
+  const results = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": `# Database\nDATABASE_URL=postgres://localhost/dev\n${stripeLine}\n`,
+    "app/page.tsx": "const a = process.env.DATABASE_URL; const b = process.env.ZED; const c = process.env.ALPHA;\nexport default function Page() { return null }",
+  }), { checks: ["env"] });
+  const env = results.checks[0];
+  assert.equal(env.status, "red");
+  assert.deepEqual(env.suggestedFile, {
+    path: ".env.example",
+    content: "# Database\nDATABASE_URL=postgres://localhost/dev\nSTRIPE_SECRET_KEY=\nALPHA=\nZED=\n",
+    command: "git add -- .env.example",
+  });
+  const text = freeFixInstructions({ id: "r", repo_url: "https://github.com/example/repo", created_at: "", results });
+  assert.equal(text.match(/git add -- \.env\.example/g)?.length, 1);
+  assert.match(text, /```\n# Database\nDATABASE_URL=postgres:\/\/localhost\/dev\nSTRIPE_SECRET_KEY=\nALPHA=\nZED=\n```/);
+  assert.ok(!text.includes("Qm7Rk2Vt9Lp4"));
+});
+
+test("no complete file is suggested when nothing is missing, and old reports without it still format", () => {
+  const results = analyzeSnapshot(snapshot([...nextEntries, { path: ".env.example", type: "blob" }], {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "API_KEY=\nNEXT_PUBLIC_ADMIN_TOKEN=\n",
+    "app/page.tsx": "const a = process.env.API_KEY; const b = process.env.NEXT_PUBLIC_ADMIN_TOKEN;\nexport default function Page() { return null }",
+  }), { checks: ["env"] });
+  assert.equal(results.checks[0].status, "red"); // exposed NEXT_PUBLIC_ secret, nothing missing
+  assert.equal(results.checks[0].suggestedFile, undefined);
+
+  const oldReport = { id: "r", repo_url: "https://github.com/example/repo", created_at: "", results: {
+    ...results, checks: [{ id: "env" as const, title: "Environment variables", status: "red" as const, explanation: "1 env variable is missing.",
+      fix: "Add X=.", evidence: [], findings: [{ file: "a.ts", line: 1, problem: "X is missing", fix: "Add X=", command: "git add -- .env.example" }] }] } };
+  assert.match(freeFixInstructions(oldReport), /File: a\.ts:1 - X is missing\.\nFix: Add X=\nCommand \(after making the change\): git add -- \.env\.example/);
 });

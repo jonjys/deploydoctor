@@ -14,6 +14,8 @@ export type CheckResult = {
   fix: string;
   evidence: string[];
   findings?: Finding[];
+  /** A complete file to commit, e.g. .env.example with the missing variables. Absent on older reports. */
+  suggestedFile?: { path: string; content: string; command?: string };
 };
 
 export type ReportResults = {

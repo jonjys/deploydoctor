@@ -2,10 +2,15 @@ import type { CheckResult, StoredReport } from "@/types/report";
 import { t, type Lang } from "@/lib/i18n";
 
 function checkText(check: CheckResult, lang: Lang) {
+  const file = check.suggestedFile;
+  // With a complete file to copy, the per-line findings that only say "add this to the file" are left out.
+  const findings = file ? check.findings?.filter((finding) => finding.command !== file.command) : check.findings;
+  const fileText = file ? [`${t(lang, "fix.completeFile", { path: file.path })}:\n\`\`\`\n${file.content}\`\`\`${file.command ? `\n${t(lang, "fix.command")}: ${file.command}` : ""}`] : [];
   return [`${check.title}: ${check.explanation}`,
-    ...(check.findings?.length ? check.findings.map((finding) =>
+    ...(findings?.length ? findings.map((finding) =>
       `${t(lang, "fix.file")}: ${finding.file}:${finding.line} - ${finding.problem}.\n${t(lang, "fix.fix")}: ${finding.fix}${finding.command ? `\n${t(lang, "fix.command")}: ${finding.command}` : ""}`)
-      : [...check.evidence.map((evidence) => `${t(lang, "fix.evidence")}: ${evidence}`), `${t(lang, "fix.fix")}: ${check.fix}`]),
+      : file ? [] : [...check.evidence.map((evidence) => `${t(lang, "fix.evidence")}: ${evidence}`), `${t(lang, "fix.fix")}: ${check.fix}`]),
+    ...fileText,
   ].join("\n");
 }
 

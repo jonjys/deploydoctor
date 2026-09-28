@@ -283,6 +283,11 @@ a { color: inherit; }
 }
 .fix-box { margin-top: 18px; padding: 13px 15px; border-left: 3px solid var(--ink); background: #efeee7; font-size: 13px; line-height: 1.5; }
 .fix-box strong { margin-right: 5px; }
+.suggested-file { margin-top: 14px; border: 1px solid var(--line); border-radius: 8px; background: white; overflow: hidden; }
+.suggested-file-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.suggested-file pre { margin: 0; padding: 12px 14px; max-height: 320px; overflow: auto; font-family: var(--font-geist-mono), monospace; font-size: 12px; line-height: 1.55; }
+.copy-button.file-copy-button { min-height: 32px; color: var(--ink); border-color: var(--line); padding: 0 12px; font-size: 12px; }
+.copy-button.file-copy-button:hover { background: var(--acid); }
 .report-actions {
   margin-top: 28px;
   padding: 31px;

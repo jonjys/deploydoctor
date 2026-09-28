@@ -409,7 +409,7 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
     fix: x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION), command: "git add -- .gitignore .env.example" }] : [];
 
   if (evidence.length) {
-    return makeCheck("env", title, "red",
+    const check = makeCheck("env", title, "red",
       [missing.length ? x.env.missing(missing.length, missing.join(", ")) : "",
         exposed.size ? x.env.exposed(exposed.size, [...exposed].join(", ")) : "",
         ignored ? x.env.gitignore(ignored.pattern) : ""].filter(Boolean).join("; ") + ".",
@@ -423,6 +423,11 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
         ...[...exposed].map((name) => ({ ...locations.get(name)!, problem: x.env.exposedProblem(name),
           fix: x.env.exposedFix(name.replace(/^NEXT_PUBLIC_/, "")) }))],
     );
+    if (missing.length) {
+      check.suggestedFile = { path: ".env.example", content: completeEnvExample(snapshot.contents.get(".env.example"), missing),
+        command: "git add -- .env.example" };
+    }
+    return check;
   }
   if (ignored) {
     return makeCheck("env", title, "yellow", x.env.gitignore(ignored.pattern) + ".", x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION),
@@ -430,6 +435,16 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
   }
   if (snapshot.partial) return makeCheck("env", title, "yellow", x.env.partial, partialFix(snapshot, x));
   return makeCheck("env", title, "green", used.size ? x.env.okUsed : x.env.okNone, x.noChange);
+}
+
+/**
+ * The committed .env.example plus an empty line for every missing variable. A value that looks like a
+ * real secret is emptied, so the suggested file never repeats one (the secrets check reports it).
+ */
+function completeEnvExample(existing: string | undefined, missing: string[]): string {
+  const text = (existing ?? "").replace(/\r\n/g, "\n").replace(/\n+$/, "");
+  const lines = (text ? text.split("\n") : []).map((line) => findSecrets(line).length ? line.replace(/=.*$/, "=") : line);
+  return [...lines, ...missing.map((name) => `${name}=`)].join("\n") + "\n";
 }
 
 const ENV_EXAMPLE_EXCEPTION = "!.env.example";

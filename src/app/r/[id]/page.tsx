@@ -7,6 +7,7 @@ import type { Category, CheckStatus } from "@/types/report";
 import { freeFixParts } from "@/lib/fix-instructions";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { LangSwitch } from "@/components/lang";
+import { CopyFixesButton } from "@/components/copy-fixes-button";
 import { getT } from "@/lib/lang";
 import { dateLocale, type MessageKey } from "@/lib/i18n";
 
@@ -114,6 +115,15 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                   <div className="fix-box">
                     <strong>{t("report.suggested")}</strong> {check.fix}
                   </div>
+                  {check.suggestedFile?.content ? (
+                    <div className="suggested-file">
+                      <div className="suggested-file-head">
+                        <strong>{t("report.completeFile", { path: check.suggestedFile.path })}</strong>
+                        <CopyFixesButton instructions={check.suggestedFile.content} file />
+                      </div>
+                      <pre><code>{check.suggestedFile.content}</code></pre>
+                    </div>
+                  ) : null}
                   {check.status === "red" && <div className="repair-cta"><p>{t("report.fixCta")}</p>
                     <Link href={`/checkout?plan=fix-one&report=${id}&check=${check.id}`}>{t("report.fixOne")}</Link>
                     <Link href={`/checkout?plan=fix-all&report=${id}`}>{t("report.fixAll")}</Link>
