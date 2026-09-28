@@ -246,7 +246,7 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
     }
   }
 
-  const missing = [...used].filter((name) => !declared.has(name) && !BUILT_IN_ENV.has(name)).sort();
+  const missing = [...used].filter((name) => !declared.has(name) && !BUILT_IN_ENV.has(name) && !/^(NEXT_PUBLIC_)?VERCEL(_[A-Z0-9_]+)?$/.test(name)).sort();
   const evidence = [
     ...missing.map((name) => x.env.evidenceMissing(name)),
     ...[...exposed].map((name) => x.env.evidenceExposed(name)),
