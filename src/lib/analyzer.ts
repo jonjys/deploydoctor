@@ -45,6 +45,12 @@ const BUILT_IN_ENV = new Set([
   "VERCEL_PROJECT_PRODUCTION_URL",
   "CI",
 ]);
+// Vercel's system env vars (VERCEL_URL, VERCEL_GIT_COMMIT_SHA, NEXT_PUBLIC_VERCEL_ENV, ...) are set by the platform.
+const VERCEL_SYSTEM_ENV = /^(?:NEXT_PUBLIC_)?VERCEL(?:_[A-Z0-9_]+)?$/;
+
+function isBuiltInEnv(name: string): boolean {
+  return BUILT_IN_ENV.has(name) || VERCEL_SYSTEM_ENV.test(name);
+}
 
 function makeCheck(
   id: CheckResult["id"],
@@ -246,7 +252,7 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
     }
   }
 
-  const missing = [...used].filter((name) => !declared.has(name) && !BUILT_IN_ENV.has(name) && !/^(NEXT_PUBLIC_)?VERCEL(_[A-Z0-9_]+)?$/.test(name)).sort();
+  const missing = [...used].filter((name) => !declared.has(name) && !isBuiltInEnv(name)).sort();
   const evidence = [
     ...missing.map((name) => x.env.evidenceMissing(name)),
     ...[...exposed].map((name) => x.env.evidenceExposed(name)),

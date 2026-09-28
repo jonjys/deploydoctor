@@ -4,7 +4,7 @@ import { t, type Lang } from "@/lib/i18n";
 function checkText(check: CheckResult, lang: Lang) {
   return [`${check.title}: ${check.explanation}`,
     ...(check.findings?.length ? check.findings.map((finding) =>
-      `${t(lang, "fix.file")}: ${finding.file}:${finding.line} — ${finding.problem}.\n${t(lang, "fix.fix")}: ${finding.fix}${finding.command ? `\n${t(lang, "fix.command")}: ${finding.command}` : ""}`)
+      `${t(lang, "fix.file")}: ${finding.file}:${finding.line} - ${finding.problem}.\n${t(lang, "fix.fix")}: ${finding.fix}${finding.command ? `\n${t(lang, "fix.command")}: ${finding.command}` : ""}`)
       : [...check.evidence.map((evidence) => `${t(lang, "fix.evidence")}: ${evidence}`), `${t(lang, "fix.fix")}: ${check.fix}`]),
   ].join("\n");
 }

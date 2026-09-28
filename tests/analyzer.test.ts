@@ -236,3 +236,14 @@ test("fixture strings inside test files are not reported as broken imports or en
   assert.equal(results.checks.find((check) => check.id === "imports")?.status, "green");
   assert.equal(results.checks.find((check) => check.id === "env")?.status, "green");
 });
+
+test("Vercel system env variables are built in, but custom variables must be documented", () => {
+  const results = analyzeSnapshot(snapshot(nextEntries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "app/page.tsx": "const a = process.env.NEXT_PUBLIC_VERCEL_URL; const b = process.env.VERCEL_GIT_COMMIT_SHA;"
+      + " const c = process.env.VERCEL_ENV; const d = process.env.MY_SECRET; export default function Page() { return null }",
+  }), { checks: ["env"] });
+  const env = results.checks[0];
+  assert.equal(env.status, "red");
+  assert.deepEqual(env.findings?.map((finding) => finding.problem), ["MY_SECRET is missing from .env.example"]);
+});

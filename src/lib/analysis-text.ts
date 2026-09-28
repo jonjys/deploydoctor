@@ -120,7 +120,7 @@ const sv: AnalysisText = {
     missingFolderFix: "Lägg till en App Router-mapp app/ med root layout och page, eller återställ Pages Router-mappen pages/ innan du deployar.",
     noRouteEvidence: "Ingen Next.js-routemapp hittades",
     routeFound: "Routemapp hittades",
-    found: "✅ Next.js-startpunkt hittades – ingen ändring behövs",
+    found: "✅ Next.js-startpunkt hittades - ingen ändring behövs",
     notNext: "Rotens package.json deklarerar inte Next.js, så det här Next.js-felet gäller inte.",
   },
   imports: {
