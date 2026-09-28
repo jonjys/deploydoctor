@@ -41,7 +41,7 @@ export type AnalysisText = {
     red: (n: number) => string; yellow: (n: number) => string; partial: string; ok: string; okNotTraced: string;
     driftChanged: (name: string, wanted: string, lockfile: string, locked: string) => string;
     driftAdded: (name: string, lockfile: string) => string; driftRemoved: (name: string, lockfile: string) => string;
-    pnpmRed: (n: number) => string; npmYellow: (n: number) => string; pnpmFix: string; npmFix: string;
+    pnpmRed: (n: number) => string; pnpmYellow: (n: number) => string; npmYellow: (n: number) => string; pnpmFix: string; npmFix: string;
   };
   secrets: {
     kinds: Record<SecretKind, string>; problem: (kind: string, masked: string) => string; fix: (kind: string) => string;
@@ -141,6 +141,7 @@ const en: AnalysisText = {
     driftAdded: (name, lockfile) => `${name} is in package.json but not in ${lockfile}`,
     driftRemoved: (name, lockfile) => `${name} is still in ${lockfile} but no longer in package.json`,
     pnpmRed: (n) => `pnpm-lock.yaml does not match package.json (${n} difference${n === 1 ? "" : "s"}); Vercel installs with a frozen lockfile, so the install stops with ERR_PNPM_OUTDATED_LOCKFILE.`,
+    pnpmYellow: (n) => `pnpm-lock.yaml does not match package.json (${n} difference${n === 1 ? "" : "s"}). vercel.json sets its own installCommand, so the install may or may not stop, but the lockfile is out of date either way.`,
     npmYellow: (n) => `package-lock.json does not match package.json (${n} difference${n === 1 ? "" : "s"}), so npm rewrites it during the build and Vercel may install other versions than you tested.`,
     pnpmFix: "Run pnpm install locally and commit the updated pnpm-lock.yaml.",
     npmFix: "Run npm install locally and commit the updated package-lock.json.",
@@ -265,6 +266,7 @@ const sv: AnalysisText = {
     driftAdded: (name, lockfile) => `${name} finns i package.json men inte i ${lockfile}`,
     driftRemoved: (name, lockfile) => `${name} finns kvar i ${lockfile} men inte längre i package.json`,
     pnpmRed: (n) => `pnpm-lock.yaml stämmer inte med package.json (${n} skillnad${n === 1 ? "" : "er"}); Vercel installerar med fryst lockfil, så installationen stoppas med ERR_PNPM_OUTDATED_LOCKFILE.`,
+    pnpmYellow: (n) => `pnpm-lock.yaml stämmer inte med package.json (${n} skillnad${n === 1 ? "" : "er"}). vercel.json anger ett eget installCommand, så installationen stoppas kanske inte, men lockfilen är inaktuell oavsett.`,
     npmYellow: (n) => `package-lock.json stämmer inte med package.json (${n} skillnad${n === 1 ? "" : "er"}), så npm skriver om den under bygget och Vercel kan installera andra versioner än de du testat.`,
     pnpmFix: "Kör pnpm install lokalt och committa den uppdaterade pnpm-lock.yaml.",
     npmFix: "Kör npm install lokalt och committa den uppdaterade package-lock.json.",

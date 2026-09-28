@@ -590,3 +590,21 @@ test("matching lockfiles, v6 pnpm files, overrides and peers are not flagged", (
     { ...page, "package.json": manifest, "pnpm-lock.yaml": "lockfileVersion: 4\nfoo: bar\n" }), { checks: ["vercel"] }));
   assert.equal(odd?.status, "green");
 });
+
+test("pnpm lockfile drift is only yellow when vercel.json sets its own installCommand", () => {
+  const manifest = JSON.stringify({ dependencies: { next: "16.3.6", zod: "^4.0.0" } }, null, 2);
+  const stale = pnpmLock(["    dependencies:", "      next:", "        specifier: 16.3.6", "        version: 16.3.6",
+    "      zod:", "        specifier: ^3.23.0", "        version: 3.23.8"].join("\n"));
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "pnpm-lock.yaml", type: "blob" }, { path: "vercel.json", type: "blob" }];
+  const run = (vercelJson: string) => dependencies(analyzeSnapshot(snapshot(entries,
+    { ...page, "package.json": manifest, "pnpm-lock.yaml": stale, "vercel.json": vercelJson }), { checks: ["vercel"] }));
+
+  const custom = run('{ "installCommand": "pnpm install --no-frozen-lockfile" }');
+  assert.equal(custom?.status, "yellow");
+  assert.equal(custom?.findings?.length, 1);
+  assert.match(custom?.explanation ?? "", /installCommand/);
+  assert.doesNotMatch(custom?.explanation ?? "", /ERR_PNPM_OUTDATED_LOCKFILE/);
+
+  // Other vercel.json settings do not change how pnpm installs.
+  assert.equal(run('{ "buildCommand": "next build" }')?.status, "red");
+});

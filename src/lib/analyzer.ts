@@ -471,16 +471,18 @@ function checkDependencies(snapshot: RepositorySnapshot, x: AnalysisText): Check
   }
 
   // Lockfile drift: pnpm installs with a frozen lockfile in CI and stops; npm rewrites the lockfile and carries on.
+  // A custom installCommand in vercel.json may not use the frozen lockfile, so pnpm drift is then only a warning.
   let drifted = 0;
   const raw = snapshot.contents.get("package.json") ?? "";
-  if (manifest && lockfile !== undefined && (lockfiles[0] === "pnpm-lock.yaml" || lockfiles[0] === "package-lock.json")) {
-    const pnpm = lockfiles[0] === "pnpm-lock.yaml";
+  const pnpm = lockfiles[0] === "pnpm-lock.yaml";
+  const driftRed = pnpm && !/"installCommand"\s*:/.test(snapshot.contents.get("vercel.json") ?? "");
+  if (manifest && lockfile !== undefined && (pnpm || lockfiles[0] === "package-lock.json")) {
     const locked = pnpm ? pnpmRootSpecifiers(lockfile) : npmRootSpecifiers(lockfile);
     const ignore = new Set([...Object.keys(manifest.peerDependencies ?? {}),
       ...(pnpm ? [...pnpmOverrides(lockfile), ...Object.keys(manifest.pnpm?.overrides ?? {})] : [])]);
     for (const drift of locked ? specifierDrift(manifestSpecifiers(manifest), locked, ignore) : []) {
       const inManifest = drift.manifest !== undefined && raw.indexOf(`"${drift.name}"`) !== -1;
-      findings.push({ file: inManifest ? "package.json" : lockfiles[0], red: pnpm,
+      findings.push({ file: inManifest ? "package.json" : lockfiles[0], red: driftRed,
         line: inManifest ? lineAt(raw, raw.indexOf(`"${drift.name}"`)) : 1,
         problem: drift.manifest !== undefined && drift.locked !== undefined ? x.deps.driftChanged(drift.name, drift.manifest, lockfiles[0], drift.locked)
           : drift.manifest !== undefined ? x.deps.driftAdded(drift.name, lockfiles[0]) : x.deps.driftRemoved(drift.name, lockfiles[0]),
@@ -493,10 +495,11 @@ function checkDependencies(snapshot: RepositorySnapshot, x: AnalysisText): Check
   const ordered: Finding[] = [...red, ...findings.filter((item) => !item.red)]
     .map((item) => ({ file: item.file, line: item.line, problem: item.problem, fix: item.fix, command: item.command }));
   if (ordered.length) {
-    const missingRed = red.length - (lockfiles[0] === "pnpm-lock.yaml" ? drifted : 0);
+    const missingRed = red.length - (driftRed ? drifted : 0);
     const explanation = red.length
       ? [missingRed ? x.deps.red(missingRed) : "", red.length > missingRed ? x.deps.pnpmRed(red.length - missingRed) : ""].filter(Boolean).join(" ")
-      : [ordered.length > drifted ? x.deps.yellow(ordered.length - drifted) : "", drifted ? x.deps.npmYellow(drifted) : ""].filter(Boolean).join(" ");
+      : [ordered.length > drifted ? x.deps.yellow(ordered.length - drifted) : "",
+        drifted ? (pnpm ? x.deps.pnpmYellow(drifted) : x.deps.npmYellow(drifted)) : ""].filter(Boolean).join(" ");
     return makeCheck("dependencies", title, red.length ? "red" : "yellow", explanation, ordered[0].fix,
       ordered.map((item) => `${item.file}:${item.line} → ${item.problem}`), ordered);
   }
