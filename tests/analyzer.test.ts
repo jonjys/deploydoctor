@@ -473,8 +473,8 @@ test("no complete file is suggested when nothing is missing, and old reports wit
   assert.match(freeFixInstructions(oldReport), /File: a\.ts:1 - X is missing\.\nFix: Add X=\nCommand \(after making the change\): git add -- \.env\.example/);
 });
 
-const npmLock = (packages: string[]) => JSON.stringify({ lockfileVersion: 3, packages: {
-  "": { dependencies: { next: "16.3.6" } },
+const npmLock = (packages: string[], root: Record<string, string> = { next: "16.3.6" }) => JSON.stringify({ lockfileVersion: 3, packages: {
+  "": { dependencies: root },
   ...Object.fromEntries(packages.map((name) => [`node_modules/${name}`, { version: "1.0.0" }])),
 } }, null, 2);
 const dependencies = (results: ReturnType<typeof analyzeSnapshot>) => results.checks.find((check) => check.id === "dependencies");
@@ -505,7 +505,8 @@ test("imports outside the build, type-only, commented, built-in, aliased or decl
     { path: "components", type: "tree" }, { path: "components/Button.tsx", type: "blob" }, { path: "next.config.mjs", type: "blob" }];
   const results = analyzeSnapshot(snapshot(entries, {
     "package.json": JSON.stringify({ name: "site", dependencies: { next: "16.3.6", react: "19" }, devDependencies: { "@types/node": "22" } }),
-    "package-lock.json": npmLock(["next", "react"]),
+    "package-lock.json": JSON.stringify({ lockfileVersion: 3, packages: { "": { dependencies: { next: "16.3.6", react: "19" }, devDependencies: { "@types/node": "22" } },
+      "node_modules/next": {}, "node_modules/react": {} } }),
     "tsconfig.json": '{\n  // comments are allowed\n  "compilerOptions": { "baseUrl": ".", "paths": { "~/*": ["./lib/*"], "@ui/*": ["./components/*"], }, },\n}',
     "next.config.mjs": 'export default { webpack: (config) => { config.resolve.alias["legacy-pkg"] = "./lib/util.ts"; return config } }',
     "app/page.tsx": [
@@ -541,4 +542,51 @@ test("without a lockfile, or through require() or a workspaces root, a missing p
   assert.deepEqual(withLock?.findings?.map((finding) => finding.problem.includes("neither")), [true, false]); // three red, sharp (require) yellow
   const workspace = dependencies(analyzeSnapshot(snapshot([...nextEntries, { path: "pnpm-workspace.yaml", type: "blob" }], files), { checks: ["vercel"] }));
   assert.equal(workspace?.status, "green");
+});
+
+const pnpmLock = (root: string) => `lockfileVersion: '9.0'\n\nsettings:\n  autoInstallPeers: true\n\nimporters:\n\n  .:\n${root}\npackages:\n\n  next@16.3.6:\n    resolution: {integrity: sha512-x}\n`;
+
+test("a pnpm lockfile that does not match package.json is red, an npm one is yellow", () => {
+  const manifest = JSON.stringify({ dependencies: { next: "16.3.6", zod: "^4.0.0" }, devDependencies: { typescript: "^5" } }, null, 2);
+  const stale = pnpmLock([
+    "    dependencies:", "      next:", "        specifier: 16.3.6", "        version: 16.3.6",
+    "      zod:", "        specifier: ^3.23.0", "        version: 3.23.8",
+    "      lodash:", "        specifier: ^4.17.21", "        version: 4.17.21",
+  ].join("\n"));
+  const pnpm = dependencies(analyzeSnapshot(snapshot([...nextEntries, { path: "pnpm-lock.yaml", type: "blob" }],
+    { ...page, "package.json": manifest, "pnpm-lock.yaml": stale }), { checks: ["vercel"] }));
+  assert.equal(pnpm?.status, "red");
+  assert.deepEqual(pnpm?.findings?.map((finding) => finding.problem), [
+    "lodash is still in pnpm-lock.yaml but no longer in package.json",
+    "typescript is in package.json but not in pnpm-lock.yaml",
+    'package.json asks for zod "^4.0.0", but pnpm-lock.yaml has "^3.23.0"',
+  ]);
+  assert.match(pnpm?.explanation ?? "", /ERR_PNPM_OUTDATED_LOCKFILE/);
+  assert.equal(pnpm?.findings?.[2].file, "package.json");
+
+  const npm = dependencies(analyzeSnapshot(snapshot([...nextEntries, { path: "package-lock.json", type: "blob" }], { ...page, "package.json": manifest,
+    "package-lock.json": npmLock(["next", "zod", "typescript"], { next: "16.3.6", zod: "^3.23.0" }) }), { checks: ["vercel"] }));
+  assert.equal(npm?.status, "yellow");
+  assert.equal(npm?.findings?.length, 2);
+});
+
+test("matching lockfiles, v6 pnpm files, overrides and peers are not flagged", () => {
+  const manifest = JSON.stringify({ dependencies: { next: "16.3.6", "@scope/ui": "^1.0.0" }, devDependencies: { typescript: "^5" },
+    peerDependencies: { react: "^19" }, pnpm: { overrides: { "@scope/ui": "1.2.0" } } });
+  const v9 = pnpmLock([
+    "    dependencies:", "      '@scope/ui':", "        specifier: 1.2.0", "        version: 1.2.0",
+    "      next:", "        specifier: 16.3.6", "        version: 16.3.6",
+    "      react:", "        specifier: ^19", "        version: 19.0.0",
+    "    devDependencies:", "      typescript:", "        specifier: ^5", "        version: 5.6.0",
+  ].join("\n"));
+  const v6 = "lockfileVersion: '6.0'\n\ndependencies:\n  '@scope/ui':\n    specifier: ^1.0.0\n    version: 1.2.0\n  next:\n    specifier: 16.3.6\n    version: 16.3.6\n\ndevDependencies:\n  typescript:\n    specifier: ^5\n    version: 5.6.0\n\npackages:\n\n  /next@16.3.6:\n    resolution: {integrity: sha512-x}\n";
+  for (const lock of [v9, v6]) {
+    const check = dependencies(analyzeSnapshot(snapshot([...nextEntries, { path: "pnpm-lock.yaml", type: "blob" }],
+      { ...page, "package.json": manifest, "pnpm-lock.yaml": lock }), { checks: ["vercel"] }));
+    assert.equal(check?.status, "green", lock.slice(0, 22));
+  }
+  // An unrecognised layout is never reported.
+  const odd = dependencies(analyzeSnapshot(snapshot([...nextEntries, { path: "pnpm-lock.yaml", type: "blob" }],
+    { ...page, "package.json": manifest, "pnpm-lock.yaml": "lockfileVersion: 4\nfoo: bar\n" }), { checks: ["vercel"] }));
+  assert.equal(odd?.status, "green");
 });
