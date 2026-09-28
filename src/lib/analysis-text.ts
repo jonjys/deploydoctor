@@ -15,7 +15,12 @@ export type AnalysisText = {
     caseProblem: (spec: string, actual: string) => string; caseFix: (exact: string, line: number) => string;
     summary: (n: number, cases: number) => string; ok: string; read: (n: number) => string;
   };
-  server: { red: string; fix: string; write: (file: string) => string; partial: string; ok: string };
+  server: {
+    red: string; fix: string; write: (file: string) => string; partial: string; ok: string;
+    edgeRed: (n: number) => string; edgeProblem: (module: string) => string;
+    packageProblem: (name: string) => string; writeProblem: string;
+    edgeFix: (module: string) => string; edgeMiddlewareFix: (module: string) => string;
+  };
   env: {
     missing: (n: number, names: string) => string; exposed: (n: number, names: string) => string;
     fixMissing: (names: string) => string; fixExposed: string;
@@ -76,7 +81,13 @@ const en: AnalysisText = {
     fix: "Move browser work to an external worker, replace SQLite with a hosted database, and write generated files to object storage instead of the function filesystem.",
     write: (file) => `${file} → filesystem write`,
     partial: "No dangerous packages found so far, but we could not check every API route.",
-    ok: "No Playwright, Puppeteer, SQLite binding, or filesystem write in an API route was found.",
+    ok: "No Playwright, Puppeteer, SQLite binding, filesystem write in an API route, or Node-only import in Edge code was found.",
+    edgeRed: (n) => `${n} import${n === 1 ? "" : "s"} in Edge runtime code need${n === 1 ? "s" : ""} Node.js, so the build or the function fails on Vercel.`,
+    edgeProblem: (module) => `imports ${module}, which does not exist in the Edge runtime`,
+    packageProblem: (name) => `depends on ${name}`,
+    writeProblem: "writes to the filesystem in an API route",
+    edgeFix: (module) => `Remove export const runtime = "edge" from the file (Node.js is the default), or move the ${module} code to a route that runs on Node.js.`,
+    edgeMiddlewareFix: (module) => `Move the ${module} code out of middleware (it runs on the Edge runtime), or on Next.js 15.5+ add export const config = { runtime: "nodejs" }; on Next.js 16, rename middleware.ts to proxy.ts, which runs on Node.js.`,
   },
   env: {
     missing: (n, names) => `${n} env variable${n === 1 ? " is" : "s are"} missing from .env.example: ${names}`,
@@ -165,7 +176,13 @@ const sv: AnalysisText = {
     fix: "Flytta webbläsararbete till en extern worker, ersätt SQLite med en hostad databas och skriv genererade filer till objektlagring i stället för funktionens filsystem.",
     write: (file) => `${file} → filsystemsskrivning`,
     partial: "Inga farliga paket hittade hittills, men vi kunde inte kolla alla API-routes.",
-    ok: "Ingen Playwright, Puppeteer, SQLite-koppling eller filsystemsskrivning i en API-route hittades.",
+    ok: "Ingen Playwright, Puppeteer, SQLite-koppling, filsystemsskrivning i en API-route eller Node-import i Edge-kod hittades.",
+    edgeRed: (n) => `${n} import${n === 1 ? "" : "er"} i kod som kör i Edge runtime kräver Node.js, så bygget eller funktionen kraschar på Vercel.`,
+    edgeProblem: (module) => `importerar ${module}, som inte finns i Edge runtime`,
+    packageProblem: (name) => `är beroende av ${name}`,
+    writeProblem: "skriver till filsystemet i en API-route",
+    edgeFix: (module) => `Ta bort export const runtime = "edge" från filen (Node.js är standard), eller flytta koden som använder ${module} till en route som kör på Node.js.`,
+    edgeMiddlewareFix: (module) => `Flytta koden som använder ${module} ut ur middleware (den kör i Edge runtime), eller lägg till export const config = { runtime: "nodejs" } på Next.js 15.5+; på Next.js 16 kan du döpa om middleware.ts till proxy.ts, som kör på Node.js.`,
   },
   env: {
     missing: (n, names) => `${n} env-variabler saknas i .env.example: ${names}`,

@@ -225,6 +225,50 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
   return makeCheck("imports", x.titles.imports, "green", x.imports.ok, x.noChange, [x.imports.read(snapshot.sourceFilesRead)]);
 }
 
+// Node built-ins and packages that cannot load in the Edge runtime, matched by exact module name.
+const NODE_ONLY_MODULES = new Set([
+  "fs", "fs/promises", "child_process", "net", "tls", "dgram", "dns", "dns/promises", "cluster", "worker_threads",
+  "readline", "http2", "v8", "vm", "inspector", "repl",
+  "better-sqlite3", "sqlite3", "bcrypt", "argon2", "sharp", "canvas", "nodemailer",
+  "puppeteer", "puppeteer-core", "playwright", "playwright-core",
+]);
+const EDGE_RUNTIME = /^\s*export\s+const\s+(?:runtime\s*=\s*["'](?:experimental-)?edge["']|config\s*=\s*\{[^}]*\bruntime\s*:\s*["'](?:experimental-)?edge["'])/m;
+// middleware.ts runs on the Edge runtime unless it opts into Node.js (Next.js 15.5+); proxy.ts always runs on Node.js.
+const MIDDLEWARE = /^(?:src\/)?middleware\.[cm]?[jt]s$/;
+const NODE_RUNTIME_CONFIG = /^\s*export\s+const\s+config\s*=\s*\{[^}]*\bruntime\s*:\s*["']nodejs["']/m;
+
+/** Imports that exist at runtime: type-only imports and commented-out lines are skipped. */
+function runtimeImports(source: string): Array<{ specifier: string; line: number }> {
+  const found: Array<{ specifier: string; line: number }> = [];
+  source.split("\n").forEach((text, index) => {
+    if (/^\s*(?:\/\/|\/?\*)/.test(text)) return;
+    const matchers = [/^\s*(?:import|export)\s+(type\s+)?(?:([^"'`;]*?)\s+from\s+)?["']([^"']+)["']/g,
+      /\b(?:require|import)\(\s*["']([^"']+)["']\s*\)/g];
+    for (const match of text.matchAll(matchers[0])) {
+      const clause = match[2] ?? "";
+      const onlyTypes = /^\{\s*(?:type\s+[^,}]+,?\s*)+\}$/.test(clause.trim());
+      if (!match[1] && !onlyTypes) found.push({ specifier: match[3], line: index + 1 });
+    }
+    for (const match of text.matchAll(matchers[1])) found.push({ specifier: match[1], line: index + 1 });
+  });
+  return found;
+}
+
+function edgeRuntimeFindings(snapshot: RepositorySnapshot, x: AnalysisText): Finding[] {
+  const findings: Finding[] = [];
+  for (const [file, source] of snapshot.contents) {
+    if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file)) continue;
+    const middleware = MIDDLEWARE.test(file) && !NODE_RUNTIME_CONFIG.test(source);
+    if (!middleware && !EDGE_RUNTIME.test(source)) continue;
+    for (const { specifier, line } of runtimeImports(source)) {
+      const name = specifier.replace(/^node:/, "");
+      if (!NODE_ONLY_MODULES.has(name)) continue;
+      findings.push({ file, line, problem: x.server.edgeProblem(name), fix: middleware ? x.server.edgeMiddlewareFix(name) : x.server.edgeFix(name) });
+    }
+  }
+  return findings;
+}
+
 function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const manifest = parsePackageJson(snapshot);
   const packages = { ...manifest?.devDependencies, ...manifest?.dependencies };
@@ -239,13 +283,25 @@ function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): Ch
       fsWrites.push(file);
     }
   }
+  const edge = edgeRuntimeFindings(snapshot, x);
 
   const evidence = [
+    ...edge.map((item) => `${item.file}:${item.line} → ${item.problem}`),
     ...riskyPackages.map((name) => `package.json → ${name}`),
     ...fsWrites.map((file) => x.server.write(file)),
   ];
   const title = x.titles.serverLibs;
-  if (evidence.length) return makeCheck("server-libs", title, "red", x.server.red, x.server.fix, evidence);
+  if (evidence.length) {
+    const other = riskyPackages.length + fsWrites.length > 0;
+    return makeCheck("server-libs", title, "red",
+      [edge.length ? x.server.edgeRed(edge.length) : "", other ? x.server.red : ""].filter(Boolean).join(" "),
+      [edge.length ? edge[0].fix : "", other ? x.server.fix : ""].filter(Boolean).join(" "),
+      evidence,
+      // Findings replace the evidence in the copied instructions, so list the other problems too when there are any.
+      edge.length ? [...edge,
+        ...riskyPackages.map((name) => ({ file: "package.json", line: 1, problem: x.server.packageProblem(name), fix: x.server.fix })),
+        ...fsWrites.map((file) => ({ file, line: 1, problem: x.server.writeProblem, fix: x.server.fix }))] : undefined);
+  }
   if (snapshot.partial) return makeCheck("server-libs", title, "yellow", x.server.partial, partialFix(snapshot, x));
   return makeCheck("server-libs", title, "green", x.server.ok, x.noChange);
 }

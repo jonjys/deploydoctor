@@ -364,3 +364,32 @@ test("build configuration: one lockfile, a build script and supported Node range
     "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), "vercel.json": '{ "buildCommand": "next build" }' }), { checks: ["vercel"] });
   assert.equal(viaVercel.checks.find((check) => check.id === "build-config")?.status, "green");
 });
+
+test("Node-only imports in Edge runtime code are red in server-libs", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries,
+    { path: "middleware.ts", type: "blob" }, { path: "app/api/og/route.ts", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "15.1.0" } }),
+    "middleware.ts": 'import { NextResponse } from "next/server";\nimport { readFileSync } from "node:fs";\nexport function middleware() { return NextResponse.next() }',
+    "app/api/og/route.ts": 'export const runtime = "edge";\nconst { exec } = require("child_process");\nexport async function GET() { return new Response("ok") }',
+  }), { checks: ["vercel"] });
+  const server = results.checks.find((check) => check.id === "server-libs");
+  assert.equal(server?.status, "red");
+  assert.deepEqual(server?.findings?.map((finding) => `${finding.file}:${finding.line}`).sort(), ["app/api/og/route.ts:2", "middleware.ts:2"]);
+  assert.match(server?.findings?.find((finding) => finding.file === "middleware.ts")?.fix ?? "", /proxy\.ts/);
+});
+
+test("Edge-safe code, Node.js middleware, proxy.ts and type-only imports are not flagged", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries,
+    { path: "src/middleware.ts", type: "blob" }, { path: "proxy.ts", type: "blob" }, { path: "app/api/a/route.ts", type: "blob" }, { path: "app/api/b/route.ts", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "src/middleware.ts": 'import fs from "fs";\nexport const config = { runtime: "nodejs", matcher: "/" };\nexport function middleware() {}',
+    "proxy.ts": 'import { readFile } from "node:fs/promises";\nexport function proxy() {}',
+    "app/api/a/route.ts": 'export const runtime = "edge";\nimport type { Stats } from "fs";\nimport { type Socket } from "net";\n// import fs from "fs";\nimport { NextResponse } from "next/server";',
+    "app/api/b/route.ts": '// export const runtime = "edge";\nimport fs from "fs";\nexport async function GET() { return new Response(String(fs)) }',
+  }), { checks: ["vercel"] });
+  assert.equal(results.checks.find((check) => check.id === "server-libs")?.status, "green");
+});
