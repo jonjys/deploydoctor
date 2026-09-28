@@ -12,7 +12,8 @@ export type AnalysisText = {
   };
   imports: {
     problem: (spec: string) => string; fix: (target: string, line: number) => string;
-    summary: (n: number) => string; ok: string; read: (n: number) => string;
+    caseProblem: (spec: string, actual: string) => string; caseFix: (exact: string, line: number) => string;
+    summary: (n: number, cases: number) => string; ok: string; read: (n: number) => string;
   };
   server: { red: string; fix: string; write: (file: string) => string; partial: string; ok: string };
   env: {
@@ -56,7 +57,9 @@ const en: AnalysisText = {
   imports: {
     problem: (spec) => `imports ${spec} which doesn't exist in the repository`,
     fix: (target, line) => `Add ${target} if the file exists locally, or change the import on line ${line} to the file's real location.`,
-    summary: (n) => `${n} import${n === 1 ? "" : "s"} point to files that are missing from the GitHub repository.`,
+    caseProblem: (spec, actual) => `imports ${spec}, but the file is ${actual}; the letter case differs, which works on Mac and Windows but fails on Linux (Vercel)`,
+    caseFix: (exact, line) => `Change the import on line ${line} to the exact file name: "${exact}".`,
+    summary: (n, cases) => `${n} import${n === 1 ? "" : "s"} point to files that are missing from the GitHub repository${cases ? ` (${cases} only by letter case)` : ""}.`,
     ok: "Every relative and @/ import found resolves to a file in the repository tree.",
     read: (n) => `Read ${n} source files`,
   },
@@ -126,7 +129,9 @@ const sv: AnalysisText = {
   imports: {
     problem: (spec) => `importerar ${spec}, som inte finns i repot`,
     fix: (target, line) => `Lägg till ${target} om filen finns lokalt, eller ändra importen på rad ${line} till filens riktiga plats.`,
-    summary: (n) => `${n} import${n === 1 ? "" : "er"} pekar på filer som saknas i GitHub-repot.`,
+    caseProblem: (spec, actual) => `importerar ${spec}, men filen heter ${actual}; stora och små bokstäver skiljer sig, vilket fungerar på Mac och Windows men kraschar på Linux (Vercel)`,
+    caseFix: (exact, line) => `Byt importen på rad ${line} till exakt filnamn: "${exact}".`,
+    summary: (n, cases) => `${n} import${n === 1 ? "" : "er"} pekar på filer som saknas i GitHub-repot${cases ? ` (${cases} bara på grund av stora och små bokstäver)` : ""}.`,
     ok: "Alla relativa importer och @/-importer som hittades pekar på en fil i repots filträd.",
     read: (n) => `Läste ${n} källfiler`,
   },

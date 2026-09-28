@@ -247,3 +247,30 @@ test("Vercel system env variables are built in, but custom variables must be doc
   assert.equal(env.status, "red");
   assert.deepEqual(env.findings?.map((finding) => finding.problem), ["MY_SECRET is missing from .env.example"]);
 });
+
+test("an import that only matches a file with different letter case is red with the exact name", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries,
+    { path: "components", type: "tree" }, { path: "components/ui", type: "tree" },
+    { path: "components/button.tsx", type: "blob" }, { path: "components/ui/Card.tsx", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "app/page.tsx": 'import Button from "../components/Button";\nimport { Card } from "@/components/UI/card";\nexport default function Page() { return null }',
+  }), { checks: ["next"] });
+  const imports = results.checks.find((check) => check.id === "imports");
+  assert.equal(imports?.status, "red");
+  assert.equal(imports?.findings?.length, 2);
+  assert.match(imports?.findings?.[0].problem ?? "", /components\/button\.tsx/);
+  assert.match(imports?.findings?.[0].fix ?? "", /"\.\.\/components\/button"/);
+  assert.match(imports?.findings?.[1].fix ?? "", /"@\/components\/ui\/Card"/);
+  assert.equal(imports?.findings?.[0].command, undefined);
+});
+
+test("imports with exactly matching letter case are not flagged", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries,
+    { path: "components", type: "tree" }, { path: "components/Button.tsx", type: "blob" }, { path: "components/button.css", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "app/page.tsx": 'import Button from "../components/Button";\nimport "@/components/button.css";\nexport default function Page() { return null }',
+  }), { checks: ["next"] });
+  assert.equal(results.checks.find((check) => check.id === "imports")?.status, "green");
+});

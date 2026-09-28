@@ -144,10 +144,18 @@ function aliasRoots(snapshot: RepositorySnapshot): string[] {
   return ["src", ""];
 }
 
+/** Rebuilds `wanted` with the letter case of `actual` wherever the two only differ in case. */
+function withCaseOf(wanted: string, actual: string): string {
+  return [...wanted].map((char, index) => actual[index]?.toLowerCase() === char.toLowerCase() ? actual[index] : char).join("");
+}
+
 function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const files = new Set(snapshot.entries.filter((entry) => entry.type === "blob").map((entry) => entry.path));
+  // Linux file systems (and so Vercel builds) are case-sensitive; macOS and Windows are not.
+  const filesByLowerCase = new Map([...files].map((file) => [file.toLowerCase(), file]));
   const aliases = aliasRoots(snapshot);
   const missing: Finding[] = [];
+  let caseMismatches = 0;
 
   for (const [file, source] of snapshot.contents) {
     // next-env.d.ts intentionally references generated .next type files that are gitignored.
@@ -155,18 +163,31 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
 
     for (const { specifier: original, line } of extractImports(source)) {
       const specifier = original.split(/[?#]/)[0];
-      let candidates: string[] = [];
+      let bases: Array<{ base: string; toSpecifier: (resolved: string) => string }> = [];
       if (specifier.startsWith("./") || specifier.startsWith("../")) {
-        candidates = possibleImportTargets(path.posix.join(path.posix.dirname(file), specifier));
+        const directory = path.posix.dirname(file);
+        bases = [{ base: path.posix.join(directory, specifier), toSpecifier: (resolved) => {
+          const relative = path.posix.relative(directory, resolved);
+          return relative.startsWith("../") ? relative : `./${relative}`;
+        } }];
       } else if (specifier.startsWith("@/")) {
-        candidates = aliases.flatMap((root) =>
-          possibleImportTargets(path.posix.join(root, specifier.slice(2))),
-        );
+        bases = aliases.map((root) => ({ base: path.posix.join(root, specifier.slice(2)),
+          toSpecifier: (resolved: string) => `@/${root ? resolved.slice(root.length + 1) : resolved}` }));
       } else {
         continue;
       }
+      const candidates = bases.flatMap(({ base }) => possibleImportTargets(base));
 
       if (!candidates.some((candidate) => files.has(candidate))) {
+        const caseMatch = bases.flatMap(({ base, toSpecifier }) => possibleImportTargets(base).map((candidate) => ({
+          base: path.posix.normalize(base).replace(/^\.\//, ""), toSpecifier, actual: filesByLowerCase.get(candidate.toLowerCase()) })))
+          .find((item) => item.actual);
+        if (caseMatch?.actual) {
+          const exact = caseMatch.toSpecifier(withCaseOf(caseMatch.base, caseMatch.actual));
+          missing.push({ file, line, problem: x.imports.caseProblem(original, caseMatch.actual), fix: x.imports.caseFix(exact, line) });
+          caseMismatches += 1;
+          continue;
+        }
         const target = candidates[0];
         missing.push({ file, line, problem: x.imports.problem(original), fix: x.imports.fix(target, line),
           command: `git add -- ${shellQuote(target)}` });
@@ -179,7 +200,7 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
       "imports",
       x.titles.imports,
       "red",
-      x.imports.summary(missing.length),
+      x.imports.summary(missing.length, caseMismatches),
       missing[0].fix,
       missing.map((item) => `${item.file}:${item.line} → ${item.problem}`), missing,
     );
