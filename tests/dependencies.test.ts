@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { lockfileMentions, moduleImports, packageName, stripComments } from "../src/lib/dependencies";
+import { blankTemplates, lockfileMentions, moduleImports, packageName, stripComments } from "../src/lib/dependencies";
 
 test("package names come from bare specifiers only", () => {
   assert.equal(packageName("three"), "three");
@@ -55,4 +55,20 @@ test("lockfile mentions work across npm, pnpm, yarn and bun formats", () => {
   }
   assert.equal(lockfileMentions('"node_modules/@react-three/fiber": {}', "@react-three/fiber"), true);
   assert.equal(lockfileMentions('"node_modules/three-stdlib": {}', "three"), false);
+});
+
+test("template strings are blanked with their line breaks kept, and code around them survives", () => {
+  const source = [
+    'const a = `line one',
+    'import x from "inside-template"',
+    'with ${`nested ${"deep"}`} and \\` escaped backtick`;',
+    'import real from "after";',
+    'const b = "a ` in a string"; import alsoReal from "same-line";',
+    "const c = `${ { key: 1 }.key }`; import last from \"last\";",
+  ].join("\n");
+  const blanked = blankTemplates(source);
+  assert.equal(blanked.length, source.length);
+  assert.equal(blanked.split("\n").length, source.split("\n").length);
+  assert.doesNotMatch(blanked, /inside-template|nested|deep|escaped/);
+  assert.deepEqual(moduleImports(source).map((use) => `${use.specifier}:${use.line}`), ["after:4", "same-line:5", "last:6"]);
 });

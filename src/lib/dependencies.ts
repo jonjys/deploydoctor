@@ -33,9 +33,45 @@ export function stripComments(source: string): string {
   return out;
 }
 
+/**
+ * Blanks out the contents of template strings, `${}` expressions included, keeping line breaks so line
+ * numbers stay right. Real imports never use backticks, but code samples inside template strings often
+ * contain import lines. Run it on comment-free code (see stripComments).
+ */
+export function blankTemplates(code: string): string {
+  let out = "";
+  // Each entry is either a template string or a `${}` expression (with its open-brace count) inside one.
+  const stack: Array<{ kind: "template" } | { kind: "expr"; depth: number }> = [];
+  let quote: string | null = null;
+  for (let index = 0; index < code.length; index += 1) {
+    const char = code[index];
+    const top = stack[stack.length - 1];
+    const inside = stack.length > 0;
+    const keep = (text: string) => { out += inside ? text.replace(/[^\n]/g, " ") : text; };
+    if (quote) {
+      keep(char);
+      if (char === "\\") { keep(code[index + 1] ?? ""); index += 1; } else if (char === quote || char === "\n") quote = null;
+    } else if (top?.kind === "template") {
+      if (char === "\\") { keep(char + (code[index + 1] ?? "")); index += 1; }
+      else if (char === "`") { stack.pop(); keep(char); }
+      else if (char === "$" && code[index + 1] === "{") { stack.push({ kind: "expr", depth: 0 }); keep("${"); index += 1; }
+      else keep(char);
+    } else {
+      if (char === "`") { keep(char); stack.push({ kind: "template" }); continue; }
+      if (char === '"' || char === "'") quote = char;
+      if (top?.kind === "expr") {
+        if (char === "{") top.depth += 1;
+        else if (char === "}" && top.depth-- === 0) stack.pop();
+      }
+      keep(char);
+    }
+  }
+  return out;
+}
+
 /** Every import that exists at runtime. Type-only imports (`import type`, `import { type A }`) are left out. */
 export function moduleImports(source: string): ImportUse[] {
-  const code = stripComments(source);
+  const code = blankTemplates(stripComments(source));
   const lineOf = (index: number) => code.slice(0, index).split("\n").length;
   const found: ImportUse[] = [];
   const staticImport = /(?:^|[;\n}])\s*(import|export)\s+(type\s+)?(?:([^"'`;]*?)\s+from\s+)?["']([^"'\n]+)["']/g;

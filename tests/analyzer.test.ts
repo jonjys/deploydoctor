@@ -608,3 +608,32 @@ test("pnpm lockfile drift is only yellow when vercel.json sets its own installCo
   // Other vercel.json settings do not change how pnpm installs.
   assert.equal(run('{ "buildCommand": "next build" }')?.status, "red");
 });
+
+test("import statements inside template strings are text, not imports", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "package-lock.json", type: "blob" }, { path: "app/docs.tsx", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "package-lock.json": npmLock(["next"]),
+    "app/page.tsx": [
+      'import { Docs } from "./docs";',
+      "const code = `const x = 1;\nimport confetti from \"canvas-confetti\"\nconfetti();`;",
+      "export default function Page() { return <pre>{code}</pre> }",
+    ].join("\n"),
+    "app/docs.tsx": [
+      "export const markdown = `",
+      "## Install",
+      "",
+      "\\`\\`\\`ts",
+      'import { motion } from "framer-motion";',
+      "const lazy = await import(\"lodash\");",
+      "\\`\\`\\`",
+      "`;",
+      'import three from "three";',
+      "export const Docs = () => null;",
+    ].join("\n"),
+  }), { checks: ["vercel"] });
+  const check = dependencies(results);
+  // Only the real import after the template string counts, on its real line.
+  assert.deepEqual(check?.findings?.map((finding) => `${finding.file}:${finding.line} ${finding.problem.split(",")[0]}`), ["app/docs.tsx:9 imports three"]);
+  assert.equal(check?.status, "red");
+});
