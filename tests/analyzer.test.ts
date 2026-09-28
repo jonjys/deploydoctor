@@ -122,7 +122,7 @@ test("without a choice, a Next.js repo without Supabase never gets a Supabase ch
   const results = analyzeSnapshot(snapshot(nextEntries, {
     "package.json": JSON.stringify({ dependencies: { next: "14.2.0", tailwindcss: "^3" } }), ...page,
   }));
-  assert.deepEqual(ids(results), ["next-entry", "imports", "server-libs", "env"]);
+  assert.deepEqual(ids(results), ["next-entry", "imports", "server-libs", "build-config", "env"]);
   assert.deepEqual(results.scope, { scanned: ["next", "vercel", "env"], ignored: ["supabase", "prisma"] });
   assert.equal(results.stack?.hasSupabase, false);
   assert.equal(results.stack?.hasTailwind, true);
@@ -147,10 +147,10 @@ test("explicit checks run only the selected categories and record what was ignor
     "package.json": JSON.stringify({ dependencies: { next: "16.3.6", "@supabase/ssr": "1" } }),
     "app/page.tsx": 'import { createBrowserClient } from "@supabase/ssr"; export default function Page() { return null }',
   }), { checks: ["vercel", "env"] });
-  assert.deepEqual(ids(results), ["server-libs", "env"]);
+  assert.deepEqual(ids(results), ["server-libs", "build-config", "env"]);
   assert.deepEqual(results.scope?.ignored, ["next", "supabase", "prisma"]);
   assert.equal(results.checks.every((check) => check.category), true);
-  assert.equal(results.summary.red + results.summary.yellow + results.summary.green, 2);
+  assert.equal(results.summary.red + results.summary.yellow + results.summary.green, 3);
 });
 
 test("Prisma check flags a missing generate step and SQLite, and is skipped when unselected", () => {
@@ -335,4 +335,32 @@ test("a .gitignore with the .env.example exception, or a tracked .env.example, i
   // No env reads: no template is needed, so the rule does not matter.
   assert.equal(analyzeSnapshot(snapshot([...nextEntries, { path: ".gitignore", type: "blob" }], {
     ...page, "package.json": files["package.json"], ".gitignore": ".env*\n" }), { checks: ["env"] }).checks[0].status, "green");
+});
+
+test("build configuration: several lockfiles, no build script and an unsupported engines.node are yellow", () => {
+  const packageJson = JSON.stringify({ packageManager: "pnpm@9.0.0", engines: { node: "18.x" },
+    dependencies: { next: "16.3.6" }, scripts: { dev: "next dev" } }, null, 2);
+  const entries: RepositorySnapshot["entries"] = [...nextEntries,
+    { path: "package-lock.json", type: "blob" }, { path: "pnpm-lock.yaml", type: "blob" }];
+  const build = analyzeSnapshot(snapshot(entries, { ...page, "package.json": packageJson }), { checks: ["vercel"] })
+    .checks.find((check) => check.id === "build-config");
+  assert.equal(build?.status, "yellow");
+  assert.equal(build?.category, "vercel");
+  assert.deepEqual(build?.findings?.map((finding) => finding.file), ["package-lock.json", "package.json", "package.json"]);
+  assert.equal(build?.findings?.[0].command, "git rm -- 'package-lock.json'");
+  assert.match(build?.findings?.[2].problem ?? "", /"18\.x"/);
+});
+
+test("build configuration: one lockfile, a build script and supported Node ranges are green", () => {
+  for (const node of [">=18", "^20.11.0", "20.x || 22.x", ">= 22.0.0 < 23", "18 - 20", "24", "*", "lts/*"]) {
+    const packageJson = JSON.stringify({ engines: { node }, dependencies: { next: "16.3.6" }, scripts: { build: "next build" } });
+    const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "pnpm-lock.yaml", type: "blob" }, { path: "sub/package-lock.json", type: "blob" }];
+    const build = analyzeSnapshot(snapshot(entries, { ...page, "package.json": packageJson }), { checks: ["vercel"] })
+      .checks.find((check) => check.id === "build-config");
+    assert.equal(build?.status, "green", node);
+  }
+  // vercel.json can supply the build command instead of package.json.
+  const viaVercel = analyzeSnapshot(snapshot([...nextEntries, { path: "vercel.json", type: "blob" }], { ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), "vercel.json": '{ "buildCommand": "next build" }' }), { checks: ["vercel"] });
+  assert.equal(viaVercel.checks.find((check) => check.id === "build-config")?.status, "green");
 });

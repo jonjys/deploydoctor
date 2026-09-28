@@ -1,7 +1,7 @@
 import type { Lang } from "@/lib/i18n";
 
 export type AnalysisText = {
-  titles: { nextEntry: string; imports: string; serverLibs: string; env: string; supabase: string; prisma: string };
+  titles: { nextEntry: string; imports: string; serverLibs: string; env: string; supabase: string; prisma: string; buildConfig: string };
   noChange: string;
   partialFixToken: string;
   partialFixRetry: string;
@@ -30,6 +30,11 @@ export type AnalysisText = {
     serverBrowser: (file: string) => string; clientKey: (file: string) => string;
     red: string; fix: string; partial: string; ok: string;
   };
+  build: {
+    lockfiles: (files: string) => string; lockfilesFix: (keep: string | undefined, files: string[]) => string;
+    noBuild: string; noBuildFix: string; engines: (range: string) => string; enginesFix: string;
+    yellow: (n: number) => string; ok: string;
+  };
   prisma: {
     okDrizzle: string; okNone: string; noGenerate: string; noGenerateFix: string;
     sqlite: string; sqliteFix: string; red: (n: number) => string; partial: string; ok: string;
@@ -40,6 +45,7 @@ const en: AnalysisText = {
   titles: {
     nextEntry: "Next.js entrypoint", imports: "Broken imports", serverLibs: "Vercel-incompatible server code",
     env: "Environment variables", supabase: "Supabase server/client boundaries", prisma: "Prisma / database",
+    buildConfig: "Build configuration",
   },
   noChange: "No change is needed for this check.",
   partialFixToken: "Add GITHUB_TOKEN in Vercel > Settings > Environment Variables, redeploy and scan again.",
@@ -99,6 +105,18 @@ const en: AnalysisText = {
     partial: "No Supabase mix-up found, but the scan did not finish.",
     ok: "No Supabase browser client is used in server code and no service role key is referenced in client code.",
   },
+  build: {
+    lockfiles: (files) => `has lockfiles for more than one package manager (${files}); Vercel picks one and may install different versions than you tested`,
+    lockfilesFix: (keep, files) => keep
+      ? `Keep the ${keep} lockfile (package.json says packageManager ${keep}) and delete the others: ${files.join(", ")}.`
+      : `Pick one package manager, keep its lockfile and delete the others: ${files.join(", ")}.`,
+    noBuild: "declares next but has no build script",
+    noBuildFix: 'Add "build": "next build" under scripts in package.json so npm run build works locally and on every host.',
+    engines: (range) => `engines.node is "${range}", which allows none of Node 20, 22 or 24 that Vercel builds with`,
+    enginesFix: 'Change engines.node in package.json to a range Vercel supports, for example ">=20" or "22.x".',
+    yellow: (n) => `${n} project setting${n === 1 ? "" : "s"} may make the Vercel build behave differently from your machine.`,
+    ok: "One lockfile, a build script and a Node version Vercel supports.",
+  },
   prisma: {
     okDrizzle: "Drizzle found. SQLite drivers are caught by the Vercel-incompatible server code check.",
     okNone: "Neither Prisma nor Drizzle was found in package.json, so there is nothing to check.",
@@ -116,6 +134,7 @@ const sv: AnalysisText = {
   titles: {
     nextEntry: "Next.js-startpunkt", imports: "Trasiga importer", serverLibs: "Vercel-inkompatibel serverkod",
     env: "Miljövariabler", supabase: "Supabase-gränser mellan server och klient", prisma: "Prisma / databas",
+    buildConfig: "Byggkonfiguration",
   },
   noChange: "Ingen ändring behövs för den här kontrollen.",
   partialFixToken: "Lägg till GITHUB_TOKEN i Vercel > Settings > Environment Variables, deploya om och skanna igen.",
@@ -174,6 +193,18 @@ const sv: AnalysisText = {
     fix: "Använd Supabase-uppgifter bara i server-only-moduler, och håll SUPABASE_SECRET_KEY eller den gamla service role-nyckeln borta från Client Components.",
     partial: "Ingen Supabase-förväxling hittad, men skanningen blev inte klar.",
     ok: "Ingen Supabase-webbläsarklient används i serverkod och ingen service role-nyckel refereras i klientkod.",
+  },
+  build: {
+    lockfiles: (files) => `har lockfiler för mer än en pakethanterare (${files}); Vercel väljer en och kan installera andra versioner än de du testat`,
+    lockfilesFix: (keep, files) => keep
+      ? `Behåll lockfilen för ${keep} (package.json anger packageManager ${keep}) och ta bort de andra: ${files.join(", ")}.`
+      : `Välj en pakethanterare, behåll dess lockfil och ta bort de andra: ${files.join(", ")}.`,
+    noBuild: "har next som beroende men inget build-skript",
+    noBuildFix: 'Lägg till "build": "next build" under scripts i package.json så att npm run build fungerar lokalt och hos alla värdar.',
+    engines: (range) => `engines.node är "${range}", vilket inte tillåter någon av Node 20, 22 eller 24 som Vercel bygger med`,
+    enginesFix: 'Ändra engines.node i package.json till ett intervall som Vercel stöder, t.ex. ">=20" eller "22.x".',
+    yellow: (n) => `${n} projektinställning${n === 1 ? "" : "ar"} kan göra att Vercel-bygget beter sig annorlunda än på din dator.`,
+    ok: "En lockfil, ett build-skript och en Node-version som Vercel stöder.",
   },
   prisma: {
     okDrizzle: "Drizzle hittades. SQLite-drivrutiner fångas av kontrollen för Vercel-inkompatibel serverkod.",

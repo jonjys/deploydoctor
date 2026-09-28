@@ -5,6 +5,7 @@ import { defaultChecks, detectStack } from "@/lib/stack";
 import { analysisText, type AnalysisText } from "@/lib/analysis-text";
 import type { Lang } from "@/lib/i18n";
 import { ignoringRule } from "@/lib/gitignore";
+import { nodeRangeAllowsMajor } from "@/lib/node-range";
 
 export type RepositorySnapshot = {
   owner: string;
@@ -83,6 +84,9 @@ function parsePackageJson(snapshot: RepositorySnapshot) {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
       scripts?: Record<string, string>;
+      engines?: Record<string, unknown>;
+      workspaces?: unknown;
+      packageManager?: string;
     };
   } catch {
     return null;
@@ -265,6 +269,53 @@ export function extractEnvReads(source: string): Array<{ name: string; index: nu
   return reads.sort((left, right) => left.index - right.index);
 }
 
+const LOCKFILES: Record<string, string> = {
+  "package-lock.json": "npm",
+  "pnpm-lock.yaml": "pnpm",
+  "yarn.lock": "yarn",
+  "bun.lockb": "bun",
+  "bun.lock": "bun",
+};
+const SUPPORTED_NODE_MAJORS = [20, 22, 24];
+
+function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
+  const title = x.titles.buildConfig;
+  const manifest = parsePackageJson(snapshot);
+  const raw = snapshot.contents.get("package.json") ?? "";
+  const lineOf = (needle: string) => Math.max(1, lineAt(raw, Math.max(0, raw.indexOf(needle))));
+  const findings: Finding[] = [];
+
+  const lockfiles = snapshot.entries.filter((entry) => entry.type === "blob" && entry.path in LOCKFILES).map((entry) => entry.path).sort();
+  const managers = new Set(lockfiles.map((file) => LOCKFILES[file]));
+  if (managers.size > 1) {
+    const keep = manifest?.packageManager?.split("@")[0];
+    const extra = lockfiles.filter((file) => LOCKFILES[file] !== keep);
+    findings.push({ file: lockfiles[0], line: 1, problem: x.build.lockfiles(lockfiles.join(", ")),
+      fix: x.build.lockfilesFix(keep && managers.has(keep) ? keep : undefined, lockfiles),
+      ...(keep && managers.has(keep) ? { command: `git rm -- ${extra.map(shellQuote).join(" ")}` } : {}) });
+  }
+
+  const packages = { ...manifest?.devDependencies, ...manifest?.dependencies };
+  // vercel.json can set its own build command; workspaces roots usually build through a workspace package.
+  const vercelBuild = /"buildCommand"\s*:/.test(snapshot.contents.get("vercel.json") ?? "");
+  if (manifest && packages.next && !manifest.scripts?.build && !vercelBuild && !manifest.workspaces) {
+    findings.push({ file: "package.json", line: lineOf('"scripts"'), problem: x.build.noBuild, fix: x.build.noBuildFix,
+      command: "git add -- package.json" });
+  }
+
+  const node = manifest?.engines?.node;
+  if (typeof node === "string" && nodeRangeAllowsMajor(node, SUPPORTED_NODE_MAJORS) === false) {
+    findings.push({ file: "package.json", line: lineOf('"engines"'), problem: x.build.engines(node), fix: x.build.enginesFix,
+      command: "git add -- package.json" });
+  }
+
+  if (findings.length) {
+    return makeCheck("build-config", title, "yellow", x.build.yellow(findings.length), findings[0].fix,
+      findings.map((item) => `${item.file}:${item.line} → ${item.problem}`), findings);
+  }
+  return makeCheck("build-config", title, "green", x.build.ok, x.noChange);
+}
+
 function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const declared = new Set<string>();
   const used = new Set<string>();
@@ -408,7 +459,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
   const chosen = new Set(options.checks ?? defaultChecks(stack));
   const runners: Record<Category, Array<(snapshot: RepositorySnapshot, x: AnalysisText) => CheckResult>> = {
     next: [checkNextEntrypoint, checkImports],
-    vercel: [checkServerLibraries],
+    vercel: [checkServerLibraries, checkBuildConfig],
     env: [checkEnvironment],
     supabase: [checkSupabase],
     prisma: [checkPrisma],
