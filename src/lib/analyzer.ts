@@ -6,6 +6,7 @@ import { analysisText, type AnalysisText } from "@/lib/analysis-text";
 import type { Lang } from "@/lib/i18n";
 import { ignoringRule } from "@/lib/gitignore";
 import { nodeRangeAllowsMajor } from "@/lib/node-range";
+import { findSecrets } from "@/lib/secrets";
 
 export type RepositorySnapshot = {
   owner: string;
@@ -446,6 +447,24 @@ function envExampleIgnoreRule(snapshot: RepositorySnapshot, readsCustomEnv: bool
   return rule;
 }
 
+function checkSecrets(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
+  const title = x.titles.secrets;
+  const findings: Finding[] = [];
+  for (const [file, source] of snapshot.contents) {
+    if (TEST_FILE.test(file)) continue;
+    for (const secret of findSecrets(source)) {
+      findings.push({ file, line: lineAt(source, secret.index), problem: x.secrets.problem(x.secrets.kinds[secret.kind], secret.masked),
+        fix: x.secrets.fix(x.secrets.kinds[secret.kind]) });
+    }
+  }
+  if (findings.length) {
+    return makeCheck("secrets", title, "red", x.secrets.red(findings.length), x.secrets.summaryFix,
+      findings.map((item) => `${item.file}:${item.line} → ${item.problem}`), findings);
+  }
+  if (snapshot.partial) return makeCheck("secrets", title, "yellow", x.secrets.partial, partialFix(snapshot, x));
+  return makeCheck("secrets", title, "green", x.secrets.ok, x.noChange);
+}
+
 function hasUseClient(source: string): boolean {
   return /^\s*["']use client["']\s*;?/.test(source);
 }
@@ -516,7 +535,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
   const runners: Record<Category, Array<(snapshot: RepositorySnapshot, x: AnalysisText) => CheckResult>> = {
     next: [checkNextEntrypoint, checkImports],
     vercel: [checkServerLibraries, checkBuildConfig],
-    env: [checkEnvironment],
+    env: [checkEnvironment, checkSecrets],
     supabase: [checkSupabase],
     prisma: [checkPrisma],
   };

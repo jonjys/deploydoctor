@@ -1,7 +1,8 @@
 import type { Lang } from "@/lib/i18n";
+import type { SecretKind } from "@/lib/secrets";
 
 export type AnalysisText = {
-  titles: { nextEntry: string; imports: string; serverLibs: string; env: string; supabase: string; prisma: string; buildConfig: string };
+  titles: { nextEntry: string; imports: string; serverLibs: string; env: string; supabase: string; prisma: string; buildConfig: string; secrets: string };
   noChange: string;
   partialFixToken: string;
   partialFixRetry: string;
@@ -35,6 +36,10 @@ export type AnalysisText = {
     serverBrowser: (file: string) => string; clientKey: (file: string) => string;
     red: string; fix: string; partial: string; ok: string;
   };
+  secrets: {
+    kinds: Record<SecretKind, string>; problem: (kind: string, masked: string) => string; fix: (kind: string) => string;
+    red: (n: number) => string; summaryFix: string; partial: string; ok: string;
+  };
   build: {
     lockfiles: (files: string) => string; lockfilesFix: (keep: string | undefined, files: string[]) => string;
     noBuild: string; noBuildFix: string; engines: (range: string) => string; enginesFix: string;
@@ -50,7 +55,7 @@ const en: AnalysisText = {
   titles: {
     nextEntry: "Next.js entrypoint", imports: "Broken imports", serverLibs: "Vercel-incompatible server code",
     env: "Environment variables", supabase: "Supabase server/client boundaries", prisma: "Prisma / database",
-    buildConfig: "Build configuration",
+    buildConfig: "Build configuration", secrets: "Hardcoded secrets",
   },
   noChange: "No change is needed for this check.",
   partialFixToken: "Add GITHUB_TOKEN in Vercel > Settings > Environment Variables, redeploy and scan again.",
@@ -116,6 +121,18 @@ const en: AnalysisText = {
     partial: "No Supabase mix-up found, but the scan did not finish.",
     ok: "No Supabase browser client is used in server code and no service role key is referenced in client code.",
   },
+  secrets: {
+    kinds: {
+      "stripe-secret": "Stripe live secret key", "stripe-restricted": "Stripe live restricted key", "stripe-webhook": "Stripe webhook signing secret",
+      "aws-access-key": "AWS access key", "github-token": "GitHub token", "supabase-secret": "Supabase secret key", "private-key": "private key",
+    },
+    problem: (kind, masked) => `contains a ${kind} (${masked})`,
+    fix: (kind) => `Revoke the ${kind} now and create a new one, since anyone who can read the repository can use it. Then delete it from the file, read it from process.env instead and set the value in Vercel > Settings > Environment Variables.`,
+    red: (n) => `${n} hardcoded secret${n === 1 ? " is" : "s are"} committed in the current files; anyone who can read the repository can use ${n === 1 ? "it" : "them"}.`,
+    summaryFix: "Revoke and replace each key first, then move it out of the code into an environment variable set in Vercel. Removing it from the file alone is not enough: the old value stays in git history.",
+    partial: "No secrets found in the files we read, but the scan did not finish.",
+    ok: "No live Stripe, AWS, GitHub or Supabase secret key and no private key was found in the files we read.",
+  },
   build: {
     lockfiles: (files) => `has lockfiles for more than one package manager (${files}); Vercel picks one and may install different versions than you tested`,
     lockfilesFix: (keep, files) => keep
@@ -145,7 +162,7 @@ const sv: AnalysisText = {
   titles: {
     nextEntry: "Next.js-startpunkt", imports: "Trasiga importer", serverLibs: "Vercel-inkompatibel serverkod",
     env: "Miljövariabler", supabase: "Supabase-gränser mellan server och klient", prisma: "Prisma / databas",
-    buildConfig: "Byggkonfiguration",
+    buildConfig: "Byggkonfiguration", secrets: "Hårdkodade hemligheter",
   },
   noChange: "Ingen ändring behövs för den här kontrollen.",
   partialFixToken: "Lägg till GITHUB_TOKEN i Vercel > Settings > Environment Variables, deploya om och skanna igen.",
@@ -210,6 +227,18 @@ const sv: AnalysisText = {
     fix: "Använd Supabase-uppgifter bara i server-only-moduler, och håll SUPABASE_SECRET_KEY eller den gamla service role-nyckeln borta från Client Components.",
     partial: "Ingen Supabase-förväxling hittad, men skanningen blev inte klar.",
     ok: "Ingen Supabase-webbläsarklient används i serverkod och ingen service role-nyckel refereras i klientkod.",
+  },
+  secrets: {
+    kinds: {
+      "stripe-secret": "hemlig Stripe-nyckel (live)", "stripe-restricted": "begränsad Stripe-nyckel (live)", "stripe-webhook": "Stripe webhook-hemlighet",
+      "aws-access-key": "AWS-åtkomstnyckel", "github-token": "GitHub-token", "supabase-secret": "hemlig Supabase-nyckel", "private-key": "privat nyckel",
+    },
+    problem: (kind, masked) => `innehåller en ${kind} (${masked})`,
+    fix: (kind) => `Återkalla ${kind} nu och skapa en ny, eftersom alla som kan läsa repot kan använda den. Ta sedan bort den från filen, läs den från process.env i stället och sätt värdet i Vercel > Settings > Environment Variables.`,
+    red: (n) => `${n} hårdkodade hemlighet${n === 1 ? " är" : "er är"} committade i de nuvarande filerna; alla som kan läsa repot kan använda ${n === 1 ? "den" : "dem"}.`,
+    summaryFix: "Återkalla och ersätt varje nyckel först, och flytta den sedan från koden till en miljövariabel i Vercel. Det räcker inte att ta bort den från filen: det gamla värdet finns kvar i git-historiken.",
+    partial: "Inga hemligheter hittades i filerna vi läste, men skanningen blev inte klar.",
+    ok: "Ingen hemlig live-nyckel för Stripe, AWS, GitHub eller Supabase och ingen privat nyckel hittades i filerna vi läste.",
   },
   build: {
     lockfiles: (files) => `har lockfiler för mer än en pakethanterare (${files}); Vercel väljer en och kan installera andra versioner än de du testat`,

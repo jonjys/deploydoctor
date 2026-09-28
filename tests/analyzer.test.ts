@@ -122,7 +122,7 @@ test("without a choice, a Next.js repo without Supabase never gets a Supabase ch
   const results = analyzeSnapshot(snapshot(nextEntries, {
     "package.json": JSON.stringify({ dependencies: { next: "14.2.0", tailwindcss: "^3" } }), ...page,
   }));
-  assert.deepEqual(ids(results), ["next-entry", "imports", "server-libs", "build-config", "env"]);
+  assert.deepEqual(ids(results), ["next-entry", "imports", "server-libs", "build-config", "env", "secrets"]);
   assert.deepEqual(results.scope, { scanned: ["next", "vercel", "env"], ignored: ["supabase", "prisma"] });
   assert.equal(results.stack?.hasSupabase, false);
   assert.equal(results.stack?.hasTailwind, true);
@@ -147,10 +147,10 @@ test("explicit checks run only the selected categories and record what was ignor
     "package.json": JSON.stringify({ dependencies: { next: "16.3.6", "@supabase/ssr": "1" } }),
     "app/page.tsx": 'import { createBrowserClient } from "@supabase/ssr"; export default function Page() { return null }',
   }), { checks: ["vercel", "env"] });
-  assert.deepEqual(ids(results), ["server-libs", "build-config", "env"]);
+  assert.deepEqual(ids(results), ["server-libs", "build-config", "env", "secrets"]);
   assert.deepEqual(results.scope?.ignored, ["next", "supabase", "prisma"]);
   assert.equal(results.checks.every((check) => check.category), true);
-  assert.equal(results.summary.red + results.summary.yellow + results.summary.green, 3);
+  assert.equal(results.summary.red + results.summary.yellow + results.summary.green, 4);
 });
 
 test("Prisma check flags a missing generate step and SQLite, and is skipped when unselected", () => {
@@ -392,4 +392,46 @@ test("Edge-safe code, Node.js middleware, proxy.ts and type-only imports are not
     "app/api/b/route.ts": '// export const runtime = "edge";\nimport fs from "fs";\nexport async function GET() { return new Response(String(fs)) }',
   }), { checks: ["vercel"] });
   assert.equal(results.checks.find((check) => check.id === "server-libs")?.status, "green");
+});
+
+// Built by concatenation so no complete key-shaped string is ever committed in this file.
+const fakeBody = "Qm7Rk2Vt9Lp4Xw8Zn3Jc6Hb1Fg5Ds0Ay";
+const liveStripe = "sk_" + "live_" + fakeBody;
+
+test("hardcoded live secrets in current source files are red and always masked", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "lib/pay.ts", type: "blob" }, { path: ".env", type: "blob" }, { path: "lib/key.ts", type: "blob" }];
+  const pem = "-----BEGIN RSA " + "PRIVATE KEY-----\\n" + "MIIEowIBAAKCAQEA7bq9" + fakeBody + "Tz\\n-----END RSA PRIVATE KEY-----";
+  const results = analyzeSnapshot(snapshot(entries, {
+    ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "lib/pay.ts": `export const stripe = new Stripe("${liveStripe}");`,
+    ".env": `AWS_ACCESS_KEY_ID=${"AKIA" + "Q4ZT7NR2WX5KLM3B"}\nGITHUB_TOKEN=${"ghp_" + fakeBody + "a1B2"}\n`,
+    "lib/key.ts": `const key = "${pem}";`,
+  }), { checks: ["env"] });
+  const secrets = results.checks.find((check) => check.id === "secrets");
+  assert.equal(secrets?.status, "red");
+  assert.equal(secrets?.category, "env");
+  assert.deepEqual(secrets?.findings?.map((finding) => `${finding.file}:${finding.line}`).sort(), [".env:1", ".env:2", "lib/key.ts:1", "lib/pay.ts:1"]);
+  const everything = JSON.stringify(results);
+  assert.ok(!everything.includes(fakeBody), "no secret body may appear anywhere in the report");
+  assert.ok(everything.includes("sk_live_…" + fakeBody.slice(-4)));
+  assert.ok(everything.includes("-----BEGIN RSA PRIVATE KEY-----…"));
+});
+
+test("placeholders, test files, empty templates and test-mode keys are not reported as secrets", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }, { path: "lib/docs.ts", type: "blob" }, { path: "tests/pay.test.ts", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "STRIPE_SECRET_KEY=\nSTRIPE_WEBHOOK_SECRET=whsec_...\nAWS_ACCESS_KEY_ID=" + "AKIA" + "IOSFODNN7EXAMPLE\n",
+    "lib/docs.ts": [
+      "// Stripe keys look like " + "sk_" + "live_xxxxxxxxxxxxxxxxxxxxxxxx",
+      "const hint = \"" + "sk_" + "live_" + "your_key_here_0000000000000\";",
+      "const test = \"sk_" + "test_" + fakeBody + "\";",
+      "const strip = key.replace(\"-----BEGIN PRIVATE " + "KEY-----\", \"\");",
+      "const pat = \"" + "ghp_" + "0".repeat(36) + "\";",
+    ].join("\n"),
+    "tests/pay.test.ts": `const key = "${liveStripe}";`,
+  }), { checks: ["env"] });
+  assert.equal(results.checks.find((check) => check.id === "secrets")?.status, "green");
 });

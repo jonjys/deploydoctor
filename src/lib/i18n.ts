@@ -66,7 +66,7 @@ const en = {
   "cat.prisma": "Prisma/DB",
   "catopt.next": "Next.js / App Router",
   "catopt.vercel": "Vercel limits",
-  "catopt.env": "Env vars",
+  "catopt.env": "Env vars & secrets",
   "catopt.supabase": "Supabase",
   "catopt.prisma": "Prisma/DB",
 
@@ -295,7 +295,7 @@ const sv: Record<MessageKey, string> = {
   "cat.prisma": "Prisma/DB",
   "catopt.next": "Next.js / App Router",
   "catopt.vercel": "Vercel-gränser",
-  "catopt.env": "Miljövariabler",
+  "catopt.env": "Miljövariabler och hemligheter",
   "catopt.supabase": "Supabase",
   "catopt.prisma": "Prisma/DB",
 
