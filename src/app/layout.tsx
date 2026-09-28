@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { LangProvider } from "@/components/lang";
 import { getT } from "@/lib/lang";
@@ -35,7 +36,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const { lang } = await getT();
   return (
     <html lang={lang} className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body><LangProvider lang={lang}>{children}</LangProvider></body>
+      <body><LangProvider lang={lang}>{children}</LangProvider><Script src="/_vercel/insights/script.js" strategy="afterInteractive" /></body>
     </html>
   );
 }
