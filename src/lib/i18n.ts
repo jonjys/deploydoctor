@@ -21,7 +21,7 @@ export function dateLocale(lang: Lang) {
 }
 
 const en = {
-  "meta.title": "DeployDoctor — Vercel readiness scanner",
+  "meta.title": "DeployDoctor | Vercel readiness scanner",
   "meta.desc": "Scan a public GitHub repository for the code issues most likely to break a Vercel deployment.",
   "lang.aria": "Language",
   "nav.pricing": "Pricing",
@@ -29,7 +29,7 @@ const en = {
 
   "home.eyebrow": "VERCEL READINESS SCANNER",
   "home.h1": "Works locally, breaks on Vercel? Find out why in 10 seconds.",
-  "home.copy": "Paste a public GitHub repository. DeployDoctor detects your stack and checks the code paths most likely to fail after your push—without cloning or building it.",
+  "home.copy": "Paste a public GitHub repository. DeployDoctor detects your stack and checks the code paths most likely to fail after your push, without cloning or building it.",
   "home.trust.aria": "Scanner characteristics",
   "home.trust.unlimited": "Unlimited scans",
   "home.trust.free": "3 free scans / day",
@@ -250,7 +250,7 @@ const en = {
 export type MessageKey = keyof typeof en;
 
 const sv: Record<MessageKey, string> = {
-  "meta.title": "DeployDoctor — skanner för Vercel-beredskap",
+  "meta.title": "DeployDoctor | skanner för Vercel-beredskap",
   "meta.desc": "Skanna ett publikt GitHub-repo efter kodproblem som oftast får en Vercel-deploy att misslyckas.",
   "lang.aria": "Språk",
   "nav.pricing": "Priser",
