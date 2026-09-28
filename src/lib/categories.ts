@@ -11,6 +11,7 @@ const CATEGORY_OF_CHECK: Record<CheckId, Category> = {
   prisma: "prisma",
   "build-config": "vercel",
   secrets: "env",
+  dependencies: "vercel",
 };
 
 export function categoryOf(check: Pick<CheckResult, "id" | "category">): Category {

@@ -7,6 +7,7 @@ import type { Lang } from "@/lib/i18n";
 import { ignoringRule } from "@/lib/gitignore";
 import { nodeRangeAllowsMajor } from "@/lib/node-range";
 import { findSecrets } from "@/lib/secrets";
+import { lockfileMentions, moduleImports, packageName, tsconfigAliases } from "@/lib/dependencies";
 
 export type RepositorySnapshot = {
   owner: string;
@@ -84,6 +85,9 @@ function parsePackageJson(snapshot: RepositorySnapshot) {
     return JSON.parse(raw) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+      optionalDependencies?: Record<string, string>;
+      name?: string;
       scripts?: Record<string, string>;
       engines?: Record<string, unknown>;
       workspaces?: unknown;
@@ -373,6 +377,109 @@ function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
   return makeCheck("build-config", title, "green", x.build.ok, x.noChange);
 }
 
+// Files Next.js builds from; everything they import (transitively, through local files) is part of the build.
+const NEXT_BUILD_ENTRY = /^(?:src\/)?(?:app|pages)\/|^(?:src\/)?(?:middleware|proxy|instrumentation|instrumentation-client|mdx-components)\.[cm]?[jt]sx?$|^next\.config\.[cm]?[jt]s$/;
+// Next.js resolves these itself, so they build without being installed.
+const PROVIDED_BY_NEXT = new Set(["server-only", "client-only"]);
+const TEXT_LOCKFILES = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock"];
+const ADD_COMMAND: Record<string, string> = { npm: "npm install", pnpm: "pnpm add", yarn: "yarn add", bun: "bun add" };
+
+type ImportTarget = { kind: "local"; path?: string } | { kind: "package"; name: string } | { kind: "other" };
+
+/** Resolves an import the way the Next.js build would, as far as the repository tree can tell. */
+function importResolver(snapshot: RepositorySnapshot) {
+  const files = new Set(snapshot.entries.filter((entry) => entry.type === "blob").map((entry) => entry.path));
+  const config = tsconfigAliases(snapshot.contents.get("tsconfig.json") ?? snapshot.contents.get("jsconfig.json") ?? "");
+  const aliases = [...config.prefixes];
+  if (!aliases.some((alias) => alias.prefix === "@/")) aliases.push({ prefix: "@/", targets: ["src/", ""] });
+  aliases.sort((left, right) => right.prefix.length - left.prefix.length);
+  const find = (base: string) => possibleImportTargets(base).find((candidate) => files.has(candidate));
+
+  return (file: string, specifier: string): ImportTarget => {
+    const clean = specifier.split(/[?#]/)[0];
+    if (clean.startsWith("./") || clean.startsWith("../")) return { kind: "local", path: find(path.posix.join(path.posix.dirname(file), clean)) };
+    for (const { prefix, targets } of aliases) {
+      if (prefix.endsWith("/") ? clean.startsWith(prefix) : clean === prefix || clean.startsWith(`${prefix}/`)) {
+        const rest = clean.slice(prefix.length);
+        return { kind: "local", path: targets.map((target) => find(path.posix.join(target, rest))).find(Boolean) };
+      }
+    }
+    if (config.baseUrl !== undefined) {
+      // With baseUrl, `components/Button` can be a folder or file under baseUrl rather than a package.
+      const first = path.posix.join(config.baseUrl, clean.split("/")[0]);
+      const local = find(path.posix.join(config.baseUrl, clean));
+      if (local || snapshot.entries.some((entry) => entry.path === first || entry.path.startsWith(`${first}.`))) return { kind: "local", path: local };
+    }
+    const name = packageName(clean);
+    return name ? { kind: "package", name } : { kind: "other" };
+  };
+}
+
+/** Packages imported by code that is part of the Next.js build, with the first place each is imported. */
+function buildImportedPackages(snapshot: RepositorySnapshot) {
+  const resolve = importResolver(snapshot);
+  const queue = [...snapshot.contents.keys()].filter((file) => NEXT_BUILD_ENTRY.test(file) && SOURCE_EXTENSION.test(file) && !TEST_FILE.test(file));
+  const seen = new Set(queue);
+  const packages = new Map<string, { file: string; line: number; static: boolean }>();
+  while (queue.length) {
+    const file = queue.shift()!;
+    const source = snapshot.contents.get(file);
+    if (source === undefined || file.endsWith(".d.ts")) continue;
+    for (const use of moduleImports(source)) {
+      const target = resolve(file, use.specifier);
+      if (target.kind === "local" && target.path && !seen.has(target.path) && SOURCE_EXTENSION.test(target.path) && !TEST_FILE.test(target.path)) {
+        seen.add(target.path);
+        queue.push(target.path);
+      } else if (target.kind === "package") {
+        const known = packages.get(target.name);
+        if (!known || (!known.static && use.kind === "static")) packages.set(target.name, { file, line: use.line, static: use.kind === "static" });
+      }
+    }
+  }
+  return packages;
+}
+
+function checkDependencies(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
+  const title = x.titles.dependencies;
+  const manifest = parsePackageJson(snapshot);
+  const findings: Array<Finding & { red: boolean }> = [];
+  const lockfiles = snapshot.entries.filter((entry) => entry.type === "blob" && entry.path in LOCKFILES).map((entry) => entry.path);
+  const manager = lockfiles.length === 1 ? LOCKFILES[lockfiles[0]] : "npm";
+  const lockfile = lockfiles.length === 1 && TEXT_LOCKFILES.includes(lockfiles[0]) ? snapshot.contents.get(lockfiles[0]) : undefined;
+  const commitFiles = ["package.json", ...(lockfiles.length === 1 ? lockfiles : [])].join(" ");
+
+  // Missing packages: only for a single Next.js app at the root, where the build's entry points are known.
+  const workspaces = Boolean(manifest?.workspaces) || snapshot.entries.some((entry) => entry.path === "pnpm-workspace.yaml");
+  const tracesImports = Boolean(manifest && (manifest.dependencies?.next || manifest.devDependencies?.next) && !workspaces);
+  if (manifest && tracesImports) {
+    const declared = new Set([manifest.name, ...[manifest.dependencies, manifest.devDependencies, manifest.peerDependencies,
+      manifest.optionalDependencies].flatMap((section) => Object.keys(section ?? {}))]);
+    const nextConfig = [...snapshot.contents].filter(([file]) => /^next\.config\./.test(file)).map(([, source]) => source).join("\n");
+    const config = tsconfigAliases(snapshot.contents.get("tsconfig.json") ?? snapshot.contents.get("jsconfig.json") ?? "");
+    // Aliases defined in an extended tsconfig, or a bundler alias in next.config, could make a name local.
+    const unknownAliases = config.extendsOther && !config.prefixes.length && config.baseUrl === undefined;
+    for (const [name, use] of buildImportedPackages(snapshot)) {
+      if (declared.has(name) || PROVIDED_BY_NEXT.has(name)) continue;
+      const certain = use.static && lockfile !== undefined && !lockfileMentions(lockfile, name) && !unknownAliases
+        && !nextConfig.includes(`"${name}`) && !nextConfig.includes(`'${name}`) && !nextConfig.includes(`\`${name}`);
+      findings.push({ file: use.file, line: use.line, red: certain,
+        problem: certain ? x.deps.missingRed(name) : x.deps.missingYellow(name),
+        fix: x.deps.missingFix(name, `${ADD_COMMAND[manager]} ${name}`), command: `git add -- ${commitFiles}` });
+    }
+  }
+
+  const red = findings.filter((item) => item.red);
+  const ordered: Finding[] = [...red, ...findings.filter((item) => !item.red)]
+    .map((item) => ({ file: item.file, line: item.line, problem: item.problem, fix: item.fix, command: item.command }));
+  if (ordered.length) {
+    return makeCheck("dependencies", title, red.length ? "red" : "yellow",
+      red.length ? x.deps.red(red.length) : x.deps.yellow(ordered.length), ordered[0].fix,
+      ordered.map((item) => `${item.file}:${item.line} → ${item.problem}`), ordered);
+  }
+  if (snapshot.partial) return makeCheck("dependencies", title, "yellow", x.deps.partial, partialFix(snapshot, x));
+  return makeCheck("dependencies", title, "green", tracesImports ? x.deps.ok : x.deps.okNotTraced, x.noChange);
+}
+
 function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const declared = new Set<string>();
   const used = new Set<string>();
@@ -466,7 +573,7 @@ function checkSecrets(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
   const title = x.titles.secrets;
   const findings: Finding[] = [];
   for (const [file, source] of snapshot.contents) {
-    if (TEST_FILE.test(file)) continue;
+    if (TEST_FILE.test(file) || file in LOCKFILES) continue;
     for (const secret of findSecrets(source)) {
       findings.push({ file, line: lineAt(source, secret.index), problem: x.secrets.problem(x.secrets.kinds[secret.kind], secret.masked),
         fix: x.secrets.fix(x.secrets.kinds[secret.kind]) });
@@ -549,7 +656,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
   const chosen = new Set(options.checks ?? defaultChecks(stack));
   const runners: Record<Category, Array<(snapshot: RepositorySnapshot, x: AnalysisText) => CheckResult>> = {
     next: [checkNextEntrypoint, checkImports],
-    vercel: [checkServerLibraries, checkBuildConfig],
+    vercel: [checkServerLibraries, checkBuildConfig, checkDependencies],
     env: [checkEnvironment, checkSecrets],
     supabase: [checkSupabase],
     prisma: [checkPrisma],

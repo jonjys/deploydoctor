@@ -123,7 +123,7 @@ test("without a choice, a Next.js repo without Supabase never gets a Supabase ch
   const results = analyzeSnapshot(snapshot(nextEntries, {
     "package.json": JSON.stringify({ dependencies: { next: "14.2.0", tailwindcss: "^3" } }), ...page,
   }));
-  assert.deepEqual(ids(results), ["next-entry", "imports", "server-libs", "build-config", "env", "secrets"]);
+  assert.deepEqual(ids(results), ["next-entry", "imports", "server-libs", "build-config", "dependencies", "env", "secrets"]);
   assert.deepEqual(results.scope, { scanned: ["next", "vercel", "env"], ignored: ["supabase", "prisma"] });
   assert.equal(results.stack?.hasSupabase, false);
   assert.equal(results.stack?.hasTailwind, true);
@@ -148,10 +148,10 @@ test("explicit checks run only the selected categories and record what was ignor
     "package.json": JSON.stringify({ dependencies: { next: "16.3.6", "@supabase/ssr": "1" } }),
     "app/page.tsx": 'import { createBrowserClient } from "@supabase/ssr"; export default function Page() { return null }',
   }), { checks: ["vercel", "env"] });
-  assert.deepEqual(ids(results), ["server-libs", "build-config", "env", "secrets"]);
+  assert.deepEqual(ids(results), ["server-libs", "build-config", "dependencies", "env", "secrets"]);
   assert.deepEqual(results.scope?.ignored, ["next", "supabase", "prisma"]);
   assert.equal(results.checks.every((check) => check.category), true);
-  assert.equal(results.summary.red + results.summary.yellow + results.summary.green, 4);
+  assert.equal(results.summary.red + results.summary.yellow + results.summary.green, 5);
 });
 
 test("Prisma check flags a missing generate step and SQLite, and is skipped when unselected", () => {
@@ -471,4 +471,74 @@ test("no complete file is suggested when nothing is missing, and old reports wit
     ...results, checks: [{ id: "env" as const, title: "Environment variables", status: "red" as const, explanation: "1 env variable is missing.",
       fix: "Add X=.", evidence: [], findings: [{ file: "a.ts", line: 1, problem: "X is missing", fix: "Add X=", command: "git add -- .env.example" }] }] } };
   assert.match(freeFixInstructions(oldReport), /File: a\.ts:1 - X is missing\.\nFix: Add X=\nCommand \(after making the change\): git add -- \.env\.example/);
+});
+
+const npmLock = (packages: string[]) => JSON.stringify({ lockfileVersion: 3, packages: {
+  "": { dependencies: { next: "16.3.6" } },
+  ...Object.fromEntries(packages.map((name) => [`node_modules/${name}`, { version: "1.0.0" }])),
+} }, null, 2);
+const dependencies = (results: ReturnType<typeof analyzeSnapshot>) => results.checks.find((check) => check.id === "dependencies");
+
+test("a package imported by the build but in neither package.json nor the lockfile is red", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "package-lock.json", type: "blob" },
+    { path: "src", type: "tree" }, { path: "src/lib", type: "tree" }, { path: "src/lib/schema.ts", type: "blob" }, { path: "app/scene.tsx", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "package-lock.json": npmLock(["next", "@types/three-helpers", "react"]),
+    "app/page.tsx": 'import { Scene } from "./scene";\nimport { schema } from "@/lib/schema";\nimport React from "react";\nexport default function Page() { return null }',
+    "app/scene.tsx": 'import {\n  WebGLRenderer,\n} from "three";\nexport const Scene = () => null;',
+    "src/lib/schema.ts": 'import { z } from "zod/v4";\nexport const schema = z.string();',
+  }), { checks: ["vercel"] });
+  const check = dependencies(results);
+  assert.equal(check?.status, "red");
+  assert.equal(check?.category, "vercel");
+  assert.deepEqual(check?.findings?.map((finding) => `${finding.file}:${finding.line}`), ["app/scene.tsx:1", "src/lib/schema.ts:1", "app/page.tsx:3"]);
+  assert.match(check?.findings?.[0].problem ?? "", /imports three, which is in neither package.json nor the lockfile/);
+  assert.match(check?.findings?.[0].fix ?? "", /npm install three/);
+  // react is in the lockfile (a peer of next), so it works by luck: yellow, listed after the red ones.
+  assert.match(check?.findings?.[2].problem ?? "", /react, which is not in package\.json; it only works/);
+});
+
+test("imports outside the build, type-only, commented, built-in, aliased or declared are not flagged", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "package-lock.json", type: "blob" }, { path: "tsconfig.json", type: "blob" },
+    { path: "scripts", type: "tree" }, { path: "scripts/seed.ts", type: "blob" }, { path: "lib", type: "tree" }, { path: "lib/util.ts", type: "blob" },
+    { path: "components", type: "tree" }, { path: "components/Button.tsx", type: "blob" }, { path: "next.config.mjs", type: "blob" }];
+  const results = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ name: "site", dependencies: { next: "16.3.6", react: "19" }, devDependencies: { "@types/node": "22" } }),
+    "package-lock.json": npmLock(["next", "react"]),
+    "tsconfig.json": '{\n  // comments are allowed\n  "compilerOptions": { "baseUrl": ".", "paths": { "~/*": ["./lib/*"], "@ui/*": ["./components/*"], }, },\n}',
+    "next.config.mjs": 'export default { webpack: (config) => { config.resolve.alias["legacy-pkg"] = "./lib/util.ts"; return config } }',
+    "app/page.tsx": [
+      'import type { Metadata } from "some-types";',
+      'import { type Thing } from "types-only";',
+      '// import { gone } from "old-package";',
+      "/* import x from 'also-gone'; */",
+      'import fs from "node:fs";', 'import path from "path";', 'import "server-only";',
+      'import { util } from "~/util";', 'import Button from "@ui/Button";', 'import Other from "components/Button";',
+      'import legacy from "legacy-pkg";', 'import site from "site/package.json";',
+      'export default function Page() { return null }',
+    ].join("\n"),
+    "lib/util.ts": 'import type { NextConfig } from "next";\nexport const util = 1;',
+    "components/Button.tsx": "export default function Button() { return null }",
+    "scripts/seed.ts": 'import { faker } from "@faker-js/faker";',
+  }), { checks: ["vercel"] });
+  const check = dependencies(results);
+  // legacy-pkg is aliased in next.config, so at most it can be a yellow guess, never red.
+  assert.deepEqual(check?.findings?.map((finding) => finding.problem.split(",")[0]), ["imports legacy-pkg"]);
+  assert.equal(check?.status, "yellow");
+});
+
+test("without a lockfile, or through require() or a workspaces root, a missing package is never red", () => {
+  const files = {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "app/page.tsx": 'import "three";\nconst sharp = require("sharp");\nexport default function Page() { return null }',
+  };
+  const noLock = dependencies(analyzeSnapshot(snapshot(nextEntries, files), { checks: ["vercel"] }));
+  assert.equal(noLock?.status, "yellow");
+  assert.equal(noLock?.findings?.length, 2);
+  const withLock = dependencies(analyzeSnapshot(snapshot([...nextEntries, { path: "package-lock.json", type: "blob" }],
+    { ...files, "package-lock.json": npmLock(["next"]) }), { checks: ["vercel"] }));
+  assert.deepEqual(withLock?.findings?.map((finding) => finding.problem.includes("neither")), [true, false]); // three red, sharp (require) yellow
+  const workspace = dependencies(analyzeSnapshot(snapshot([...nextEntries, { path: "pnpm-workspace.yaml", type: "blob" }], files), { checks: ["vercel"] }));
+  assert.equal(workspace?.status, "green");
 });

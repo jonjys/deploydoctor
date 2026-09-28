@@ -1,7 +1,7 @@
 import type { Stack } from "@/lib/stack";
 
 export type CheckStatus = "red" | "yellow" | "green";
-export type CheckId = "next-entry" | "imports" | "server-libs" | "env" | "supabase" | "prisma" | "build-config" | "secrets";
+export type CheckId = "next-entry" | "imports" | "server-libs" | "env" | "supabase" | "prisma" | "build-config" | "secrets" | "dependencies";
 export type Category = "next" | "vercel" | "env" | "supabase" | "prisma";
 export type Finding = { file: string; line: number; problem: string; fix: string; command?: string };
 
