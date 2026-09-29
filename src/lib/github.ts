@@ -9,6 +9,9 @@ const GITHUB_API = "https://api.github.com";
 const SOURCE_FILE = /\.(?:[cm]?[jt]sx?|vue|svelte)$/i;
 const API_ROUTE = /(?:^|\/)(?:src\/)?app\/api(?:\/.*)?\/route\.[cm]?[jt]s$|(?:^|\/)(?:src\/)?pages\/api\/.*\.[cm]?[jt]s$/i;
 const MAX_FILE_BYTES = 256_000;
+// Root lockfiles are read in full (they can be large) so the dependencies check can compare them with package.json.
+const ROOT_LOCKFILE = /^(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock)$/;
+const MAX_LOCKFILE_BYTES = 8_000_000;
 
 type GitHubRepository = {
   default_branch: string;
@@ -105,7 +108,8 @@ async function githubRequest<T>(pathname: string, token?: string): Promise<T> {
 function priorityFor(pathname: string): number {
   if (pathname === "package.json") return 0;
   if (/(?:^|\/)\.env(?:\..+)?$/.test(pathname) || pathname === ".gitignore") return 1;
-  if (/^(?:tsconfig|jsconfig|vercel)\.json$/.test(pathname) || /\.prisma$/.test(pathname)) return 2;
+  if (/^(?:tsconfig|jsconfig|vercel)\.json$/.test(pathname) || /\.prisma$/.test(pathname) || ROOT_LOCKFILE.test(pathname)
+    || /^next\.config\.[cm]?[jt]s$/.test(pathname)) return 2;
   if (API_ROUTE.test(pathname)) return 3;
   if (/(?:^|\/)(?:src\/)?app\/.*\/(?:page|layout|loading|default|not-found)\.[jt]sx$/i.test(pathname)) return 4;
   return 5;
@@ -139,14 +143,15 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
     .filter(
       (entry) =>
         entry.type === "blob" &&
-        (entry.size ?? 0) <= MAX_FILE_BYTES &&
+        ((ROOT_LOCKFILE.test(entry.path) && (entry.size ?? 0) <= MAX_LOCKFILE_BYTES) ||
+        ((entry.size ?? 0) <= MAX_FILE_BYTES &&
         (SOURCE_FILE.test(entry.path) ||
           entry.path === "package.json" ||
           entry.path === ".gitignore" ||
           entry.path === "vercel.json" ||
           /^(?:tsconfig|jsconfig)\.json$/.test(entry.path) ||
           /\.prisma$/.test(entry.path) ||
-          /(?:^|\/)\.env(?:\..+)?$/.test(entry.path)),
+          /(?:^|\/)\.env(?:\..+)?$/.test(entry.path)))),
     )
     .sort((left, right) => priorityFor(left.path) - priorityFor(right.path) || left.path.localeCompare(right.path));
   const requestLimit = token ? 180 : 48;

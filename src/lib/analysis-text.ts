@@ -2,7 +2,7 @@ import type { Lang } from "@/lib/i18n";
 import type { SecretKind } from "@/lib/secrets";
 
 export type AnalysisText = {
-  titles: { nextEntry: string; imports: string; serverLibs: string; env: string; supabase: string; prisma: string; buildConfig: string; secrets: string };
+  titles: { nextEntry: string; imports: string; serverLibs: string; env: string; supabase: string; prisma: string; buildConfig: string; secrets: string; dependencies: string };
   noChange: string;
   partialFixToken: string;
   partialFixRetry: string;
@@ -36,6 +36,13 @@ export type AnalysisText = {
     serverBrowser: (file: string) => string; clientKey: (file: string) => string;
     red: string; fix: string; partial: string; ok: string;
   };
+  deps: {
+    missingRed: (name: string) => string; missingYellow: (name: string) => string; missingFix: (name: string, command: string) => string;
+    red: (n: number) => string; yellow: (n: number) => string; partial: string; ok: string; okNotTraced: string;
+    driftChanged: (name: string, wanted: string, lockfile: string, locked: string) => string;
+    driftAdded: (name: string, lockfile: string) => string; driftRemoved: (name: string, lockfile: string) => string;
+    pnpmRed: (n: number) => string; pnpmYellow: (n: number) => string; npmYellow: (n: number) => string; pnpmFix: string; npmFix: string;
+  };
   secrets: {
     kinds: Record<SecretKind, string>; problem: (kind: string, masked: string) => string; fix: (kind: string) => string;
     red: (n: number) => string; summaryFix: string; partial: string; ok: string;
@@ -55,7 +62,7 @@ const en: AnalysisText = {
   titles: {
     nextEntry: "Next.js entrypoint", imports: "Broken imports", serverLibs: "Vercel-incompatible server code",
     env: "Environment variables", supabase: "Supabase server/client boundaries", prisma: "Prisma / database",
-    buildConfig: "Build configuration", secrets: "Hardcoded secrets",
+    buildConfig: "Build configuration", secrets: "Hardcoded secrets", dependencies: "Dependencies",
   },
   noChange: "No change is needed for this check.",
   partialFixToken: "Add GITHUB_TOKEN in Vercel > Settings > Environment Variables, redeploy and scan again.",
@@ -121,6 +128,24 @@ const en: AnalysisText = {
     partial: "No Supabase mix-up found, but the scan did not finish.",
     ok: "No Supabase browser client is used in server code and no service role key is referenced in client code.",
   },
+  deps: {
+    missingRed: (name) => `imports ${name}, which is in neither package.json nor the lockfile, so Vercel never installs it and the build fails`,
+    missingYellow: (name) => `imports ${name}, which is not in package.json; it only works if another package happens to install it`,
+    missingFix: (name, command) => `Add ${name} to package.json: run ${command} and commit package.json and the lockfile.`,
+    red: (n) => `${n} package${n === 1 ? " is" : "s are"} imported by the build but never installed on Vercel.`,
+    yellow: (n) => `${n} dependenc${n === 1 ? "y relies" : "ies rely"} on luck: the build may install something other than what you tested.`,
+    partial: "No dependency problems in the files we read, but the scan did not finish.",
+    ok: "Every package the Next.js build imports is declared in package.json, and the lockfile matches it.",
+    okNotTraced: "No dependency problems found. Imports are traced for a Next.js app at the repository root.",
+    driftChanged: (name, wanted, lockfile, locked) => `package.json asks for ${name} "${wanted}", but ${lockfile} has "${locked}"`,
+    driftAdded: (name, lockfile) => `${name} is in package.json but not in ${lockfile}`,
+    driftRemoved: (name, lockfile) => `${name} is still in ${lockfile} but no longer in package.json`,
+    pnpmRed: (n) => `pnpm-lock.yaml does not match package.json (${n} difference${n === 1 ? "" : "s"}); Vercel installs with a frozen lockfile, so the install stops with ERR_PNPM_OUTDATED_LOCKFILE.`,
+    pnpmYellow: (n) => `pnpm-lock.yaml does not match package.json (${n} difference${n === 1 ? "" : "s"}). vercel.json sets its own installCommand, so the install may or may not stop, but the lockfile is out of date either way.`,
+    npmYellow: (n) => `package-lock.json does not match package.json (${n} difference${n === 1 ? "" : "s"}), so npm rewrites it during the build and Vercel may install other versions than you tested.`,
+    pnpmFix: "Run pnpm install locally and commit the updated pnpm-lock.yaml.",
+    npmFix: "Run npm install locally and commit the updated package-lock.json.",
+  },
   secrets: {
     kinds: {
       "stripe-secret": "Stripe live secret key", "stripe-restricted": "Stripe live restricted key", "stripe-webhook": "Stripe webhook signing secret",
@@ -162,7 +187,7 @@ const sv: AnalysisText = {
   titles: {
     nextEntry: "Next.js-startpunkt", imports: "Trasiga importer", serverLibs: "Vercel-inkompatibel serverkod",
     env: "Miljövariabler", supabase: "Supabase-gränser mellan server och klient", prisma: "Prisma / databas",
-    buildConfig: "Byggkonfiguration", secrets: "Hårdkodade hemligheter",
+    buildConfig: "Byggkonfiguration", secrets: "Hårdkodade hemligheter", dependencies: "Beroenden",
   },
   noChange: "Ingen ändring behövs för den här kontrollen.",
   partialFixToken: "Lägg till GITHUB_TOKEN i Vercel > Settings > Environment Variables, deploya om och skanna igen.",
@@ -227,6 +252,24 @@ const sv: AnalysisText = {
     fix: "Använd Supabase-uppgifter bara i server-only-moduler, och håll SUPABASE_SECRET_KEY eller den gamla service role-nyckeln borta från Client Components.",
     partial: "Ingen Supabase-förväxling hittad, men skanningen blev inte klar.",
     ok: "Ingen Supabase-webbläsarklient används i serverkod och ingen service role-nyckel refereras i klientkod.",
+  },
+  deps: {
+    missingRed: (name) => `importerar ${name}, som varken finns i package.json eller i lockfilen, så Vercel installerar det aldrig och bygget kraschar`,
+    missingYellow: (name) => `importerar ${name}, som inte finns i package.json; det fungerar bara om ett annat paket råkar installera det`,
+    missingFix: (name, command) => `Lägg till ${name} i package.json: kör ${command} och committa package.json och lockfilen.`,
+    red: (n) => `${n} paket importeras av bygget men installeras aldrig på Vercel.`,
+    yellow: (n) => `${n} beroende${n === 1 ? "" : "n"} bygger på tur: bygget kan installera något annat än det du testat.`,
+    partial: "Inga beroendeproblem i filerna vi läste, men skanningen blev inte klar.",
+    ok: "Alla paket som Next.js-bygget importerar finns i package.json, och lockfilen stämmer med den.",
+    okNotTraced: "Inga beroendeproblem hittades. Importer följs för en Next.js-app i repots rot.",
+    driftChanged: (name, wanted, lockfile, locked) => `package.json vill ha ${name} "${wanted}", men ${lockfile} har "${locked}"`,
+    driftAdded: (name, lockfile) => `${name} finns i package.json men inte i ${lockfile}`,
+    driftRemoved: (name, lockfile) => `${name} finns kvar i ${lockfile} men inte längre i package.json`,
+    pnpmRed: (n) => `pnpm-lock.yaml stämmer inte med package.json (${n} skillnad${n === 1 ? "" : "er"}); Vercel installerar med fryst lockfil, så installationen stoppas med ERR_PNPM_OUTDATED_LOCKFILE.`,
+    pnpmYellow: (n) => `pnpm-lock.yaml stämmer inte med package.json (${n} skillnad${n === 1 ? "" : "er"}). vercel.json anger ett eget installCommand, så installationen stoppas kanske inte, men lockfilen är inaktuell oavsett.`,
+    npmYellow: (n) => `package-lock.json stämmer inte med package.json (${n} skillnad${n === 1 ? "" : "er"}), så npm skriver om den under bygget och Vercel kan installera andra versioner än de du testat.`,
+    pnpmFix: "Kör pnpm install lokalt och committa den uppdaterade pnpm-lock.yaml.",
+    npmFix: "Kör npm install lokalt och committa den uppdaterade package-lock.json.",
   },
   secrets: {
     kinds: {
