@@ -7,7 +7,7 @@ import type { Lang } from "@/lib/i18n";
 import { ignoringRule } from "@/lib/gitignore";
 import { nodeRangeAllowsMajor } from "@/lib/node-range";
 import { findSecrets } from "@/lib/secrets";
-import { lockfileMentions, manifestSpecifiers, moduleImports, npmRootSpecifiers, packageName, pnpmOverrides, pnpmRootSpecifiers,
+import { lockfileMentions, manifestSpecifiers, moduleImports, npmRootSpecifiers, packageName, pnpmOverrides, pnpmRootSpecifiers, stripComments,
   specifierDrift, tsconfigAliases } from "@/lib/dependencies";
 
 export type RepositorySnapshot = {
@@ -318,12 +318,14 @@ const ENV_NAME = /^[A-Z][A-Z0-9_]*$/;
 /** process.env.X, process.env?.X, process.env["X"], process.env?.["X"] and `const { X, Y: y = "" } = process.env`. */
 export function extractEnvReads(source: string): Array<{ name: string; index: number }> {
   const reads: Array<{ name: string; index: number }> = [];
+  // Comments are blanked (not removed), so every index still points into the original source.
+  const code = stripComments(source);
   const access = /process\.env(?:\??\.([A-Z][A-Z0-9_]*)\b|(?:\?\.)?\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\])/g;
   let match: RegExpExecArray | null;
-  while ((match = access.exec(source))) reads.push({ name: match[1] || match[2], index: match.index });
+  while ((match = access.exec(code))) reads.push({ name: match[1] || match[2], index: match.index });
 
   const destructure = /\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*process\.env\b(?!\s*(?:\?\.|\.|\[))/g;
-  while ((match = destructure.exec(source))) {
+  while ((match = destructure.exec(code))) {
     for (const part of match[1].split(",")) {
       const key = part.trim().replace(/^["']|["']?\s*(?::[\s\S]*|=[\s\S]*)?$/g, "").trim();
       if (!part.trim().startsWith("...") && ENV_NAME.test(key)) reads.push({ name: key, index: match.index });

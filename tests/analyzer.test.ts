@@ -293,6 +293,16 @@ test("env reads through destructuring and optional chaining are found", () => {
   assert.deepEqual(results.checks[0].findings?.map((finding) => [finding.problem, finding.line]), [["API_KEY is missing from .env.example", 1]]);
 });
 
+test("env names inside comments are not env reads", () => {
+  const source = [
+    "/** Reads process.env.X and `const { Y } = process.env` at start-up. */",
+    "// process.env.LINE_COMMENT",
+    "const real = process.env.REAL; /* process.env.BLOCK */",
+  ].join("\n");
+  assert.deepEqual(extractEnvReads(source).map((read) => [read.name, read.index]), [["REAL", 113]]);
+  assert.equal(source.slice(113, 129), "process.env.REAL");
+});
+
 test("look-alikes of env destructuring are not treated as env reads", () => {
   const source = [
     "const { A, B } = process.envelope;",
