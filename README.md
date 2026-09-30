@@ -24,7 +24,7 @@ Statuses are Fail, Review and Pass. A check is red only when the finding is cert
 | Environment variables | `process.env` reads that are not documented in `.env.example`, secret-looking values exposed through `NEXT_PUBLIC_`, and an `.env.example` that `.gitignore` keeps out of the repository. |
 | Hardcoded secrets | Live Stripe, AWS, GitHub and Supabase keys and private keys in source. Reports show only the prefix and the last four characters. |
 | Supabase server/client boundaries | Supabase browser clients used in server code, or a service role key used in client code. |
-| Prisma / database | Prisma is used without `prisma generate` in the build. |
+| Prisma / database | Prisma is used without `prisma generate` in the build, or the Prisma datasource uses SQLite, which does not persist on Vercel. |
 
 Supabase and Prisma checks run only when the stack uses them.
 
