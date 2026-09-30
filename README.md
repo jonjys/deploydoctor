@@ -2,61 +2,64 @@
 
 License: BSL 1.1 · Live: [deploydoctor.nyttolabs.com](https://deploydoctor.nyttolabs.com)
 
-DeployDoctor scans a GitHub repository for the most common Vercel deployment failures and saves a shareable report in Supabase. It reads repository metadata and files through the GitHub REST API; it does not clone, install, build, or execute the target repository.
+DeployDoctor scans a public GitHub repository for the mistakes that most often break a Vercel deploy and saves a shareable report. It reads the repository through the GitHub REST API. It does not clone, install, build, or execute the code it scans.
+
+## What a scan does
+
+1. Detects the stack from `package.json`, the lockfile, `vercel.json` and `.env.example`.
+2. Runs only the checks that stack needs.
+3. Saves the report in Supabase and shows it at `/r/[id]`, with a suggested fix for every failed check.
+
+Statuses are Fail, Review and Pass. A check is red only when the finding is certain; anything that is a guess is yellow.
 
 ## Checks
 
-The stack is detected first (package.json, `.env.example`), and only the checks that fit it run.
+| Check | What it finds |
+|---|---|
+| Next.js entrypoint | Next.js is declared but no `app/` or `pages/` route folder exists. |
+| Broken imports | Relative, `@/` and tsconfig alias imports that point to files missing from the repository, including files that differ only by letter case (works on Mac and Windows, fails on Linux). |
+| Vercel-incompatible server code | Playwright, Puppeteer, SQLite bindings, filesystem writes and other things that do not run in API routes or on the Edge runtime. |
+| Build configuration | More than one lockfile, a missing `build` script, or an `engines.node` range that Vercel cannot run. |
+| Dependencies | Imported packages that are not declared in `package.json`, and a lockfile that is out of step with `package.json`. |
+| Environment variables | `process.env` reads that are not documented in `.env.example`, secret-looking values exposed through `NEXT_PUBLIC_`, and an `.env.example` that `.gitignore` keeps out of the repository. |
+| Hardcoded secrets | Live Stripe, AWS, GitHub and Supabase keys and private keys in source. Reports show only the prefix and the last four characters. |
+| Supabase server/client boundaries | Supabase browser clients used in server code, or a service role key used in client code. |
+| Prisma / database | Prisma is used without `prisma generate` in the build. |
 
-1. Next.js is declared but no `app/` or `pages/` route folder exists.
-2. Relative or `@/` imports point to files missing from the repository tree.
-3. Playwright, Puppeteer, SQLite bindings, or filesystem writes appear in API routes.
-4. `process.env` variables are undocumented or secret-looking values use `NEXT_PUBLIC_`.
-5. Supabase browser clients cross into server code or a service role key crosses into client code.
-6. Prisma is used without `prisma generate` in the build.
+Supabase and Prisma checks run only when the stack uses them.
 
 ## Local setup
 
-Requirements: Node.js 22+, npm, and a Supabase project.
+Requirements: Node.js 22 or newer, npm, and a Supabase project.
 
-```powershell
+```sh
 npm install
-Copy-Item .env.example .env.local
+cp .env.example .env.local
 ```
 
-Fill in `.env.local` (every variable is listed in `.env.example`). Free scans need only the Supabase values; the Stripe values and `SESSION_SECRET` enable payments. `GITHUB_TOKEN` is optional, but raises GitHub's API limit and allows a broader source scan. Supabase's URL and publishable key are public values; keep `SUPABASE_SECRET_KEY` private.
+Every variable is listed and explained in `.env.example`. Free scans need only the Supabase values. `GITHUB_TOKEN` is optional but raises GitHub's rate limit and lets a scan read more files. The Stripe values and `SESSION_SECRET` are needed only for paid passes.
 
-Apply the migrations in [`supabase/migrations`](supabase/migrations) to the Supabase project, then run:
+Apply the migrations in [`supabase/migrations`](supabase/migrations) to your Supabase project, then run:
 
-```powershell
+```sh
 npm run dev
 ```
 
-Open `http://localhost:3000`, paste a public GitHub repository URL, and the API will analyze and persist the report before redirecting to `/r/[id]`.
+Open `http://localhost:3000` and paste a public GitHub repository URL.
 
 ## Verification
 
-```powershell
+```sh
 npm test
 npm run lint
 npm run build
 ```
 
-The fixture test confirms that `https://github.com/manasvmoon/post-image-generator`'s current shape triggers checks 1 and 3 as red.
+The tests in [`tests/`](tests) cover the analyzer, the dependency, gitignore, Node range and secret helpers, and run against fixtures only; no network is needed.
 
-## Vercel preview
+## Deploying to Vercel
 
-Add all four variables to the Preview environment, then deploy without `--prod`:
-
-```powershell
-npx.cmd vercel@60.1.3 login
-npx.cmd vercel@60.1.3 link --yes
-npx.cmd vercel@60.1.3 env add GITHUB_TOKEN preview
-npx.cmd vercel@60.1.3 env add NEXT_PUBLIC_SUPABASE_URL preview
-npx.cmd vercel@60.1.3 env add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY preview
-npx.cmd vercel@60.1.3 env add SUPABASE_SECRET_KEY preview
-npx.cmd vercel@60.1.3 deploy --yes
-```
+Add the variables from `.env.example` to the Vercel project (Production and Preview), then deploy from the Vercel dashboard or with the Vercel CLI. Every push to `master` deploys production.
 
 ## License
 
