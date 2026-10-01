@@ -5,6 +5,8 @@ import { isPlan, isScanPlan, plans } from "@/lib/plans";
 import { getReport } from "@/lib/reports";
 import { getT } from "@/lib/lang";
 
+export const metadata = { robots: { index: false, follow: false } };
+
 export default async function Checkout({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const { t } = await getT();
