@@ -9,7 +9,7 @@ import { dateLocale } from "@/lib/i18n";
 export default async function Account() {
   const { lang, t } = await getT();
   const customer = await customerSession();
-  if (!customer) return <main className="site-shell"><SiteNav /><section className="checkout-card"><h1>{t("nav.myScans")}</h1>
+  if (!customer) return <main className="site-shell"><SiteNav current="account" /><section className="checkout-card"><h1>{t("nav.myScans")}</h1>
     <p>{t("account.needBrowser")}</p><p><Link href="/restore">{t("account.restore")}</Link></p><Link href="/pricing">{t("account.seePricing")}</Link></section></main>;
   const plan = await activePlan(customer);
   const history = plan && plan.plan !== "week" ? await db<Array<{ report_id: string; repo_url: string; is_private: boolean; created_at: string }>>(query("report_history", {
@@ -18,7 +18,7 @@ export default async function Account() {
   const orders = await db<Array<{ id: string; plan: string; status: string; report_id: string }>>(query("repair_orders", {
     stripe_customer_id: `eq.${customer.customerId}`, select: "id,plan,status,report_id", order: "created_at.desc", limit: "100",
   }));
-  return <main className="site-shell"><SiteNav /><header className="pricing-header"><h1>{t("nav.myScans")}</h1><p>{customer.email}</p>
+  return <main className="site-shell"><SiteNav current="account" /><header className="pricing-header"><h1>{t("nav.myScans")}</h1><p>{customer.email}</p>
     <p>{plan ? t("account.active", { plan: t(`plan.${plan.plan}.name`), date: new Date(plan.current_period_end).toLocaleDateString(dateLocale(lang)) }) : t("account.noPlan")}</p>
     {/* A 7-day pass is a one-time payment: there is no subscription to manage or cancel. */}
     {plan?.plan === "week" ? <p>{t("account.passNote")}</p> : <BillingPortalButton />}</header><section className="account-list"><h2>{t("account.history")}</h2>
