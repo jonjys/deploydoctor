@@ -6,6 +6,8 @@ import { db, query } from "@/lib/db";
 import { getT } from "@/lib/lang";
 import { dateLocale } from "@/lib/i18n";
 
+export const metadata = { robots: { index: false, follow: false } };
+
 export default async function Account() {
   const { lang, t } = await getT();
   const customer = await customerSession();

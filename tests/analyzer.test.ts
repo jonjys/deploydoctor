@@ -303,6 +303,11 @@ test("env names inside comments are not env reads", () => {
   assert.equal(source.slice(113, 129), "process.env.REAL");
 });
 
+test("an env read after a regex literal containing // on the same line is still found", () => {
+  const source = 'const abs = /https?:\\/\\//.test(raw) ? raw : process.env.BASE_URL + raw;';
+  assert.deepEqual(extractEnvReads(source).map((read) => read.name), ["BASE_URL"]);
+});
+
 test("look-alikes of env destructuring are not treated as env reads", () => {
   const source = [
     "const { A, B } = process.envelope;",

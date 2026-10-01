@@ -7,7 +7,32 @@ import { builtinModules } from "node:module";
 
 export type ImportUse = { specifier: string; line: number; kind: "static" | "call" };
 
-/** Blanks out comments while keeping strings, offsets and line breaks intact. */
+/** True when a `/` at `index` starts a regex literal rather than a division: it follows an operator, a bracket, a keyword or the line start. */
+function startsRegex(source: string, index: number): boolean {
+  let back = index - 1;
+  while (back >= 0 && (source[back] === " " || source[back] === "\t")) back -= 1;
+  if (back < 0) return true;
+  const prev = source[back];
+  if ("(,=:[!&|?{};+-*%<>~^\n".includes(prev)) return true;
+  const word = /([A-Za-z_$][\w$]*)$/.exec(source.slice(Math.max(0, back - 12), back + 1))?.[1];
+  return word !== undefined && ["return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await"].includes(word);
+}
+
+/** The index just past a regex literal that starts at `index`, or -1 if no closing slash is found on the same line. */
+function regexEnd(source: string, index: number): number {
+  let inClass = false;
+  for (let cursor = index + 1; cursor < source.length; cursor += 1) {
+    const char = source[cursor];
+    if (char === "\n") return -1;
+    if (char === "\\") { cursor += 1; continue; }
+    if (inClass) { if (char === "]") inClass = false; continue; }
+    if (char === "[") inClass = true;
+    else if (char === "/") return cursor + 1;
+  }
+  return -1;
+}
+
+/** Blanks out comments while keeping strings, regex literals, offsets and line breaks intact. */
 export function stripComments(source: string): string {
   let out = "";
   let quote: string | null = null;
@@ -17,6 +42,10 @@ export function stripComments(source: string): string {
     if (quote) {
       out += char;
       if (char === "\\") { out += next ?? ""; index += 1; } else if (char === quote || (char === "\n" && quote !== "`")) quote = null;
+    } else if (char === "/" && next !== "/" && next !== "*" && startsRegex(source, index) && regexEnd(source, index) !== -1) {
+      // a regex literal such as /https?:\/\// is copied as is, so the "//" inside it is not a comment
+      const end = regexEnd(source, index);
+      out += source.slice(index, end); index = end - 1;
     } else if (char === "/" && next === "/") {
       while (index < source.length && source[index] !== "\n") { out += " "; index += 1; }
       if (index < source.length) out += "\n";

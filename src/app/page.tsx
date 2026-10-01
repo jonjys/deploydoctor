@@ -8,7 +8,12 @@ export default async function Home() {
   const plan = await activePlan(await customerSession());
   const { lang, t } = await getT();
   const { titles } = analysisText(lang);
-  const checks = [titles.nextEntry, titles.imports, titles.serverLibs, titles.env, titles.supabase, titles.prisma];
+  // The same titles the analyzer prints, in report order. Supabase and Prisma only run when the stack uses them.
+  const checks: Array<{ title: string; whenUsed?: boolean }> = [
+    { title: titles.nextEntry }, { title: titles.imports }, { title: titles.serverLibs }, { title: titles.buildConfig },
+    { title: titles.dependencies }, { title: titles.env }, { title: titles.secrets },
+    { title: titles.supabase, whenUsed: true }, { title: titles.prisma, whenUsed: true },
+  ];
   return (
     <main className="site-shell home-page">
       <SiteNav current="scan" />
@@ -43,9 +48,10 @@ export default async function Home() {
         </div>
         <ol className="check-list">
           {checks.map((check, index) => (
-            <li key={check}>
+            <li key={check.title}>
               <span>{String(index + 1).padStart(2, "0")}</span>
-              {check}
+              {check.title}
+              {check.whenUsed && <small className="check-when-used">{t("home.checkWhenUsed")}</small>}
             </li>
           ))}
         </ol>

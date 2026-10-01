@@ -1,6 +1,8 @@
 import { SiteNav } from "@/components/site-nav";
 import { CheckoutConfirmation } from "@/components/checkout-confirmation";
 import { getT } from "@/lib/lang";
+export const metadata = { robots: { index: false, follow: false } };
+
 export default async function Success({ searchParams }: { searchParams: Promise<{ session_id?: string }> }) {
   const { session_id } = await searchParams;
   const { t } = await getT();

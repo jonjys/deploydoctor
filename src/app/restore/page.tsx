@@ -4,7 +4,7 @@ import { getT } from "@/lib/lang";
 
 export async function generateMetadata() {
   const { t } = await getT();
-  return { title: t("restore.title") };
+  return { title: t("restore.title"), robots: { index: false, follow: false } };
 }
 export default async function Restore() {
   const { t } = await getT();

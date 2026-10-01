@@ -34,6 +34,11 @@ test("runtime imports skip types and comments but keep multi-line, side-effect, 
   ]);
   assert.equal(stripComments('a // b\nc /* d\ne */ f "g // h"').split("\n").length, 3);
   assert.match(stripComments('const s = "// not a comment";'), /"\/\/ not a comment"/);
+  // "//" inside a regex literal is not a comment, so code after it on the same line survives; a real comment after it still goes
+  const withRegex = 'const abs = /https?:\\/\\//.test(raw) ? raw : process.env.BASE_URL + raw; // trailing';
+  assert.equal(stripComments(withRegex), 'const abs = /https?:\\/\\//.test(raw) ? raw : process.env.BASE_URL + raw; ' + " ".repeat("// trailing".length));
+  assert.equal(stripComments("const half = total / 2; // note").trimEnd(), "const half = total / 2;");
+  assert.equal(stripComments("const cls = /[/]x/.source; import('later')"), "const cls = /[/]x/.source; import('later')");
 });
 
 test("lockfile mentions work across npm, pnpm, yarn and bun formats", () => {

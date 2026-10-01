@@ -29,7 +29,7 @@ const en = {
   "nav.myScans": "My scans",
 
   "home.eyebrow": "VERCEL READINESS SCANNER",
-  "home.h1": "Works locally, breaks on Vercel? Find out why in 10 seconds.",
+  "home.h1": "Works locally, breaks on Vercel? Find out why before you deploy.",
   "home.copy": "Paste a public GitHub repository. DeployDoctor detects your stack and checks the code paths most likely to fail after your push, without cloning or building it.",
   "home.trust.aria": "Scanner characteristics",
   "home.trust.unlimited": "Unlimited scans",
@@ -38,6 +38,7 @@ const en = {
   "home.trust.share": "Shareable report",
   "home.preflight": "THE PRE-FLIGHT",
   "home.checksHeading": "Only the checks your stack needs.",
+  "home.checkWhenUsed": "only when your stack uses it",
   "home.footerNote": "Reads metadata and source through the GitHub REST API.",
 
   "form.urlLabel": "Public GitHub repository URL",
@@ -263,7 +264,7 @@ const sv: Record<MessageKey, string> = {
   "nav.myScans": "Mina skanningar",
 
   "home.eyebrow": "SKANNER FÖR VERCEL-BEREDSKAP",
-  "home.h1": "Funkar lokalt, kraschar på Vercel? Ta reda på varför på 10 sekunder.",
+  "home.h1": "Funkar lokalt, kraschar på Vercel? Ta reda på varför innan du deployar.",
   "home.copy": "Klistra in ett publikt GitHub-repo. DeployDoctor identifierar din stack och kontrollerar de kodvägar som oftast går sönder efter din push, utan att klona eller bygga.",
   "home.trust.aria": "Skannerns egenskaper",
   "home.trust.unlimited": "Obegränsat med skanningar",
@@ -272,6 +273,7 @@ const sv: Record<MessageKey, string> = {
   "home.trust.share": "Delbar rapport",
   "home.preflight": "FÖRE AVFÄRD",
   "home.checksHeading": "Bara de kontroller din stack behöver.",
+  "home.checkWhenUsed": "bara när din stack använder det",
   "home.footerNote": "Läser metadata och källkod via GitHubs REST-API.",
 
   "form.urlLabel": "URL till publikt GitHub-repo",
