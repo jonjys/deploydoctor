@@ -50,8 +50,10 @@ export default async function Home() {
           {checks.map((check, index) => (
             <li key={check.title}>
               <span>{String(index + 1).padStart(2, "0")}</span>
-              {check.title}
-              {check.whenUsed && <small className="check-when-used">{t("home.checkWhenUsed")}</small>}
+              <div>
+                {check.title}
+                {check.whenUsed && <small className="check-when-used">{t("home.checkWhenUsed")}</small>}
+              </div>
             </li>
           ))}
         </ol>

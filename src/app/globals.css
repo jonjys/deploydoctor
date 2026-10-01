@@ -180,7 +180,7 @@ a { color: inherit; }
   font-size: 15px;
   font-weight: 620;
 }
-.check-list li span { color: #75817c; font-family: var(--font-geist-mono), monospace; font-size: 12px; }
+.check-list li > span { color: #75817c; font-family: var(--font-geist-mono), monospace; font-size: 12px; }
 .footer {
   min-height: 80px;
   display: flex;
