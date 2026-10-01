@@ -9,7 +9,7 @@ export async function generateMetadata() {
 }
 export default async function Pricing() {
   const { t } = await getT();
-  return <main className="site-shell"><SiteNav /><header className="pricing-header">
+  return <main className="site-shell"><SiteNav current="pricing" /><header className="pricing-header">
     <p className="section-kicker">{t("pricing.kicker")}</p>
     <h1>{t("pricing.h1a")}<br />{t("pricing.h1b")}</h1>
     <p>{t("pricing.sub")}</p>

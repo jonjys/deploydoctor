@@ -1,18 +1,8 @@
 import { RepoForm } from "@/components/repo-form";
-import Link from "next/link";
 import { activePlan, customerSession } from "@/lib/access";
-import { LangSwitch } from "@/components/lang";
+import { SiteNav } from "@/components/site-nav";
 import { analysisText } from "@/lib/analysis-text";
 import { getT } from "@/lib/lang";
-
-function PulseMark() {
-  return (
-    <span className="logo-mark" aria-hidden="true">
-      <span />
-      <span />
-    </span>
-  );
-}
 
 export default async function Home() {
   const plan = await activePlan(await customerSession());
@@ -21,13 +11,7 @@ export default async function Home() {
   const checks = [titles.nextEntry, titles.imports, titles.serverLibs, titles.env, titles.supabase, titles.prisma];
   return (
     <main className="site-shell home-page">
-      <nav className="topbar" aria-label="Primary navigation">
-        <Link className="brand" href="/" aria-label="DeployDoctor home">
-          <PulseMark />
-          <span>DeployDoctor</span>
-        </Link>
-        <div className="nav-links"><Link href="/pricing">{t("nav.pricing")}</Link><Link href="/account">{t("nav.myScans")}</Link><LangSwitch /></div>
-      </nav>
+      <SiteNav current="scan" />
 
       <section className="hero">
         <div className="eyebrow">

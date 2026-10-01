@@ -6,7 +6,7 @@ import { getReport } from "@/lib/reports";
 import type { Category, CheckStatus } from "@/types/report";
 import { freeFixParts } from "@/lib/fix-instructions";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
-import { LangSwitch } from "@/components/lang";
+import { SiteNav } from "@/components/site-nav";
 import { CopyFixesButton } from "@/components/copy-fixes-button";
 import { getT } from "@/lib/lang";
 import { dateLocale, type MessageKey } from "@/lib/i18n";
@@ -50,24 +50,14 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const scanned = results.scope?.scanned ?? CATEGORIES.filter((category) => present.has(category));
   const ignoredCategories = results.scope?.ignored ?? [];
 
+  const status = report.is_private ? t("report.private") : t("report.savedFree");
   return (
     <main className="site-shell report-page">
-      <nav className="topbar" aria-label="Primary navigation">
-        <Link className="brand" href="/">
-          <span className="logo-mark" aria-hidden="true">
-            <span />
-            <span />
-          </span>
-          <span>DeployDoctor</span>
-        </Link>
-        <span className="nav-note">
-          <span className="status-dot" /> {report.is_private ? t("report.private") : t("report.savedFree")}
-        </span>
-        <LangSwitch />
-      </nav>
+      <SiteNav note={<><span className="status-dot" /> {status}</>} />
 
       <IgnoreProvider reportId={id}>
       <header className="report-header">
+        <p className="report-status-mobile"><span className="status-dot" /> {status}</p>
         <Link className="back-link" href="/">
           {t("report.back")}
         </Link>

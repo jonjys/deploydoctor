@@ -24,6 +24,7 @@ const en = {
   "meta.title": "DeployDoctor | Vercel readiness scanner",
   "meta.desc": "Scan a public GitHub repository for the code issues most likely to break a Vercel deployment.",
   "lang.aria": "Language",
+  "nav.scan": "Scan",
   "nav.pricing": "Pricing",
   "nav.myScans": "My scans",
 
@@ -257,6 +258,7 @@ const sv: Record<MessageKey, string> = {
   "meta.title": "DeployDoctor | skanner för Vercel-beredskap",
   "meta.desc": "Skanna ett publikt GitHub-repo efter kodproblem som oftast får en Vercel-deploy att misslyckas.",
   "lang.aria": "Språk",
+  "nav.scan": "Skanna",
   "nav.pricing": "Priser",
   "nav.myScans": "Mina skanningar",
 
