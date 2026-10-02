@@ -231,6 +231,9 @@ a { color: inherit; }
 .score-card.is-red strong { color: var(--red); }
 .score-card.is-yellow strong { color: var(--yellow); }
 .score-card.is-green strong { color: var(--green); }
+.score-card.is-neutral strong { color: var(--muted); }
+.not-next-notice { margin: 18px 0 6px; padding: 16px 20px; border: 1px solid var(--line); border-left: 4px solid var(--ink); border-radius: 12px; background: var(--panel); font-size: 15px; line-height: 1.5; }
+.not-next-notice strong { font-weight: 650; }
 .report-meta { display: flex; flex-wrap: wrap; gap: 9px 22px; margin-top: 26px; color: var(--muted); font-size: 12px; }
 .report-meta span { display: inline-flex; align-items: center; gap: 7px; }
 .results-list { display: grid; gap: 15px; }

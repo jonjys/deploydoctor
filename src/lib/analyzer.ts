@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { Category, CheckResult, CheckStatus, ReportResults, Finding } from "@/types/report";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
-import { defaultChecks, detectStack } from "@/lib/stack";
+import { defaultChecks, detectStack, type Stack } from "@/lib/stack";
 import { analysisText, type AnalysisText } from "@/lib/analysis-text";
 import type { Lang } from "@/lib/i18n";
 import { ignoringRule } from "@/lib/gitignore";
@@ -672,6 +672,20 @@ function checkPrisma(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult
   return makeCheck("prisma", title, "green", x.prisma.ok, x.noChange);
 }
 
+/** "root" when the root package.json declares Next.js, "nested" when a subfolder looks like a Next.js app, else "none". */
+export function locateNextApp(snapshot: RepositorySnapshot, stack: Stack): "root" | "nested" | "none" {
+  if (stack.hasNext) return "root";
+  const paths = new Set(snapshot.entries.filter((entry) => !/(?:^|\/)node_modules\//.test(entry.path)).map((entry) => entry.path));
+  for (const path of paths) {
+    const nested = /^(.+)\/(?:next\.config\.[cm]?[jt]s|package\.json)$/.exec(path);
+    if (!nested) continue;
+    const dir = nested[1];
+    if (path.endsWith("next.config.js") || path.endsWith("next.config.mjs") || path.endsWith("next.config.cjs") || path.endsWith("next.config.ts")) return "nested";
+    if (["app", "pages", "src/app", "src/pages"].some((folder) => paths.has(`${dir}/${folder}`))) return "nested";
+  }
+  return "none";
+}
+
 export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?: Category[]; lang?: Lang } = {}): ReportResults {
   const x = analysisText(options.lang ?? "en");
   const envText: string[] = [];
@@ -713,6 +727,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
     },
     scope: { scanned, ignored: CATEGORIES.filter((category) => !chosen.has(category)) },
     stack,
+    nextApp: locateNextApp(snapshot, stack),
     summary,
     overall: summary.red ? "red" : summary.yellow ? "yellow" : "green",
     checks,

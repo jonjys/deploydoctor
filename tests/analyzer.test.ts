@@ -5,6 +5,7 @@ import { parseChecks } from "../src/lib/categories";
 import { freeFixInstructions } from "../src/lib/fix-instructions";
 import { defaultChecks, describeStack, detectStack } from "../src/lib/stack";
 import { langFromCookieHeader, messages, parseLang, t } from "../src/lib/i18n";
+import { overallLabel } from "../src/lib/report-summary";
 
 function snapshot(
   entries: RepositorySnapshot["entries"],
@@ -306,6 +307,39 @@ test("env names inside comments are not env reads", () => {
 test("an env read after a regex literal containing // on the same line is still found", () => {
   const source = 'const abs = /https?:\\/\\//.test(raw) ? raw : process.env.BASE_URL + raw;';
   assert.deepEqual(extractEnvReads(source).map((read) => read.name), ["BASE_URL"]);
+});
+
+test("a repository without package.json is not a Next.js app", () => {
+  const results = analyzeSnapshot(snapshot(
+    [{ path: "README.md", type: "blob" }, { path: "app.py", type: "blob" }, { path: "requirements.txt", type: "blob" }],
+    { "README.md": "# tool" },
+  ));
+  assert.equal(results.nextApp, "none");
+  assert.equal(overallLabel(results.summary, "en", { notNext: true }), "Not a Next.js app");
+  assert.equal(overallLabel(results.summary, "sv", { notNext: true }), "Inte en Next.js-app");
+});
+
+test("a Vite app with a package.json is not a Next.js app", () => {
+  const results = analyzeSnapshot(snapshot(
+    [{ path: "package.json", type: "blob" }, { path: "src", type: "tree" }, { path: "src/main.tsx", type: "blob" }, { path: "vite.config.ts", type: "blob" }],
+    { "package.json": JSON.stringify({ dependencies: { react: "19.2.8" }, devDependencies: { vite: "7.0.0" } }), "src/main.tsx": 'import React from "react";' },
+  ));
+  assert.equal(results.nextApp, "none");
+  assert.equal(results.stack?.hasNext, false);
+});
+
+test("a monorepo with Next.js in apps/web but not at the root is reported as nested", () => {
+  const results = analyzeSnapshot(snapshot(
+    [
+      { path: "package.json", type: "blob" }, { path: "apps", type: "tree" }, { path: "apps/web", type: "tree" },
+      { path: "apps/web/package.json", type: "blob" }, { path: "apps/web/app", type: "tree" }, { path: "apps/web/app/page.tsx", type: "blob" },
+    ],
+    { "package.json": JSON.stringify({ private: true, workspaces: ["apps/*"] }) },
+  ));
+  assert.equal(results.nextApp, "nested");
+  const rootApp = analyzeSnapshot(snapshot([...nextEntries, { path: "package.json", type: "blob" }], { "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), ...page }));
+  assert.equal(rootApp.nextApp, "root");
+  assert.equal(overallLabel(rootApp.summary, "en"), overallLabel(rootApp.summary, "en", {}));
 });
 
 test("look-alikes of env destructuring are not treated as env reads", () => {

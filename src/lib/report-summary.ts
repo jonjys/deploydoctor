@@ -12,7 +12,8 @@ export function overallOf(summary: Record<CheckStatus, number>): CheckStatus {
   return summary.red ? "red" : summary.yellow ? "yellow" : "green";
 }
 
-export function overallLabel(summary: Record<CheckStatus, number>, lang: Lang = "en"): string {
+export function overallLabel(summary: Record<CheckStatus, number>, lang: Lang = "en", options: { notNext?: boolean } = {}): string {
+  if (options.notNext) return t(lang, "report.notNextApp");
   return summary.red
     ? summary.red === 1 ? t(lang, "report.issue1") : t(lang, "report.issues", { n: summary.red })
     : summary.yellow
