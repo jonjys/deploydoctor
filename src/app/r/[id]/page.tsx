@@ -51,6 +51,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const ignoredCategories = results.scope?.ignored ?? [];
 
   const status = report.is_private ? t("report.private") : t("report.savedFree");
+  // Older reports have no nextApp field and keep their old look.
+  const notNext = results.nextApp === "none" || results.nextApp === "nested";
   return (
     <main className="site-shell report-page">
       <SiteNav note={<><span className="status-dot" /> {status}</>} />
@@ -61,12 +63,18 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         <Link className="back-link" href="/">
           {t("report.back")}
         </Link>
+        {notNext && (
+          <div className="not-next-notice" role="note">
+            <strong>{t("report.notNextNotice")}</strong>
+            {results.nextApp === "nested" && <> {t("report.notNextNested")}</>}
+          </div>
+        )}
         <div className="report-heading-row">
           <div>
             <p className="section-kicker">{t("report.kicker")}</p>
             <h1>{repoName}</h1>
           </div>
-          <ScoreCard checks={checkStates} />
+          <ScoreCard checks={checkStates} notNext={notNext} />
         </div>
         <div className="report-meta">
           <a className="report-repo" href={report.repo_url} target="_blank" rel="noreferrer">

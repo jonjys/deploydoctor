@@ -36,15 +36,15 @@ export function IgnoreProvider({ reportId, children }: { reportId: string; child
   return <IgnoreContext value={value}>{children}</IgnoreContext>;
 }
 
-export function ScoreCard({ checks }: { checks: Array<{ id: string; status: CheckStatus }> }) {
+export function ScoreCard({ checks, notNext = false }: { checks: Array<{ id: string; status: CheckStatus }>; notNext?: boolean }) {
   const { ignored } = useContext(IgnoreContext);
   const lang = useLang();
   const t = useT();
   const summary = countStatuses(checks.filter((check) => !ignored.has(check.id)));
   return (
-    <div className={`score-card is-${overallOf(summary)}`}>
+    <div className={`score-card is-${notNext ? "neutral" : overallOf(summary)}`}>
       <span>{t("report.overall")}</span>
-      <strong>{overallLabel(summary, lang)}</strong>
+      <strong>{overallLabel(summary, lang, { notNext })}</strong>
     </div>
   );
 }

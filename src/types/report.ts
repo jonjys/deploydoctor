@@ -35,6 +35,8 @@ export type ReportResults = {
   /** Absent on reports saved before category filtering existed: every check counts as scanned. */
   scope?: { scanned: Category[]; ignored: Category[] };
   stack?: Stack;
+  /** Where the Next.js app was found. "nested" means a subfolder (monorepo), which is not supported yet. Absent on older reports. */
+  nextApp?: "root" | "nested" | "none";
   summary: Record<CheckStatus, number>;
   overall: CheckStatus;
   checks: CheckResult[];
