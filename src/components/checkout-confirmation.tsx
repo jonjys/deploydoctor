@@ -8,6 +8,7 @@ export function CheckoutConfirmation({ sessionId }: { sessionId: string }) {
   const [message, setMessage] = useState(t("confirm.waiting"));
   const [ready, setReady] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [needsRestore, setNeedsRestore] = useState(false);
   useEffect(() => {
     let canceled = false;
     const controller = new AbortController();
@@ -18,7 +19,7 @@ export function CheckoutConfirmation({ sessionId }: { sessionId: string }) {
           body: JSON.stringify({ sessionId }), signal: controller.signal });
         const result = await response.json();
         if (canceled) return;
-        if (!response.ok) { setMessage(result.error); return; }
+        if (!response.ok) { setMessage(result.error); setNeedsRestore(response.status === 403); return; }
         if (result.pending) {
           setMessage(t("confirm.pending"));
           if (count < 8) timer = setTimeout(() => confirm(count + 1), 2500);
@@ -29,6 +30,6 @@ export function CheckoutConfirmation({ sessionId }: { sessionId: string }) {
     return () => { canceled = true; controller.abort(); clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- t only changes with the language
   }, [sessionId, attempt]);
-  return <><p role="status">{message}</p><div className="action-buttons">{!ready && <button className="cta-button" onClick={() => setAttempt(attempt + 1)}>{t("confirm.recheck")}</button>}
+  return <><p role="status">{message}</p>{needsRestore && <p><Link href="/restore">{t("confirm.restoreLink")}</Link></p>}<div className="action-buttons">{!ready && <button className="cta-button" onClick={() => setAttempt(attempt + 1)}>{t("confirm.recheck")}</button>}
     <Link className="cta-button" href="/account">{t("nav.myScans")} →</Link></div></>;
 }

@@ -2,7 +2,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { rpc } from "@/lib/db";
 import { objectId, scanPlanForPrice, stripeClient } from "@/lib/stripe";
-import { isPlan, isScanPlan } from "@/lib/plans";
+import { isPlan, isScanPlan, plans } from "@/lib/plans";
 
 export async function handleBillingEvent(event: Stripe.Event) {
   const stripe = stripeClient();
@@ -41,6 +41,10 @@ export async function handleBillingEvent(event: Stripe.Event) {
       } else if (plan === "week" && scanPlanForPrice(session.line_items?.data[0]?.price?.id ?? "") === "week") {
         entitlement = { id: session.id, email, plan, status: "active", stripe_customer_id: customerId,
           current_period_end: new Date((session.created + 7 * 86400) * 1000).toISOString() };
+      } else if (plan === "day" && session.amount_total === plans.day.amount && session.currency === "usd") {
+        // Stored as a week-type pass with a 24 hour period, so no schema change is needed.
+        entitlement = { id: session.id, email, plan: "week", status: "active", stripe_customer_id: customerId,
+          current_period_end: new Date((session.created + 86400) * 1000).toISOString() };
       } else if (!isScanPlan(plan)) {
         order = { id: session.id, email, plan, stripe_customer_id: customerId,
           report_id: session.metadata.reportId, check_id: session.metadata.checkId || null,
