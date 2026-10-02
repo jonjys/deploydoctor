@@ -1,4 +1,5 @@
 export const plans = {
+  day: { name: "24-hour pass", price: "$2", cadence: "one-time · 24 hours", mode: "payment", amount: 200, env: "" },
   week: { name: "7-day pass", price: "$5", cadence: "one-time · 7 days", mode: "payment", amount: 500, env: "STRIPE_PRICE_5_ONETIME" },
   public: { name: "Public", price: "$9", cadence: "/ month", mode: "subscription", amount: 900, env: "STRIPE_PRICE_9_PUBLIC" },
   private: { name: "Private", price: "$19", cadence: "/ month", mode: "subscription", amount: 1900, env: "STRIPE_PRICE_19_PRIVATE" },
@@ -9,6 +10,6 @@ export type Plan = keyof typeof plans;
 export function isPlan(value: unknown): value is Plan {
   return typeof value === "string" && Object.hasOwn(plans, value);
 }
-export function isScanPlan(plan: Plan): plan is "week" | "public" | "private" {
-  return plan === "week" || plan === "public" || plan === "private";
+export function isScanPlan(plan: Plan): plan is "day" | "week" | "public" | "private" {
+  return plan === "day" || plan === "week" || plan === "public" || plan === "private";
 }
