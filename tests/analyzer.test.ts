@@ -6,6 +6,7 @@ import { freeFixInstructions } from "../src/lib/fix-instructions";
 import { defaultChecks, describeStack, detectStack } from "../src/lib/stack";
 import { langFromCookieHeader, messages, parseLang, t } from "../src/lib/i18n";
 import { overallLabel } from "../src/lib/report-summary";
+import { FIX_SERVICE_ENABLED, isFixPlan } from "../src/lib/fix-service";
 
 function snapshot(
   entries: RepositorySnapshot["entries"],
@@ -307,6 +308,17 @@ test("env names inside comments are not env reads", () => {
 test("an env read after a regex literal containing // on the same line is still found", () => {
   const source = 'const abs = /https?:\\/\\//.test(raw) ? raw : process.env.BASE_URL + raw;';
   assert.deepEqual(extractEnvReads(source).map((read) => read.name), ["BASE_URL"]);
+});
+
+test("the paid fix service is paused and fix plans are recognised", () => {
+  assert.equal(FIX_SERVICE_ENABLED, false);
+  assert.equal(isFixPlan("fix-one"), true);
+  assert.equal(isFixPlan("fix-all"), true);
+  assert.equal(isFixPlan("week"), false);
+  assert.equal(isFixPlan("public"), false);
+  // the free instructions never mention a paid patch
+  assert.doesNotMatch(t("en", "fix.head", { url: "x" }), /patch/i);
+  assert.doesNotMatch(t("sv", "fix.head", { url: "x" }), /patch/i);
 });
 
 test("a repository without package.json is not a Next.js app", () => {

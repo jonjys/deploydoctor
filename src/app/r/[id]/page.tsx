@@ -9,6 +9,7 @@ import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { SiteNav } from "@/components/site-nav";
 import { CopyFixesButton } from "@/components/copy-fixes-button";
 import { getT } from "@/lib/lang";
+import { FIX_SERVICE_ENABLED } from "@/lib/fix-service";
 import { dateLocale, type MessageKey } from "@/lib/i18n";
 
 const statusLabelKeys: Record<CheckStatus, MessageKey> = {
@@ -122,7 +123,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                       <pre><code>{check.suggestedFile.content}</code></pre>
                     </div>
                   ) : null}
-                  {check.status === "red" && <div className="repair-cta"><p>{t("report.fixCta")}</p>
+                  {FIX_SERVICE_ENABLED && check.status === "red" && <div className="repair-cta"><p>{t("report.fixCta")}</p>
                     <Link href={`/checkout?plan=fix-one&report=${id}&check=${check.id}`}>{t("report.fixOne")}</Link>
                     <Link href={`/checkout?plan=fix-all&report=${id}`}>{t("report.fixAll")}</Link>
                   </div>}
@@ -136,15 +137,15 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
       <section className="report-actions" aria-labelledby="action-heading">
         <div>
           <h2 id="action-heading">{t("report.actionsTitle")}</h2>
-          <p>{t("report.actionsBody")}</p>
+          <p>{FIX_SERVICE_ENABLED ? t("report.actionsBody") : t("report.actionsBodyFree")}</p>
         </div>
         <div className="action-buttons">
           <CopyFixes parts={parts} />
-          <WhenOpenRed checks={checkStates}>
+          {FIX_SERVICE_ENABLED && <WhenOpenRed checks={checkStates}>
             <Link className="cta-button" href={`/checkout?plan=fix-all&report=${id}`}>
               {t("report.fixAll")}
             </Link>
-          </WhenOpenRed>
+          </WhenOpenRed>}
         </div>
       </section>
       </IgnoreProvider>

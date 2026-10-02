@@ -4,6 +4,8 @@ import { CheckoutForm } from "@/components/checkout-form";
 import { isPlan, isScanPlan, plans } from "@/lib/plans";
 import { getReport } from "@/lib/reports";
 import { getT } from "@/lib/lang";
+import { FIX_SERVICE_ENABLED, isFixPlan } from "@/lib/fix-service";
+import Link from "next/link";
 
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -13,6 +15,12 @@ export default async function Checkout({ searchParams }: { searchParams: Promise
   if (!isPlan(params.plan)) notFound();
   const plan = params.plan;
   const reportId = typeof params.report === "string" ? params.report : undefined;
+  if (isFixPlan(plan) && !FIX_SERVICE_ENABLED) {
+    return <main className="site-shell"><SiteNav /><section className="checkout-card"><p className="section-kicker">{t("checkout.kicker")}</p>
+      <h1>{t("checkout.fixPausedTitle")}</h1><p>{t("checkout.fixPaused")}</p>
+      <Link className="cta-button" href={reportId ? `/r/${reportId}` : "/"}>{reportId ? t("checkout.backToReport") : t("nav.scan")} →</Link>
+    </section></main>;
+  }
   const checkId = typeof params.check === "string" ? params.check : undefined;
   let report;
   if (!isScanPlan(plan)) {
