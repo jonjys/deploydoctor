@@ -24,7 +24,7 @@ export default async function Pricing() {
         {key !== "week" && <li>{t("pricing.cancel")}</li>}</ul>
       <Link className="cta-button" href={`/checkout?plan=${key}`}>{key === "week" ? t("pricing.cta.week") : t("pricing.cta.choose")} →</Link>
     </article>)}
-  </section><section className="pricing-notes"><h2>{t("pricing.fixTitle")}</h2><p>{t("pricing.note1")}</p>
+  </section><section className="pricing-notes"><h2>{t("pricing.notesTitle")}</h2>
     <p>{t("pricing.note2")}</p>
     <p>{t("pricing.note3")}</p>
   </section></main>;

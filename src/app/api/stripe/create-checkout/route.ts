@@ -7,6 +7,7 @@ import { getReport } from "@/lib/reports";
 import { priceFor, sameOrigin, stripeClient } from "@/lib/stripe";
 import { langFromRequest, t } from "@/lib/i18n";
 import { appOrigin } from "@/lib/site";
+import { FIX_SERVICE_ENABLED, isFixPlan } from "@/lib/fix-service";
 
 export async function POST(request: Request) {
   const lang = langFromRequest(request);
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
     const body = JSON.parse(text) as { plan?: unknown; reportId?: unknown; checkId?: unknown; context?: unknown };
     if (!isPlan(body.plan)) return Response.json({ error: t(lang, "pay.badPlan") }, { status: 400 });
     const plan = body.plan;
+    if (isFixPlan(plan) && !FIX_SERVICE_ENABLED) return Response.json({ error: t(lang, "pay.fixPaused") }, { status: 409 });
     let reportId = "";
     let checkId = "";
     if (!isScanPlan(plan)) {
