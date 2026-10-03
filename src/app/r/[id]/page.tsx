@@ -141,6 +141,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         </div>
         <div className="action-buttons">
           <CopyFixes parts={parts} />
+          <Link className="cta-button" style={{ background: "transparent" }} href="/checkout?plan=day">{t("report.dayCta")}</Link>
           {FIX_SERVICE_ENABLED && <WhenOpenRed checks={checkStates}>
             <Link className="cta-button" href={`/checkout?plan=fix-all&report=${id}`}>
               {t("report.fixAll")}
