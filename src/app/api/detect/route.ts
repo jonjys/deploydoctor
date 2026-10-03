@@ -3,6 +3,7 @@ import { defaultChecks, describeStack } from "@/lib/stack";
 import { langFromRequest, t } from "@/lib/i18n";
 import { detectRepositoryStack, GitHubApiError } from "@/lib/github";
 import { sameOrigin } from "@/lib/stripe";
+import { allowsPrivate } from "@/lib/plans";
 
 export const maxDuration = 30;
 
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     let privateToken = typeof body.privateToken === "string" ? body.privateToken.trim() : undefined;
     if (privateToken) {
       const plan = await activePlan(await customerSession());
-      if (plan?.plan !== "private" || privateToken.length > 300) privateToken = undefined;
+      if (!allowsPrivate(plan?.plan) || privateToken.length > 300) privateToken = undefined;
     }
     const { stack } = await detectRepositoryStack(body.repoUrl, { privateToken });
     return Response.json({ stack, summary: describeStack(stack, lang), checks: defaultChecks(stack) });

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/categories";
 import { describeStack, type Stack } from "@/lib/stack";
@@ -11,6 +11,13 @@ import type { Category } from "@/types/report";
 const GITHUB_REPO_URL = /^https:\/\/(?:www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/i;
 const FALLBACK_CHECKS: Category[] = ["next", "vercel", "env"];
 type Detection = { status: "loading" } | { status: "ready"; stack: Stack } | { status: "error" };
+
+function repoUrlFromParam(value: string | null): string {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return "";
+  const url = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(trimmed) ? `https://github.com/${trimmed}` : trimmed;
+  return GITHUB_REPO_URL.test(url) ? url : "";
+}
 
 function GitHubIcon() {
   return (
@@ -27,7 +34,9 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
   const router = useRouter();
   const lang = useLang();
   const t = useT();
-  const [repoUrl, setRepoUrl] = useState("");
+  // ?repo=owner/name (or a full GitHub URL) fills the form and starts the scan, so a shared link is a live demo.
+  const autoRepoUrl = repoUrlFromParam(useSearchParams().get("repo"));
+  const [repoUrl, setRepoUrl] = useState(autoRepoUrl);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [paywall, setPaywall] = useState(false);
@@ -87,14 +96,18 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
-    setPaywall(false);
     // Send the visible selection; while detection is still running the server picks the categories itself.
     const sendChecks = detection?.status === "ready" || detection?.status === "error";
     if (sendChecks && selected.size === 0) {
       setError(t("form.pickOne"));
       return;
     }
+    await startScan(repoUrl, sendChecks);
+  }
+
+  async function startScan(url: string, sendChecks: boolean) {
+    setError("");
+    setPaywall(false);
     cancelDetection();
     setIsLoading(true);
 
@@ -103,7 +116,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          repoUrl,
+          repoUrl: url,
           ...(sendChecks ? { checks: CATEGORIES.filter((category) => selected.has(category)) } : {}),
           ...(privateToken ? { privateToken } : {}),
         }),
@@ -130,6 +143,15 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
       setIsLoading(false);
     }
   }
+
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoRepoUrl || autoStarted.current) return;
+    autoStarted.current = true;
+    const handle = window.setTimeout(() => void startScan(autoRepoUrl, false), 0);
+    return () => window.clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRepoUrl]);
 
   return (
     <form className="repo-form" onSubmit={handleSubmit}>

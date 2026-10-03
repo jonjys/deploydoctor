@@ -9,6 +9,10 @@ export type Plan = keyof typeof plans;
 export function isPlan(value: unknown): value is Plan {
   return typeof value === "string" && Object.hasOwn(plans, value);
 }
+/** Plans that may scan private repositories with a read-only token. The 7-day pass includes it. */
+export function allowsPrivate(plan: Plan | null | undefined): boolean {
+  return plan === "week" || plan === "private";
+}
 export function isScanPlan(plan: Plan): plan is "week" | "public" | "private" {
   return plan === "week" || plan === "public" || plan === "private";
 }

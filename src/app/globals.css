@@ -379,6 +379,8 @@ a { color: inherit; }
 button:disabled { opacity: .55; cursor: not-allowed; }
 .paywall { border: 1px solid var(--ink); padding: 22px; margin-top: 20px; border-radius: 10px; background: var(--yellow-soft); }
 .private-input { text-align: left; margin: 20px 0; font-size: 14px; }
+.example-link { margin: 14px 0 0; font-size: 15px; }
+.example-link a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .repair-cta { margin-top: 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 13px; }
 .repair-cta p { margin: 0; }
 .repair-cta a { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; text-decoration: none; }

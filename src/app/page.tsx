@@ -1,4 +1,8 @@
+import { Suspense } from "react";
+import Link from "next/link";
 import { RepoForm } from "@/components/repo-form";
+import { allowsPrivate } from "@/lib/plans";
+import { EXAMPLE_REPORT_ID } from "@/lib/site";
 import { activePlan, customerSession } from "@/lib/access";
 import { SiteNav } from "@/components/site-nav";
 import { analysisText } from "@/lib/analysis-text";
@@ -26,7 +30,12 @@ export default async function Home() {
         <h1>{t("home.h1")}</h1>
         <p className="hero-copy">{t("home.copy")}</p>
 
-        <RepoForm privateAccess={plan?.plan === "private"} />
+        <Suspense fallback={null}>
+          <RepoForm privateAccess={allowsPrivate(plan?.plan)} />
+        </Suspense>
+        <p className="example-link">
+          <Link href={`/r/${EXAMPLE_REPORT_ID}`}>{t("home.example")}</Link>
+        </p>
 
         <div className="trust-row" aria-label={t("home.trust.aria")}>
           <span>
