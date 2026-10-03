@@ -187,7 +187,11 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
       ) : null}
       {paywall && <div className="paywall" role="status"><strong>{t("paywall.title")}</strong>
         <p>{t("paywall.body")}</p>
-        <Link className="cta-button" href="/pricing">{t("paywall.cta")}</Link>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 14 }}>
+          <Link className="cta-button" href="/checkout?plan=day">{t("paywall.day")}</Link>
+          <Link className="cta-button" style={{ background: "transparent" }} href="/checkout?plan=week">{t("paywall.week")}</Link>
+          <Link className="cta-button" style={{ background: "transparent" }} href="/pricing">{t("paywall.cta")}</Link>
+        </div>
       </div>}
     </form>
   );
