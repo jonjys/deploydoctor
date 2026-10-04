@@ -184,6 +184,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         <label className="sr-only" htmlFor="repo-url">
           {t("form.urlLabel")}
         </label>
+        <div className="repo-input-wrap">
         <input
           className="repo-input"
           id="repo-url"
@@ -198,6 +199,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
           required
         />
         <kbd className="slash-hint" aria-hidden="true" title={t("form.shortcut")}>/</kbd>
+        </div>
         <button className="scan-button" type="submit" disabled={isLoading}>
           {isLoading ? t("form.scanning") : t("form.scan")}
           <span aria-hidden="true">→</span>

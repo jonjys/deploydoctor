@@ -409,7 +409,8 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .plugin-line { margin: 22px 0 0; font-size: 13px; }
 .plugin-line a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
 .plugin-line a:hover { color: var(--ink); }
-.slash-hint { display: none; margin-right: 10px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 11px; }
+.repo-input-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.slash-hint { display: none; flex: 0 0 auto; padding: 2px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 11px; }
 @media (hover: hover) and (min-width: 761px) { .input-shell:not(:focus-within) .slash-hint { display: inline-block; } }
 .scan-progress { list-style: none; margin: 18px 0 0; padding: 16px 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); text-align: left; display: grid; gap: 9px; font-size: 14px; color: var(--muted); }
 .scan-progress li { display: flex; align-items: center; gap: 12px; transition: color .25s; }

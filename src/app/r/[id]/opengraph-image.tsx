@@ -24,7 +24,9 @@ export default async function Image({ params }: { params: Promise<{ id: string }
         padding: "64px 72px", background: "#10231c", color: "#f5f3ea", fontFamily: "sans-serif" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 17, border: "3px solid #b9f227", display: "flex", alignItems: "center", justifyContent: "center", color: "#b9f227", fontSize: 20, fontWeight: 700 }}>x</div>
+            <div style={{ width: 34, height: 34, borderRadius: 17, border: "3px solid #b9f227", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 12, height: 12, borderRadius: 6, background: "#b9f227" }} />
+            </div>
             <div style={{ fontSize: 30, fontWeight: 700 }}>DeployDoctor</div>
           </div>
           <div style={{ fontSize: 20, color: "#b7c2bd", letterSpacing: 2 }}>VERCEL READINESS REPORT</div>
