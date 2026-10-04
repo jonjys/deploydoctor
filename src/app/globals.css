@@ -398,6 +398,43 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .check-options label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 .scope-line { margin: 18px 0 0; font-size: 13px; color: var(--muted); }
 .scope-line strong { color: var(--ink); }
+
+/* Home: example link, keyboard hint and the live scan progress. */
+.example-chips { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 10px; margin: 16px auto 0; font-size: 13px; color: var(--muted); }
+.example-chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); text-decoration: none; font-size: 13px; transition: border-color .15s, transform .15s; }
+.example-chip:hover { border-color: var(--ink); transform: translateY(-1px); }
+.chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.example-chip.is-red .chip-dot { background: var(--red); }
+.example-chip.is-green .chip-dot { background: var(--green); }
+.plugin-line { margin: 22px 0 0; font-size: 13px; }
+.plugin-line a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.plugin-line a:hover { color: var(--ink); }
+.repo-input-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.slash-hint { display: none; flex: 0 0 auto; padding: 2px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 11px; }
+@media (hover: hover) and (min-width: 761px) { .input-shell:not(:focus-within) .slash-hint { display: inline-block; } }
+.scan-progress { list-style: none; margin: 18px 0 0; padding: 16px 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); text-align: left; display: grid; gap: 9px; font-size: 14px; color: var(--muted); }
+.scan-progress li { display: flex; align-items: center; gap: 12px; transition: color .25s; }
+.scan-progress li.is-done { color: var(--ink); }
+.scan-progress li.is-active { color: var(--ink); font-weight: 600; }
+.step-mark { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1.5px solid var(--line); border-radius: 50%; font-size: 11px; flex: 0 0 auto; }
+.is-done .step-mark { border-color: var(--green); background: var(--green); color: white; }
+.is-active .step-mark { border-color: var(--ink); animation: step-pulse 1s ease-in-out infinite; }
+@keyframes step-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(16, 35, 28, .25); } 50% { box-shadow: 0 0 0 6px rgba(16, 35, 28, 0); } }
+
+/* Report: jump list for red checks, rescan link and README badge. */
+.rescan-link { color: var(--ink); font-weight: 600; text-decoration: none; }
+.rescan-link:hover { text-decoration: underline; }
+.fix-first { margin: 22px 0 0; padding: 16px 20px; border: 1px solid var(--ink); border-left-width: 4px; border-radius: 12px; background: var(--red-soft); font-size: 14px; }
+.fix-first strong { display: block; margin-bottom: 6px; font-family: var(--font-geist-mono), monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--red); }
+.fix-first ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.fix-first a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.result-card { scroll-margin-top: 24px; }
+.badge-section { margin-top: 18px; padding: 24px 31px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px 30px; }
+.badge-section h2 { margin: 0 0 4px; font-size: 18px; }
+.badge-section p { margin: 0; color: var(--muted); font-size: 13px; max-width: 460px; }
+.badge-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
+.badge-row code { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; font-family: var(--font-geist-mono), monospace; font-size: 11px; overflow-wrap: anywhere; max-width: 100%; }
+.copy-text textarea { display: block; width: 100%; margin-top: 8px; font-size: 12px; }
 .check-group { display: grid; gap: 15px; }
 .results-list { gap: 26px; }
 .group-title { margin: 0; }

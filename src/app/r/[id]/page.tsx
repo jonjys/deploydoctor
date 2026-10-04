@@ -8,9 +8,12 @@ import { freeFixParts } from "@/lib/fix-instructions";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { SiteNav } from "@/components/site-nav";
 import { CopyFixesButton } from "@/components/copy-fixes-button";
+import { CopyTextButton } from "@/components/copy-text-button";
+import { SITE_URL } from "@/lib/site";
 import { getT } from "@/lib/lang";
 import { FIX_SERVICE_ENABLED } from "@/lib/fix-service";
 import { dateLocale, type MessageKey } from "@/lib/i18n";
+import { overallLabel } from "@/lib/report-summary";
 
 const statusLabelKeys: Record<CheckStatus, MessageKey> = {
   red: "report.fail",
@@ -29,10 +32,16 @@ export async function generateMetadata({ params }: PageProps<"/r/[id]">): Promis
   const { t } = await getT();
   const report = await getReport(id);
   if (!report) return { title: t("report.notFoundTitle") };
+  const title = t("report.title", { repo: `${report.results.repository.owner}/${report.results.repository.name}` });
+  const description = t("report.metaDesc", { n: report.results.summary.red });
+  // The image comes from opengraph-image.tsx next to this file; the title and url must be per report too,
+  // otherwise a shared link unfurls as the home page.
   return {
-    title: t("report.title", { repo: `${report.results.repository.owner}/${report.results.repository.name}` }),
-    description: t("report.metaDesc", { n: report.results.summary.red }),
+    title,
+    description,
     robots: { index: false, follow: false },
+    openGraph: { type: "article", siteName: "DeployDoctor", url: `/r/${id}`, title, description },
+    twitter: { card: "summary_large_image", title, description },
   };
 }
 
@@ -52,8 +61,12 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const ignoredCategories = results.scope?.ignored ?? [];
 
   const status = report.is_private ? t("report.private") : t("report.savedFree");
+  const redChecks = results.checks.filter((check) => check.status === "red");
+  const rescanHref = `/?repo=${encodeURIComponent(`${results.repository.owner}/${results.repository.name}`)}`;
+  const badgeMarkdown = `[![DeployDoctor](${SITE_URL}/r/${id}/badge)](${SITE_URL}/r/${id})`;
   // Older reports have no nextApp field and keep their old look.
   const notNext = results.nextApp === "none" || results.nextApp === "nested";
+  const overall = overallLabel(results.summary, lang, { notNext });
   return (
     <main className="site-shell report-page">
       <SiteNav note={<><span className="status-dot" /> {status}</>} />
@@ -84,7 +97,18 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <span>{t("report.branch", { branch: results.repository.defaultBranch })}</span>
           <span>{t("report.scannedFiles", { read: results.scan.sourceFilesRead, found: results.scan.sourceFilesFound })}</span>
           <span>{new Date(report.created_at).toLocaleString(dateLocale(lang), { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC</span>
+          <Link className="rescan-link" href={rescanHref}>{t("report.scanAgain")} ↻</Link>
         </div>
+        {redChecks.length > 0 && !notNext && (
+          <nav className="fix-first" aria-label={t("report.fixFirst")}>
+            <strong>{t("report.fixFirst")}</strong>
+            <ol>
+              {redChecks.map((check) => (
+                <li key={check.id}><a href={`#check-${check.id}`}>{check.title}</a></li>
+              ))}
+            </ol>
+          </nav>
+        )}
         <p className="scope-line">
           <strong>{t("report.scanned")}</strong> {scanned.map((category) => t(`cat.${category}`)).join(", ") || "—"}
           {ignoredCategories.length > 0 && <> | <strong>{t("report.ignored")}</strong> {ignoredCategories.map((category) => t(`cat.${category}`)).join(", ")}</>}
@@ -149,6 +173,21 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           </WhenOpenRed>}
         </div>
       </section>
+
+      {!report.is_private && (
+        <section className="badge-section" aria-labelledby="badge-heading">
+          <div>
+            <h2 id="badge-heading">{t("report.badgeTitle")}</h2>
+            <p>{t("report.badgeBody")}</p>
+          </div>
+          <div className="badge-row">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/r/${id}/badge`} alt={`DeployDoctor: ${overall}`} height={20} />
+            <code>{badgeMarkdown}</code>
+            <CopyTextButton text={badgeMarkdown} label={t("report.badgeCopy")} copiedLabel={t("report.badgeCopied")} />
+          </div>
+        </section>
+      )}
       </IgnoreProvider>
     </main>
   );
