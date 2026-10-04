@@ -308,6 +308,9 @@ a { color: inherit; }
 .action-buttons { display: flex; flex-wrap: wrap; gap: 10px; flex: 0 0 auto; }
 .copy-button { background: transparent; color: white; border-color: #65736d; }
 .copy-button:hover { background: #283d34; }
+/* Secondary links in the dark actions bar are drawn transparent inline, so they need light text in both modes. */
+.report-actions .cta-button { color: white; border-color: #65736d; }
+.report-actions .cta-button:hover { background: #283d34; color: white; }
 .not-found-card {
   max-width: 620px;
   margin: 120px auto;
@@ -479,7 +482,6 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   .report-actions .copy-button { color: var(--ink); border-color: var(--line); }
   .copy-button.file-copy-button { color: var(--ink); }
   .copy-button.file-copy-button:hover { background: var(--acid); color: #10231c; }
-  .lang-switch button[aria-pressed="true"] { background: var(--acid); color: #10231c; }
   .severity.is-build { color: #10231c; }
   .severity.is-security { background: var(--acid); color: #10231c; }
   .is-done .step-mark { color: #10231c; }
@@ -514,3 +516,10 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .plugin-guide pre { overflow-x: auto; padding: 1rem; border: 1px solid #666; border-radius: .5rem; font-size: .85rem; }
 .plugin-guide dt { font-weight: 700; margin-top: 1rem; }
 .plugin-guide a { text-decoration: underline; }
+
+/* Declared last so it wins over the light language switch rules above. */
+@media (prefers-color-scheme: dark) {
+  .lang-switch button[aria-pressed="true"] { background: var(--acid); color: #10231c; }
+  .report-actions .cta-button, .report-actions .copy-button { color: var(--ink); border-color: var(--line); }
+  .report-actions .cta-button:hover, .report-actions .copy-button:hover { background: #1f2d27; color: var(--ink); }
+}
