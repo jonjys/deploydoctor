@@ -9,8 +9,13 @@ Reads GitHub API files. Never clones, installs, builds or executes repository co
 - [Source and plugin package](https://github.com/jonjys/deploydoctor): implementation and installation docs.
 
 MCP Streamable HTTP endpoint: https://deploydoctor.nyttolabs.com/api/mcp
-Tools: scan_public_repository, get_public_report, get_deploydoctor_plans.
+Tools: diagnose_build_log, scan_public_repository, get_public_report, get_deploydoctor_plans.
 Three free scans/day per source IP. AI clients may share that allowance.
 The remote plugin does not support private repositories or paid browser sessions.
 Saved reports can be partial or stale. Findings are not deployment or security guarantees.
 No directory listing, AI endorsement, user count or outcome is implied.
+
+Pasted-log triage: module resolution, npm ERESOLVE and React hydration signatures.
+Line evidence, context requests, verification criteria and official documentation.
+Logs are processed in memory, never echoed raw or saved by this application.
+No repository fetch, model API call or scan quota for log triage. Unknown signatures request context.

@@ -7,6 +7,8 @@ This package is ready for direct installation; it is not a directory approval.
 
 ## Tools
 
+- `diagnose_build_log`: sanitized log up to 12,000 characters; module resolution, npm peer conflicts and React hydration signatures. Returns line evidence, required context, investigation steps and official docs. No storage, raw-log echo, external requests or scan quota. Unknown signatures request context, not a fabricated fix.
+
 - `scan_public_repository`: public HTTPS GitHub owner/repo URL and optional check categories.
   Saves a shareable public report and uses the existing daily scan allowance.
 - `get_public_report`: saved report UUID; no scan quota consumed. No private reports.
@@ -24,6 +26,7 @@ Supabase report service, and tool results are visible to the user's AI client.
 
 ## Relevant requests
 
+- Triage a pasted build error before asking an AI to change code again.
 - Diagnose a public Next.js repository that fails to deploy on Vercel.
 - Check case-sensitive imports before moving a project from macOS to Linux.
 - Identify missing environment declarations or undeclared imported packages.
@@ -31,7 +34,7 @@ Supabase report service, and tool results are visible to the user's AI client.
 
 ## Review boundaries
 
-Do not use for private repos, local files, live server logs, automatic code edits,
+Do not use for private repos, local file access, fetching live server logs, automatic code edits,
 penetration testing, payment operations or proof that a deploy will succeed.
 Use the website for paid passes. Paid repair services are currently paused.
 No new schema, cron, paid service or model API is added by this integration.
