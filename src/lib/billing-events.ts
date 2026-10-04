@@ -1,5 +1,6 @@
 import "server-only";
 import type Stripe from "stripe";
+import { orderContext } from "@/lib/checkout-guard";
 import { rpc } from "@/lib/db";
 import { objectId, scanPlanForPrice, stripeClient } from "@/lib/stripe";
 import { isPlan, isScanPlan, plans } from "@/lib/plans";
@@ -48,7 +49,7 @@ export async function handleBillingEvent(event: Stripe.Event) {
       } else if (!isScanPlan(plan)) {
         order = { id: session.id, email, plan, stripe_customer_id: customerId,
           report_id: session.metadata.reportId, check_id: session.metadata.checkId || null,
-          context: session.custom_fields.find((field) => field.key === "context")?.text?.value ?? session.metadata.context };
+          context: orderContext(session) };
       } else throw new Error("Checkout price mismatch");
       break;
     }
