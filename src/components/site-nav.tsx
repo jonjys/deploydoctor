@@ -28,6 +28,7 @@ export async function SiteNav({ current, note }: { current?: NavPage; note?: Rea
       <div className="nav-links">
         <Link href="/" {...active("scan")}>{t("nav.scan")}</Link>
         <Link href="/pricing" {...active("pricing")}>{t("nav.pricing")}</Link>
+        <Link href="/ai-plugin">AI plugin</Link>
         <Link href="/account" {...active("account")}>{t("nav.myScans")}</Link>
         <LangSwitch />
       </div>

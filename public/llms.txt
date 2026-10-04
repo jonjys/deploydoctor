@@ -1,0 +1,16 @@
+# DeployDoctor
+
+Static deployment checks for public GitHub repositories, especially Next.js on Vercel.
+Reads GitHub API files. Never clones, installs, builds or executes repository code.
+
+- [Product](https://deploydoctor.nyttolabs.com/): public repository scan.
+- [AI plugin](https://deploydoctor.nyttolabs.com/ai-plugin): tools, connection, limits, privacy and support.
+- [Pricing](https://deploydoctor.nyttolabs.com/pricing): current website scan passes.
+- [Source and plugin package](https://github.com/jonjys/deploydoctor): implementation and installation docs.
+
+MCP Streamable HTTP endpoint: https://deploydoctor.nyttolabs.com/api/mcp
+Tools: scan_public_repository, get_public_report, get_deploydoctor_plans.
+Three free scans/day per source IP. AI clients may share that allowance.
+The remote plugin does not support private repositories or paid browser sessions.
+Saved reports can be partial or stale. Findings are not deployment or security guarantees.
+No directory listing, AI endorsement, user count or outcome is implied.

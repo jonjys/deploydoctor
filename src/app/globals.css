@@ -418,3 +418,12 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .restore-form input { padding: 10px 12px; border: 1px solid var(--line, #d8d4c8); border-radius: 10px; font: inherit; background: white; }
 .restore-form .restore-hint { font-size: 12.5px; color: var(--muted); margin: 2px 0 8px; }
 .footer a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+/* Readable installation and reference documentation on mobile and desktop. */
+.plugin-guide { max-width: 780px; margin: 4rem auto; line-height: 1.7; }
+.plugin-guide h1 { font-size: clamp(2rem, 6vw, 3.8rem); line-height: 1.1; }
+.plugin-guide h2 { margin: 2rem 0 .6rem; font-size: 1.4rem; }
+.plugin-guide p, .plugin-guide ul, .plugin-guide dl { margin: 1rem 0; }
+.plugin-guide ul { padding-left: 1.5rem; }
+.plugin-guide pre { overflow-x: auto; padding: 1rem; border: 1px solid #666; border-radius: .5rem; font-size: .85rem; }
+.plugin-guide dt { font-weight: 700; margin-top: 1rem; }
+.plugin-guide a { text-decoration: underline; }

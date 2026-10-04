@@ -1,5 +1,14 @@
 # DeployDoctor
 
+## AI plugin
+
+Connect a custom remote MCP server at `https://deploydoctor.nyttolabs.com/api/mcp`.
+Public repository scans, saved reports and website pricing are available to AI
+clients. No private tokens, code execution or automatic payment. The existing
+three-free-scans/day source-IP allowance applies; website paid sessions do not
+transfer to MCP. See [plugin documentation](plugins/deploydoctor/README.md) and
+the public `/ai-plugin` setup page.
+
 License: BSL 1.1 · Live: [deploydoctor.nyttolabs.com](https://deploydoctor.nyttolabs.com)
 
 DeployDoctor scans a public GitHub repository for the mistakes that most often break a Vercel deploy and saves a shareable report. It reads the repository through the GitHub REST API. It does not clone, install, build, or execute the code it scans.
