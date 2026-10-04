@@ -4,21 +4,30 @@ import {
   checkoutContext,
   checkoutSessionParams,
   configuredScanPriceId,
-  isProbeContext,
   isProbeHeader,
   orderContext,
   readStripeHealth,
 } from "../src/lib/checkout-guard";
 import { isStripeCheckoutUrl, scanCheckoutHref } from "../src/lib/scan-checkout";
 
-test("probe contexts and the health header never look like a real note", () => {
-  for (const context of ["health-check-2026-10-04", "watch-home", "health-probe-no-pay", "  Probe", "WATCH-1", "healthcare", "watchtower"]) {
-    assert.equal(isProbeContext(context), true, context);
+test("repo context still builds a checkout session; only the probe header skips", () => {
+  for (const context of ["healthcare-app/web", "watchlist/api", "watchtower", "probe-tools/x", "health-check-2026-10-04", "health-probe-no-pay"]) {
+    assert.equal(isProbeHeader(new Headers()), false, context);
+    const params = checkoutSessionParams({
+      plan: "day",
+      lang: "en",
+      reportId: "",
+      checkId: "",
+      context,
+      browser: "digest",
+      origin: "https://deploydoctor.example",
+      lineItem: { quantity: 1, price_data: { currency: "usd", unit_amount: 200, product_data: { name: "Day" } } },
+      integrationIdentifier: "deploydoctor-abcdefgh",
+    });
+    assert.equal(params.metadata?.context, context);
+    assert.equal(params.mode, "payment");
+    assert.equal("custom_fields" in params, false);
   }
-  for (const context of ["", "https://github.com/health/repo", "owner/repo", "the health of the deploy"]) {
-    assert.equal(isProbeContext(context), false, context);
-  }
-  assert.equal(isProbeContext(undefined), false);
   assert.equal(isProbeHeader(new Headers({ "x-health-probe": "1" })), true);
   assert.equal(isProbeHeader(new Headers({ "X-Health-Probe": " 1 " })), true);
   assert.equal(isProbeHeader(new Headers({ "x-health-probe": "0" })), false);

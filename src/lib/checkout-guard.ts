@@ -2,18 +2,11 @@ import type Stripe from "stripe";
 import type { Lang } from "@/lib/i18n";
 import { plans, type Plan } from "@/lib/plans";
 
-// Monitors send values such as health-check-*, watch-*, and health-probe-no-pay.
-const PROBE_PREFIXES = ["health", "watch", "probe"];
 const PRICE_PLANS = ["week", "public", "private"] as const;
 
+/** Health checks opt out with this header. Context is never used; repo names like healthcare-app must still check out. */
 export function isProbeHeader(headers: Headers): boolean {
   return headers.get("x-health-probe")?.trim() === "1";
-}
-
-export function isProbeContext(context: unknown): boolean {
-  if (typeof context !== "string") return false;
-  const value = context.trim().toLowerCase();
-  return PROBE_PREFIXES.some((prefix) => value.startsWith(prefix));
 }
 
 export function checkoutContext(context: unknown): string {

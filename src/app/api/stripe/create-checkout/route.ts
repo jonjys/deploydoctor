@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { customerSession, cookieOptions } from "@/lib/access";
-import { checkoutContext, checkoutSessionParams, isProbeContext, isProbeHeader } from "@/lib/checkout-guard";
+import { checkoutContext, checkoutSessionParams, isProbeHeader } from "@/lib/checkout-guard";
 import { digest } from "@/lib/session-token";
 import { isPlan, isScanPlan } from "@/lib/plans";
 import { getReport } from "@/lib/reports";
@@ -22,7 +22,6 @@ export async function POST(request: Request) {
     const text = await request.text();
     if (text.length > 5000) return Response.json({ error: t(lang, "pay.tooLarge") }, { status: 413 });
     const body = JSON.parse(text) as { plan?: unknown; reportId?: unknown; checkId?: unknown; context?: unknown };
-    if (isProbeContext(body.context)) return probeResponse();
     if (!isPlan(body.plan)) return Response.json({ error: t(lang, "pay.badPlan") }, { status: 400 });
     const plan = body.plan;
     if (isFixPlan(plan) && !FIX_SERVICE_ENABLED) return Response.json({ error: t(lang, "pay.fixPaused") }, { status: 409 });
