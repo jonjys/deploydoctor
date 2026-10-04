@@ -1,0 +1,48 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "deploydoctor",
+  "version": "1.0.0",
+  "description": "Diagnose static Next.js and Vercel deployment errors in public GitHub repositories and retrieve saved reports with evidence and suggested fixes.",
+  "author": { "name": "Nytto Labs", "email": "support@nyttolabs.com", "url": "https://nyttolabs.com" },
+  "homepage": "https://deploydoctor.nyttolabs.com/ai-plugin",
+  "repository": "https://github.com/jonjys/deploydoctor",
+  "license": "BUSL-1.1",
+  "keywords": ["deployment", "Vercel", "Next.js", "GitHub", "build errors", "environment variables"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "DeployDoctor",
+        "shortDescription": "Diagnose GitHub deploy errors",
+        "longDescription": "Scan a public GitHub repository for static Next.js and Vercel deployment mistakes: missing and case-sensitive imports, undeclared dependencies, build configuration, environment declarations, server/client boundaries and Prisma generation. Retrieve file/line evidence, suggested fixes and a shareable report. Code is never cloned, installed, built or executed. Three free scans per day per source IP. This remote plugin supports public repositories only; paid website sessions and private repository tokens are not supported. Static findings are not a guarantee of deployment success.",
+        "developerName": "Nytto Labs",
+        "category": "Developer Tools",
+        "capabilities": ["Scan public repositories", "Read public reports", "Read pricing"],
+        "websiteURL": "https://deploydoctor.nyttolabs.com/ai-plugin",
+        "supportURL": "https://deploydoctor.nyttolabs.com/ai-plugin#support",
+        "privacyPolicyURL": "https://deploydoctor.nyttolabs.com/ai-plugin#privacy",
+        "termsOfServiceURL": "https://deploydoctor.nyttolabs.com/ai-plugin#terms",
+        "defaultPrompt": ["Check my public GitHub repository for Vercel deployment mistakes.", "Find missing imports and environment declarations in my public repository.", "Read my saved DeployDoctor report and explain the failed checks."],
+        "logo": "./assets/icon.svg",
+        "composerIcon": "./assets/icon.svg"
+      },
+      "review": {
+        "commerce": false,
+        "commerce_description": "No purchase, checkout, subscription or payment tool. Prices link to the separate website; paid browser sessions do not transfer to MCP.",
+        "test_cases": {
+          "positive": [
+            { "description": "Public repository deployment diagnosis", "prompt": "Scan https://github.com/jonjys/deploydoctor for Vercel deployment mistakes.", "tools_triggered": "scan_public_repository", "expected_behavior": "Return a saved public report URL and static findings, or accurately report an upstream/quota error without claiming a scan succeeded." },
+            { "description": "Scoped import diagnosis", "prompt": "Check Next.js imports in https://github.com/jonjys/Vatidence. Don't execute code.", "tools_triggered": "scan_public_repository", "expected_behavior": "Scan with the next category and return static evidence, limitations and a report URL, or an explicit upstream/quota error." },
+            { "description": "Environment declarations", "prompt": "Check environment declarations in https://github.com/jonjys/CycleTag.", "tools_triggered": "scan_public_repository", "expected_behavior": "Scan with the env category, distinguish failed and review findings, and never expose full secret values." },
+            { "description": "Reuse a saved public report", "prompt": "Read the saved DeployDoctor report from our previous scan and explain its failed checks without rescanning.", "tools_triggered": "get_public_report", "expected_behavior": "Use the report UUID returned by a previous scan, retrieve saved findings and mention the scan date. If no ID exists, ask for it instead of inventing one." },
+            { "description": "Website pricing and remote limitation", "prompt": "How much do DeployDoctor scan passes cost, and do they unlock this AI connection?", "tools_triggered": "get_deploydoctor_plans", "expected_behavior": "Return current website prices and state that paid browser sessions do not transfer to the unauthenticated remote plugin. No charge or subscription." }
+          ],
+          "negative": [
+            { "description": "Private credentials", "prompt": "Use my GitHub personal access token to scan a private repository." },
+            { "description": "Automatic execution and edits", "prompt": "Install my repository, run its scripts and push a fix automatically." },
+            { "description": "Unrelated VAT verification", "prompt": "Check a supplier's EU VAT number and buy VAT evidence." }
+          ]
+        }
+      }
+    }
+  }
+}
