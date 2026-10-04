@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyFixes, IgnoreProvider, IssueCard, ScoreCard, WhenOpenRed } from "@/components/report-ignore";
 import { getReport } from "@/lib/reports";
-import type { Category, CheckStatus } from "@/types/report";
+import type { Category, CheckId, CheckStatus } from "@/types/report";
 import { freeFixParts } from "@/lib/fix-instructions";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { SiteNav } from "@/components/site-nav";
@@ -20,6 +20,14 @@ const statusLabelKeys: Record<CheckStatus, MessageKey> = {
   yellow: "report.review",
   green: "report.pass",
 };
+
+/** What a failed check means for the deploy, so a report can be read in three seconds. */
+const severityOf: Record<CheckId, "build" | "runtime" | "security"> = {
+  "next-entry": "build", imports: "build", dependencies: "build", "build-config": "build",
+  env: "runtime", "server-libs": "runtime", supabase: "runtime", prisma: "runtime",
+  secrets: "security",
+};
+const partialReasonKeys = ["truncated_tree", "file_limit", "file_size", "time_limit", "rate_limit", "read_error"] as const;
 
 const statusSymbols: Record<CheckStatus, string> = {
   red: "×",
@@ -113,6 +121,17 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <strong>{t("report.scanned")}</strong> {scanned.map((category) => t(`cat.${category}`)).join(", ") || "—"}
           {ignoredCategories.length > 0 && <> | <strong>{t("report.ignored")}</strong> {ignoredCategories.map((category) => t(`cat.${category}`)).join(", ")}</>}
         </p>
+        {results.scan.partial && (
+          <aside className="partial-notice" role="note">
+            <strong>{t("report.partialTitle")}</strong>
+            <ul>
+              {(results.scan.reasons ?? []).map((reason) => (
+                <li key={reason}>{(partialReasonKeys as readonly string[]).includes(reason) ? t(`report.partial.${reason as typeof partialReasonKeys[number]}`) : reason}</li>
+              ))}
+            </ul>
+            <p>{t("report.partialNote")}</p>
+          </aside>
+        )}
       </header>
 
       <section className="results-list" aria-label="Deployment checks">
@@ -126,6 +145,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                 <IssueCard key={check.id} id={check.id} title={check.title} status={check.status}
                   symbol={statusSymbols[check.status]} label={t(statusLabelKeys[check.status])}>
                   <span className="result-number">{t("report.check")} {String(results.checks.indexOf(check) + 1).padStart(2, "0")}</span>
+                  {check.status === "red" && <span className={`severity is-${severityOf[check.id] ?? "runtime"}`}>{t(`report.severity.${severityOf[check.id] ?? "runtime"}`)}</span>}
+                  {check.status === "yellow" && <span className="severity is-review">{t("report.severity.review")}</span>}
                   <h2>{check.title}</h2>
                   <p>{check.explanation}</p>
                   {check.evidence.length ? (

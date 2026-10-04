@@ -308,6 +308,9 @@ a { color: inherit; }
 .action-buttons { display: flex; flex-wrap: wrap; gap: 10px; flex: 0 0 auto; }
 .copy-button { background: transparent; color: white; border-color: #65736d; }
 .copy-button:hover { background: #283d34; }
+/* Secondary links in the dark actions bar are drawn transparent inline, so they need light text in both modes. */
+.report-actions .cta-button { color: white; border-color: #65736d; }
+.report-actions .cta-button:hover { background: #283d34; color: white; }
 .not-found-card {
   max-width: 620px;
   margin: 120px auto;
@@ -435,6 +438,55 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .badge-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
 .badge-row code { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; font-family: var(--font-geist-mono), monospace; font-size: 11px; overflow-wrap: anywhere; max-width: 100%; }
 .copy-text textarea { display: block; width: 100%; margin-top: 8px; font-size: 12px; }
+
+/* Report: severity tag on failed checks and the partial-scan notice. */
+.severity { display: inline-block; margin: 8px 0 0 10px; padding: 3px 9px; border-radius: 999px; font-family: var(--font-geist-mono), monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; vertical-align: middle; }
+.severity.is-build { background: var(--red); color: white; }
+.severity.is-runtime { background: var(--red-soft); color: var(--red); border: 1px solid var(--red); }
+.severity.is-security { background: var(--ink); color: var(--acid); }
+.severity.is-review { background: var(--yellow-soft); color: var(--yellow); border: 1px solid var(--yellow); }
+.partial-notice { margin: 18px 0 0; padding: 14px 18px; border: 1px dashed var(--yellow); border-radius: 10px; background: var(--yellow-soft); font-size: 13px; color: var(--ink); }
+.partial-notice strong { display: block; margin-bottom: 6px; }
+.partial-notice ul { margin: 0; padding-left: 18px; }
+.partial-notice p { margin: 8px 0 0; color: var(--muted); }
+
+/* Dark mode follows the system setting. Tokens first, then the handful of fixed colours. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #eef2ee;
+    --muted: #9aa8a2;
+    --paper: #0f1a16;
+    --panel: #16241f;
+    --line: #2b3a34;
+    --acid: #b9f227;
+    --red: #ff7a70;
+    --red-soft: #3a1d1b;
+    --yellow: #f0c050;
+    --yellow-soft: #352c12;
+    --green: #5ad28f;
+    --green-soft: #15302a;
+  }
+  body { background: radial-gradient(circle at 20% 0%, rgba(185, 242, 39, 0.08), transparent 27rem), var(--paper); }
+  .topbar, .check-list, .footer { border-color: rgba(238, 242, 238, 0.14); }
+  .check-list li { border-color: var(--line); }
+  .eyebrow, .section-kicker, .plan-badge { color: var(--acid); }
+  .input-shell { box-shadow: 8px 8px 0 rgba(185, 242, 39, 0.12); }
+  .repo-input::placeholder { color: #6f7d77; }
+  .scan-button, .cta-button { color: #10231c; }
+  .scan-button:hover, .cta-button:hover { background: #cafb4f; color: #10231c; }
+  .check-list li > span, .result-number { color: var(--muted); }
+  .evidence-list li { color: var(--muted); }
+  .fix-box { background: #1f2d27; }
+  .suggested-file, .badge-row code, .checkout-form input, .private-input input, .restore-form input, .copy-button + textarea { background: #0f1a16; color: var(--ink); }
+  .report-actions { background: #050b09; border-color: var(--line); }
+  .report-actions .copy-button { color: var(--ink); border-color: var(--line); }
+  .copy-button.file-copy-button { color: var(--ink); }
+  .copy-button.file-copy-button:hover { background: var(--acid); color: #10231c; }
+  .severity.is-build { color: #10231c; }
+  .severity.is-security { background: var(--acid); color: #10231c; }
+  .is-done .step-mark { color: #10231c; }
+  .score-card { box-shadow: 5px 5px 0 var(--acid); }
+}
 .check-group { display: grid; gap: 15px; }
 .results-list { gap: 26px; }
 .group-title { margin: 0; }
@@ -464,3 +516,10 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .plugin-guide pre { overflow-x: auto; padding: 1rem; border: 1px solid #666; border-radius: .5rem; font-size: .85rem; }
 .plugin-guide dt { font-weight: 700; margin-top: 1rem; }
 .plugin-guide a { text-decoration: underline; }
+
+/* Declared last so it wins over the light language switch rules above. */
+@media (prefers-color-scheme: dark) {
+  .lang-switch button[aria-pressed="true"] { background: var(--acid); color: #10231c; }
+  .report-actions .cta-button, .report-actions .copy-button { color: var(--ink); border-color: var(--line); }
+  .report-actions .cta-button:hover, .report-actions .copy-button:hover { background: #1f2d27; color: var(--ink); }
+}
