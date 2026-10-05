@@ -450,6 +450,10 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .partial-notice ul { margin: 0; padding-left: 18px; }
 .partial-notice p { margin: 8px 0 0; color: var(--muted); }
 
+.card-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-top: 14px; font-size: 13px; }
+.card-links a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.card-links a:hover { color: var(--ink); }
+
 /* Dark mode follows the system setting. Tokens first, then the handful of fixed colours. */
 @media (prefers-color-scheme: dark) {
   :root {
