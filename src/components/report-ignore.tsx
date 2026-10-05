@@ -56,7 +56,7 @@ export function IssueCard({ id, title, status, symbol, label, children }: {
   const t = useT();
   if (status !== "green" && ignored.has(id)) {
     return (
-      <article className="result-card is-ignored">
+      <article className="result-card is-ignored" id={`check-${id}`}>
         <div className="result-body">
           <p>{t("report.ignoredTitle", { title })} <button className="ignore-button" type="button" onClick={() => toggle(id)}>{t("report.undo")}</button></p>
         </div>
@@ -64,7 +64,7 @@ export function IssueCard({ id, title, status, symbol, label, children }: {
     );
   }
   return (
-    <article className={`result-card is-${status}`}>
+    <article className={`result-card is-${status}`} id={`check-${id}`}>
       <div className="result-status">
         <span className="status-symbol" aria-hidden="true">{symbol}</span>
         {label}

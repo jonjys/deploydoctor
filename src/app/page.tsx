@@ -1,4 +1,7 @@
+import { Suspense } from "react";
+import Link from "next/link";
 import { RepoForm } from "@/components/repo-form";
+import { EXAMPLE_REPORTS } from "@/lib/site";
 import { activePlan, customerSession } from "@/lib/access";
 import { SiteNav } from "@/components/site-nav";
 import { analysisText } from "@/lib/analysis-text";
@@ -26,7 +29,17 @@ export default async function Home() {
         <h1>{t("home.h1")}</h1>
         <p className="hero-copy">{t("home.copy")}</p>
 
-        <RepoForm privateAccess={plan?.plan === "private"} />
+        <Suspense fallback={null}>
+          <RepoForm privateAccess={plan?.plan === "private"} />
+        </Suspense>
+        <div className="example-chips" aria-label={t("home.examples")}>
+          <span>{t("home.examples")}</span>
+          {EXAMPLE_REPORTS.map((example) => (
+            <Link key={example.id} className={`example-chip is-${example.tone}`} href={`/r/${example.id}`}>
+              <span className="chip-dot" aria-hidden="true" />{t(example.key)}
+            </Link>
+          ))}
+        </div>
 
         <div className="trust-row" aria-label={t("home.trust.aria")}>
           <span>
@@ -39,6 +52,9 @@ export default async function Home() {
             <span className="mini-check">✓</span> {t("home.trust.share")}
           </span>
         </div>
+        <p className="plugin-line">
+          <Link href="/ai-plugin">{t("home.pluginLine")}</Link>
+        </p>
       </section>
 
       <section className="checks-panel" aria-labelledby="checks-heading">

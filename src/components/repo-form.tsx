@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { CATEGORIES } from "@/lib/categories";
@@ -12,6 +12,15 @@ import type { Category } from "@/types/report";
 const GITHUB_REPO_URL = /^https:\/\/(?:www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/i;
 const FALLBACK_CHECKS: Category[] = ["next", "vercel", "env"];
 type Detection = { status: "loading" } | { status: "ready"; stack: Stack } | { status: "error" };
+const STEP_KEYS = ["form.step.tree", "form.step.stack", "form.step.checks", "form.step.report"] as const;
+
+/** ?repo=owner/name or a full GitHub URL, so a shared link can start a scan on arrival. */
+function repoUrlFromParam(value: string | null): string {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return "";
+  const url = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(trimmed) ? `https://github.com/${trimmed}` : trimmed;
+  return GITHUB_REPO_URL.test(url) ? url : "";
+}
 
 function GitHubIcon() {
   return (
@@ -28,9 +37,12 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
   const router = useRouter();
   const lang = useLang();
   const t = useT();
-  const [repoUrl, setRepoUrl] = useState("");
+  const autoRepoUrl = repoUrlFromParam(useSearchParams().get("repo"));
+  const [repoUrl, setRepoUrl] = useState(autoRepoUrl);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [step, setStep] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [paywall, setPaywall] = useState(false);
   const [privateToken, setPrivateToken] = useState("");
   const [detection, setDetection] = useState<Detection | null>(null);
@@ -40,6 +52,26 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
   const tokenRef = useRef("");
 
   useEffect(() => () => { window.clearTimeout(timer.current); controller.current?.abort(); }, []);
+
+  // "/" focuses the repository field from anywhere on the page, unless you are already typing.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      event.preventDefault();
+      inputRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  // While a scan runs, walk through the stages the server goes through. The last stage waits for the response.
+  useEffect(() => {
+    if (!isLoading) return;
+    const handle = window.setInterval(() => setStep((current) => Math.min(current + 1, STEP_KEYS.length - 1)), 2_300);
+    return () => window.clearInterval(handle);
+  }, [isLoading]);
 
   function cancelDetection() {
     window.clearTimeout(timer.current);
@@ -88,15 +120,20 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
-    setPaywall(false);
     // Send the visible selection; while detection is still running the server picks the categories itself.
     const sendChecks = detection?.status === "ready" || detection?.status === "error";
     if (sendChecks && selected.size === 0) {
       setError(t("form.pickOne"));
       return;
     }
+    await startScan(repoUrl, sendChecks);
+  }
+
+  async function startScan(url: string, sendChecks: boolean) {
+    setError("");
+    setPaywall(false);
     cancelDetection();
+    setStep(0);
     setIsLoading(true);
 
     try {
@@ -104,7 +141,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          repoUrl,
+          repoUrl: url,
           ...(sendChecks ? { checks: CATEGORIES.filter((category) => selected.has(category)) } : {}),
           ...(privateToken ? { privateToken } : {}),
         }),
@@ -132,6 +169,15 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
     }
   }
 
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoRepoUrl || autoStarted.current) return;
+    autoStarted.current = true;
+    const handle = window.setTimeout(() => void startScan(autoRepoUrl, false), 0);
+    return () => window.clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRepoUrl]);
+
   return (
     <form className="repo-form" onSubmit={handleSubmit}>
       <div className="input-shell">
@@ -139,6 +185,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         <label className="sr-only" htmlFor="repo-url">
           {t("form.urlLabel")}
         </label>
+        <div className="repo-input-wrap">
         <input
           className="repo-input"
           id="repo-url"
@@ -149,14 +196,27 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
           placeholder="https://github.com/owner/repository"
           value={repoUrl}
           onChange={(event) => handleUrlChange(event.target.value)}
+          ref={inputRef}
           required
         />
+        <kbd className="slash-hint" aria-hidden="true" title={t("form.shortcut")}>/</kbd>
+        </div>
         <button className="scan-button" type="submit" disabled={isLoading}>
           {isLoading ? t("form.scanning") : t("form.scan")}
           <span aria-hidden="true">→</span>
         </button>
       </div>
-      {detection && (
+      {isLoading && (
+        <ol className="scan-progress" aria-live="polite">
+          {STEP_KEYS.map((key, index) => (
+            <li key={key} className={index < step ? "is-done" : index === step ? "is-active" : ""}>
+              <span className="step-mark" aria-hidden="true">{index < step ? "✓" : ""}</span>
+              {t(key)}
+            </li>
+          ))}
+        </ol>
+      )}
+      {detection && !isLoading && (
         <fieldset className="stack-panel" disabled={isLoading}>
           <legend className="sr-only">{t("form.whatToScan")}</legend>
           <p className="stack-summary" aria-live="polite">
