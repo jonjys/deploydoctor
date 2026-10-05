@@ -527,3 +527,27 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   .report-actions .cta-button, .report-actions .copy-button { color: var(--ink); border-color: var(--line); }
   .report-actions .cta-button:hover, .report-actions .copy-button:hover { background: #1f2d27; color: var(--ink); }
 }
+
+/* Guides. */
+.guide-list { list-style: none; margin: 0 0 80px; padding: 0; display: grid; gap: 14px; }
+.guide-list a { display: block; padding: 22px 26px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); text-decoration: none; color: var(--ink); transition: border-color .15s, transform .15s; }
+.guide-list a:hover { border-color: var(--ink); transform: translateY(-1px); }
+.guide-list strong { display: block; font-size: 19px; letter-spacing: -0.02em; margin-bottom: 6px; }
+.guide-list span { color: var(--muted); font-size: 14px; line-height: 1.5; }
+.guide { max-width: 780px; margin: 48px auto 80px; line-height: 1.7; }
+.guide .section-kicker a { color: inherit; text-decoration: none; }
+.guide h1 { font-size: clamp(32px, 5vw, 50px); line-height: 1.08; letter-spacing: -0.04em; margin: 10px 0 16px; }
+.guide-lead { font-size: 18px; color: var(--muted); margin: 0 0 32px; }
+.guide h2 { margin: 36px 0 10px; font-size: 24px; letter-spacing: -0.02em; }
+.guide p { margin: 12px 0; }
+.guide pre { overflow-x: auto; padding: 14px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); font-size: 13px; line-height: 1.55; }
+.guide-cta { margin: 44px 0 20px; padding: 28px 31px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px 30px; border: 1px solid var(--ink); border-radius: 12px; background: var(--ink); color: white; }
+.guide-cta h2 { margin: 0 0 6px; font-size: 22px; }
+.guide-cta p { margin: 0; color: #bdc8c3; font-size: 14px; max-width: 520px; }
+.guide-cta .cta-button { color: #10231c; }
+.guide-updated { color: var(--muted); font-size: 13px; }
+.guide-more { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--line); }
+.guide-more strong { display: block; margin-bottom: 10px; }
+.guide-more ul { margin: 0; padding-left: 20px; }
+.guide-more a { color: var(--ink); }
+@media (prefers-color-scheme: dark) { .guide-cta { background: #050b09; border-color: var(--line); } }

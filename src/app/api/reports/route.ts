@@ -3,6 +3,7 @@ import { saveReport } from "@/lib/reports";
 import { activePlan, customerSession, finishScan, reserveScan } from "@/lib/access";
 import { sameOrigin } from "@/lib/stripe";
 import { parseChecks } from "@/lib/categories";
+import { allowsPrivate } from "@/lib/plans";
 import { langFromRequest, t } from "@/lib/i18n";
 
 export const maxDuration = 60;
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     const customer = await customerSession();
     const plan = await activePlan(customer);
     const privateToken = typeof body.privateToken === "string" ? body.privateToken.trim() : undefined;
-    if (privateToken && (plan?.plan !== "private" || privateToken.length > 300)) {
+    if (privateToken && (!allowsPrivate(plan?.plan) || privateToken.length > 300)) {
       return Response.json({ error: t(lang, "err.privatePlan"), paywall: true }, { status: 402 });
     }
     if (!plan) {

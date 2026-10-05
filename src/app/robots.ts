@@ -6,7 +6,7 @@ import { SITE_URL } from "@/lib/site";
 // carries robots noindex in its own metadata, which is what keeps it out of search results.
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: [{ userAgent: "*", allow: ["/", "/pricing"], disallow: ["/account", "/checkout", "/restore", "/api/"] }],
+    rules: [{ userAgent: "*", allow: ["/", "/pricing", "/guides", "/ai-plugin"], disallow: ["/account", "/checkout", "/restore", "/api/"] }],
     sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }
