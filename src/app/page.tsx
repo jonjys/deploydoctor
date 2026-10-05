@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { RepoForm } from "@/components/repo-form";
 import { EXAMPLE_REPORTS } from "@/lib/site";
+import { allowsPrivate } from "@/lib/plans";
 import { activePlan, customerSession } from "@/lib/access";
 import { SiteNav } from "@/components/site-nav";
 import { analysisText } from "@/lib/analysis-text";
@@ -30,7 +31,7 @@ export default async function Home() {
         <p className="hero-copy">{t("home.copy")}</p>
 
         <Suspense fallback={null}>
-          <RepoForm privateAccess={plan?.plan === "private"} />
+          <RepoForm privateAccess={allowsPrivate(plan?.plan)} />
         </Suspense>
         <div className="example-chips" aria-label={t("home.examples")}>
           <span>{t("home.examples")}</span>
@@ -77,7 +78,7 @@ export default async function Home() {
 
       <footer className="footer">
         <span>DeployDoctor</span>
-        <span>{t("home.footerNote")}</span>
+        <span>{t("home.footerNote")} <Link href="/guides">{t("nav.guides")}</Link></span>
         <a href="https://github.com/jonjys/deploydoctor/blob/master/LICENSE" rel="noopener">{t("footer.license")}</a>
       </footer>
     </main>
