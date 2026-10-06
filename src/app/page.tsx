@@ -54,6 +54,9 @@ export default async function Home() {
           </span>
         </div>
         <p className="plugin-line">
+          <Link href="/ci">{t("home.ciLine")}</Link>
+        </p>
+        <p className="plugin-line">
           <Link href="/ai-plugin">{t("home.pluginLine")}</Link>
         </p>
       </section>

@@ -21,6 +21,7 @@ export default async function Pricing() {
       <h2>{t(`plan.${key}.name`)}</h2><p className="price">{plans[key].price}<small>{t(`plan.${key}.cadence`)}</small></p>
       <ul><li>{t("pricing.unlimited")}</li><li>{t("pricing.shareable")}</li>{key !== "week" && key !== "day" && <li>{t("pricing.history")}</li>}
         <li>{t("pricing.privateRepos")}</li><li className="plan-note">{t("pricing.privateToken")}</li><li className="plan-note">{t("pricing.privateSession")}</li>
+        <li>{t("pricing.ci")}</li>
         {key === "week" && <li>{t("pricing.expires")}</li>}{key === "day" && <li>{t("pricing.expiresDay")}</li>}
         {key !== "week" && key !== "day" && <li>{t("pricing.cancel")}</li>}</ul>
       <Link className="cta-button" href={`/checkout?plan=${key}`}>{key === "day" ? t("pricing.cta.day") : key === "week" ? t("pricing.cta.week") : t("pricing.cta.choose")} →</Link>

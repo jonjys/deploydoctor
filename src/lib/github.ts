@@ -115,7 +115,7 @@ function priorityFor(pathname: string): number {
   return 5;
 }
 
-export async function analyzeGitHubRepository(repoUrl: string, options: { privateToken?: string; checks?: Category[]; lang?: Lang } = {}): Promise<{
+export async function analyzeGitHubRepository(repoUrl: string, options: { privateToken?: string; checks?: Category[]; lang?: Lang; ref?: string } = {}): Promise<{
   canonicalUrl: string;
   results: ReportResults;
   isPrivate: boolean;
@@ -128,9 +128,14 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
     throw new GitHubApiError("DeployDoctor only scans public repositories.", 400, "gh.privateOnly");
   }
 
+  // CI scans the pull request head; the website scans the default branch.
+  const ref = options.ref && options.ref !== repository.default_branch ? options.ref : undefined;
   const tree = await githubRequest<GitTree>(
-    `${repoPath}/git/trees/${encodeURIComponent(repository.default_branch)}?recursive=1`, token,
-  );
+    `${repoPath}/git/trees/${encodeURIComponent(ref ?? repository.default_branch)}?recursive=1`, token,
+  ).catch((error: unknown) => {
+    if (ref && error instanceof GitHubApiError && error.status === 404) throw new GitHubApiError(`Branch or commit "${ref}" was not found in the repository.`, 404, "gh.refNotFound");
+    throw error;
+  });
   const entries = tree.tree
     .filter((entry): entry is typeof entry & { type: "blob" | "tree" } =>
       entry.type === "blob" || entry.type === "tree",
@@ -201,7 +206,9 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
       sourceFiles.some((entry) => (entry.size ?? 0) > MAX_FILE_BYTES),
   };
 
-  return { canonicalUrl, results: analyzeSnapshot(snapshot, { checks: options.checks, lang: options.lang }), isPrivate: repository.private };
+  const results = analyzeSnapshot(snapshot, { checks: options.checks, lang: options.lang });
+  if (ref) results.repository.ref = ref;
+  return { canonicalUrl, results, isPrivate: repository.private };
 }
 
 async function readRootFile(repoPath: string, file: string, token?: string): Promise<string | null> {
