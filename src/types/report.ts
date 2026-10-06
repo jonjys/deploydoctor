@@ -23,6 +23,8 @@ export type ReportResults = {
     owner: string;
     name: string;
     defaultBranch: string;
+    /** The branch, tag or commit that was scanned when it was not the default branch (CI scans a PR head). Absent on older reports. */
+    ref?: string;
   };
   checkedAt: string;
   scan: {

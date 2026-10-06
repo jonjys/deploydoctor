@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { BillingPortalButton } from "@/components/billing-portal-button";
+import { CiTokenButton } from "@/components/ci-token-button";
 import { activePlan, customerSession } from "@/lib/access";
 import { db, query } from "@/lib/db";
 import { getT } from "@/lib/lang";
@@ -24,7 +25,9 @@ export default async function Account() {
   return <main className="site-shell"><SiteNav current="account" /><header className="pricing-header"><h1>{t("nav.myScans")}</h1><p>{customer.email}</p>
     <p>{plan ? t("account.active", { plan: t(`plan.${plan.plan}.name`), date: new Date(plan.current_period_end).toLocaleDateString(dateLocale(lang)) }) : t("account.noPlan")}</p>
     {/* A 7-day pass is a one-time payment: there is no subscription to manage or cancel. */}
-    {plan && !hasHistory(plan.plan) ? <p>{t("account.passNote")}</p> : <BillingPortalButton />}</header><section className="account-list"><h2>{t("account.history")}</h2>
+    {plan && !hasHistory(plan.plan) ? <p>{t("account.passNote")}</p> : <BillingPortalButton />}</header><section className="account-list">
+    {plan && <><h2>{t("account.ciTitle")}</h2><p>{t("account.ciBody")} <Link href="/ci">{t("account.ciGuide")}</Link></p><CiTokenButton /></>}
+    <h2>{t("account.history")}</h2>
     {!plan || !hasHistory(plan.plan) ? <p>{t("account.historyNote")}</p> : history.length ? history.map((report) => <Link key={report.report_id} href={`/r/${report.report_id}`}>
       {report.repo_url} <small>{report.is_private ? t("account.private") : t("account.public")} · {new Date(report.created_at).toLocaleString(dateLocale(lang))}</small></Link>) : <p>{t("account.nextScan")}</p>}
     <h2>{t("account.orders")}</h2>{orders.length ? orders.map((order) => <div key={order.id}><Link href={`/r/${order.report_id}`}>{order.plan === "fix-one" ? t("account.orderOne") : t("account.orderAll")}</Link>

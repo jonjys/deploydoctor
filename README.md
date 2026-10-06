@@ -13,6 +13,28 @@ License: BSL 1.1 · Live: [deploydoctor.nyttolabs.com](https://deploydoctor.nytt
 
 DeployDoctor scans a public GitHub repository for the mistakes that most often break a Vercel deploy and saves a shareable report. It reads the repository through the GitHub REST API. It does not clone, install, build, or execute the code it scans.
 
+## CI: GitHub Action and API
+
+With a pass, the same checks run on every pull request before Vercel builds it.
+Create an API token under My scans, store it as the `DEPLOYDOCTOR_TOKEN` secret and add:
+
+```yaml
+on: pull_request
+jobs:
+  deploydoctor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: jonjys/deploydoctor/action@master
+        with:
+          token: ${{ secrets.DEPLOYDOCTOR_TOKEN }}
+```
+
+Findings are annotated on the changed files, the job summary links the report and the
+job fails on a red check. The action is a thin client over `POST /api/reports` with
+`Authorization: Bearer <token>`, which accepts an optional `ref` and answers with the
+full report as JSON; `GET /api/reports/<id>` reads a saved one. See [action/](action/README.md)
+and the public [/ci](https://deploydoctor.nyttolabs.com/ci) page.
+
 ## What a scan does
 
 1. Detects the stack from `package.json`, the lockfile, `vercel.json` and `.env.example`.
