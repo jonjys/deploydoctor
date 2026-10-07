@@ -113,6 +113,33 @@ test("environment and Supabase client boundary violations are reported", () => {
   assert.equal(results.checks.find((check) => check.id === "supabase")?.status, "red");
 });
 
+test("an env template under another name is read, and the rename is the finding", () => {
+  const entries = [
+    { path: "package.json", type: "blob" as const }, { path: "env.example", type: "blob" as const },
+    { path: "app", type: "tree" as const }, { path: "app/page.tsx", type: "blob" as const },
+  ];
+  const template = "# Environment\n\nCopy to .env.local.\n\n```\nMONGO_URL=mongodb+srv://USER:PASS@cluster/\nDB_NAME=app\n```\n";
+  const documented = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), "env.example": template,
+    "app/page.tsx": "export default function Page() { return process.env.MONGO_URL + process.env.DB_NAME }",
+  }));
+  const env = documented.checks.find((check) => check.id === "env")!;
+  assert.equal(env.status, "yellow");
+  assert.match(env.explanation, /named env\.example/);
+  assert.deepEqual(env.findings?.map((finding) => [finding.file, finding.command]), [["env.example", "git mv env.example .env.example"]]);
+
+  const partly = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), "env.example": template,
+    "app/page.tsx": "export default function Page() { return process.env.MONGO_URL + process.env.MONGODB_URI }",
+  }));
+  const red = partly.checks.find((check) => check.id === "env")!;
+  assert.equal(red.status, "red");
+  assert.match(red.explanation, /1 env variable is missing from \.env\.example: MONGODB_URI; the env template is named env\.example/);
+  assert.equal(red.findings?.[0].command, "git mv env.example .env.example");
+  // The suggested .env.example keeps assignment and comment lines, never the markdown prose or code fences.
+  assert.equal(red.suggestedFile?.content, "# Environment\nMONGO_URL=mongodb+srv://USER:PASS@cluster/\nDB_NAME=app\nMONGODB_URI=\n");
+});
+
 const nextEntries: RepositorySnapshot["entries"] = [
   { path: "package.json", type: "blob" },
   { path: "app", type: "tree" },
