@@ -30,6 +30,8 @@ export type AnalysisText = {
     evidenceMissing: (name: string) => string; evidenceExposed: (name: string) => string;
     gitignore: (rule: string) => string; gitignoreProblem: (rule: string) => string;
     gitignoreFix: (line: string) => string; evidenceGitignore: (rule: string) => string;
+    misnamed: (file: string) => string; misnamedProblem: (file: string) => string;
+    misnamedFix: (file: string) => string; evidenceMisnamed: (file: string) => string;
     partial: string; okUsed: string; okNone: string;
   };
   supabase: {
@@ -116,6 +118,10 @@ const en: AnalysisText = {
     gitignoreProblem: (rule) => `the rule "${rule}" makes git ignore .env.example`,
     gitignoreFix: (line) => `Add this line at the end of .gitignore: ${line}`,
     evidenceGitignore: (rule) => `.gitignore → "${rule}" ignores .env.example`,
+    misnamed: (file) => `the env template is named ${file}, so Vercel, dotenv tools and new developers never find it`,
+    misnamedProblem: (file) => `${file} is the env template, but the convention is .env.example in the repository root`,
+    misnamedFix: (file) => `Rename ${file} to .env.example (git mv ${file} .env.example) and keep only NAME= lines in it`,
+    evidenceMisnamed: (file) => `${file} → env template under a name tools do not look for`,
     partial: "The env variables we read are documented, but the scan did not finish.",
     okUsed: "Every process.env variable found is documented and no secret-looking value uses NEXT_PUBLIC_.",
     okNone: "No process.env usage or browser-exposed secret was found.",
@@ -241,6 +247,10 @@ const sv: AnalysisText = {
     gitignoreProblem: (rule) => `regeln "${rule}" gör att git ignorerar .env.example`,
     gitignoreFix: (line) => `Lägg till den här raden sist i .gitignore: ${line}`,
     evidenceGitignore: (rule) => `.gitignore → "${rule}" ignorerar .env.example`,
+    misnamed: (file) => `env-mallen heter ${file}, så Vercel, dotenv-verktyg och nya utvecklare hittar den aldrig`,
+    misnamedProblem: (file) => `${file} är env-mallen, men konventionen är .env.example i repots root`,
+    misnamedFix: (file) => `Döp om ${file} till .env.example (git mv ${file} .env.example) och behåll bara NAMN=-rader i den`,
+    evidenceMisnamed: (file) => `${file} → env-mall under ett namn som verktyg inte letar efter`,
     partial: "De env-variabler vi läste är dokumenterade, men skanningen blev inte klar.",
     okUsed: "Alla process.env-variabler som hittades är dokumenterade och inget hemligt-liknande värde använder NEXT_PUBLIC_.",
     okNone: "Ingen process.env-användning eller webbläsarexponerad hemlighet hittades.",

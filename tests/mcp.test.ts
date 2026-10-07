@@ -70,6 +70,11 @@ test("temporary report read failure after save returns the saved link", async ()
 test("pricing never calls network and server errors do not expose secrets", async () => {
   const p = await call({ scan: fail, report: fail }, "get_deploydoctor_plans", {});
   assert.equal(p.data.result.structuredContent.remotePaidSessionSupported, false);
+  // Stripe charges dollars, so the machine-readable price is the dollar amount; the kronor figure rides along.
+  const [day] = p.data.result.structuredContent.websitePlans as Array<{ price: string; localPrice: string; cadence: string }>;
+  assert.equal(day.price, "$2");
+  assert.equal(day.localPrice, "19 kr");
+  assert.equal(day.cadence, "one-time · 24 hours");
   const e = await call({ scan: async () => { throw new Error("database-password-secret"); }, report: fail }, "scan_public_repository", { repoUrl: report.repo_url });
   assert.equal(JSON.stringify(e).includes("database-password-secret"), false);
 });

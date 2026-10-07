@@ -515,10 +515,14 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
   const exposed = new Set<string>();
   const locations = new Map<string, { file: string; line: number }>();
 
+  // A template under another name (env.example, .env.sample) documents the variables but tools never find it.
+  const hasExample = snapshot.entries.some((entry) => entry.path === ".env.example");
+  const misnamed = hasExample ? undefined : [...snapshot.contents.keys()].find((file) => MISNAMED_ENV_TEMPLATE.test(file));
+
   for (const [file, source] of snapshot.contents) {
-    if (/(?:^|\/)\.env(?:\..+)?$/.test(file)) {
+    if (/(?:^|\/)\.env(?:\..+)?$/.test(file) || file === misnamed) {
       for (const line of source.split(/\r?\n/)) {
-        const name = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/)?.[1];
+        const name = line.match(ENV_ASSIGNMENT)?.[1];
         if (name) declared.add(name);
       }
       continue;
@@ -541,33 +545,38 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
     ...[...exposed].map((name) => x.env.evidenceExposed(name)),
   ];
   const title = x.titles.env;
+  const misnamedFinding: Finding[] = misnamed ? [{ file: misnamed, line: 1, problem: x.env.misnamedProblem(misnamed),
+    fix: x.env.misnamedFix(misnamed), command: `git mv ${misnamed} .env.example` }] : [];
   const gitignoreFinding: Finding[] = ignored ? [{ file: ".gitignore", line: ignored.line, problem: x.env.gitignoreProblem(ignored.pattern),
     fix: x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION), command: "git add -- .gitignore .env.example" }] : [];
+  const conventionEvidence = [...(misnamed ? [x.env.evidenceMisnamed(misnamed)] : []), ...(ignored ? [x.env.evidenceGitignore(ignored.pattern)] : [])];
+  const conventionProblems = [misnamed ? x.env.misnamed(misnamed) : "", ignored ? x.env.gitignore(ignored.pattern) : ""].filter(Boolean);
+  const conventionFixes = [misnamed ? x.env.misnamedFix(misnamed) : "", ignored ? x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION) : ""].filter(Boolean);
 
   if (evidence.length) {
     const check = makeCheck("env", title, "red",
       [missing.length ? x.env.missing(missing.length, missing.join(", ")) : "",
         exposed.size ? x.env.exposed(exposed.size, [...exposed].join(", ")) : "",
-        ignored ? x.env.gitignore(ignored.pattern) : ""].filter(Boolean).join("; ") + ".",
-      [ignored ? x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION) : "",
+        ...conventionProblems].filter(Boolean).join("; ") + ".",
+      [...conventionFixes,
         missing.length ? x.env.fixMissing(missing.map((name) => `${name}=`).join(" + ")) : "",
         exposed.size ? x.env.fixExposed : ""].filter(Boolean).join("; ") + ".",
-      [...(ignored ? [x.env.evidenceGitignore(ignored.pattern)] : []), ...evidence],
-      [...gitignoreFinding,
+      [...conventionEvidence, ...evidence],
+      [...misnamedFinding, ...gitignoreFinding,
         ...missing.map((name) => ({ ...locations.get(name)!, problem: x.env.missingProblem(name),
           fix: x.env.missingFix(name), command: "git add -- .env.example" })),
         ...[...exposed].map((name) => ({ ...locations.get(name)!, problem: x.env.exposedProblem(name),
           fix: x.env.exposedFix(name.replace(/^NEXT_PUBLIC_/, "")) }))],
     );
     if (missing.length) {
-      check.suggestedFile = { path: ".env.example", content: completeEnvExample(snapshot.contents.get(".env.example"), missing),
-        command: "git add -- .env.example" };
+      const existing = snapshot.contents.get(".env.example") ?? (misnamed ? assignmentsOnly(snapshot.contents.get(misnamed) ?? "") : undefined);
+      check.suggestedFile = { path: ".env.example", content: completeEnvExample(existing, missing), command: "git add -- .env.example" };
     }
     return check;
   }
-  if (ignored) {
-    return makeCheck("env", title, "yellow", x.env.gitignore(ignored.pattern) + ".", x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION),
-      [x.env.evidenceGitignore(ignored.pattern)], gitignoreFinding);
+  if (misnamed || ignored) {
+    return makeCheck("env", title, "yellow", conventionProblems.join("; ") + ".", conventionFixes.join("; ") + ".",
+      conventionEvidence, [...misnamedFinding, ...gitignoreFinding]);
   }
   if (snapshot.partial) return makeCheck("env", title, "yellow", x.env.partial, partialFix(snapshot, x));
   return makeCheck("env", title, "green", used.size ? x.env.okUsed : x.env.okNone, x.noChange);
@@ -584,6 +593,13 @@ function completeEnvExample(existing: string | undefined, missing: string[]): st
 }
 
 const ENV_EXAMPLE_EXCEPTION = "!.env.example";
+const ENV_ASSIGNMENT = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/;
+/** Root files people name their env template when they do not know the convention. */
+export const MISNAMED_ENV_TEMPLATE = /^(?:env\.example|env\.sample|env\.template|example\.env|sample\.env|template\.env|\.env\.sample|\.env\.template|\.env\.example\.txt)$/i;
+/** Keeps the assignment and comment lines of a template written as prose or markdown, so the suggested file is a real dotenv file. */
+function assignmentsOnly(source: string): string {
+  return source.split(/\r?\n/).filter((line) => ENV_ASSIGNMENT.test(line) || /^\s*#/.test(line)).join("\n");
+}
 
 /**
  * The root .gitignore rule that would stop a new .env.example from being committed. Only reported when the
