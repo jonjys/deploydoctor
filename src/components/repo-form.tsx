@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { CATEGORIES } from "@/lib/categories";
 import { describeStack, type Stack } from "@/lib/stack";
 import { useLang, useT } from "@/components/lang";
@@ -248,8 +249,8 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
       {paywall && <div className="paywall" role="status"><strong>{t("paywall.title")}</strong>
         <p>{t("paywall.body")}</p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 14 }}>
-          <Link className="cta-button" href="/checkout?plan=day">{t("paywall.day")}</Link>
-          <Link className="cta-button" style={{ background: "transparent" }} href="/checkout?plan=week">{t("paywall.week")}</Link>
+          <ScanCheckoutButton plan="day" context={repoUrl.trim() || undefined}>{t("paywall.day")}</ScanCheckoutButton>
+          <ScanCheckoutButton plan="week" style={{ background: "transparent" }} context={repoUrl.trim() || undefined}>{t("paywall.week")}</ScanCheckoutButton>
           <Link className="cta-button" style={{ background: "transparent" }} href="/pricing">{t("paywall.cta")}</Link>
         </div>
       </div>}

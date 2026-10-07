@@ -9,6 +9,7 @@ import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { SiteNav } from "@/components/site-nav";
 import { CopyFixesButton } from "@/components/copy-fixes-button";
 import { CopyTextButton } from "@/components/copy-text-button";
+import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { SITE_URL } from "@/lib/site";
 import { getT } from "@/lib/lang";
 import { FIX_SERVICE_ENABLED } from "@/lib/fix-service";
@@ -216,7 +217,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         </div>
         <div className="action-buttons">
           <CopyFixes parts={parts} />
-          <Link className="cta-button" style={{ background: "transparent" }} href="/checkout?plan=day">{t("report.dayCta")}</Link>
+          <ScanCheckoutButton plan="day" style={{ background: "transparent" }} context={report.repo_url}>{t("report.dayCta")}</ScanCheckoutButton>
           {FIX_SERVICE_ENABLED && <WhenOpenRed checks={checkStates}>
             <Link className="cta-button" href={`/checkout?plan=fix-all&report=${id}`}>
               {t("report.fixAll")}

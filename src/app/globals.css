@@ -144,7 +144,8 @@ a { color: inherit; }
   transition: transform 150ms ease, background 150ms ease;
 }
 .scan-button:hover, .cta-button:hover, .copy-button:hover { background: #cafb4f; transform: translateY(-1px); }
-.scan-button:disabled { cursor: wait; opacity: 0.72; transform: none; }
+.scan-button:disabled, .cta-button:disabled, .cta-button[aria-busy="true"] { cursor: wait; opacity: 0.72; transform: none; }
+a.cta-button[aria-busy="true"]:hover { transform: none; background: var(--acid); }
 .form-error { margin: 16px 0 0; color: var(--red); font-size: 14px; }
 .trust-row {
   display: flex;

@@ -10,6 +10,7 @@ export type Plan = keyof typeof plans;
 export function isPlan(value: unknown): value is Plan {
   return typeof value === "string" && Object.hasOwn(plans, value);
 }
+export type ScanPlan = "day" | "week" | "public" | "private";
 /** Every paid pass or subscription may scan private repositories with a read-only token. */
 export function allowsPrivate(plan: Plan | null | undefined): boolean {
   return plan === "day" || plan === "week" || plan === "public" || plan === "private";
@@ -18,6 +19,6 @@ export function allowsPrivate(plan: Plan | null | undefined): boolean {
 export function hasHistory(plan: Plan | null | undefined): boolean {
   return plan === "public" || plan === "private";
 }
-export function isScanPlan(plan: Plan): plan is "day" | "week" | "public" | "private" {
+export function isScanPlan(plan: Plan): plan is ScanPlan {
   return plan === "day" || plan === "week" || plan === "public" || plan === "private";
 }

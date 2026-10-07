@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
+import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { plans } from "@/lib/plans";
 import { getT } from "@/lib/lang";
 
@@ -24,7 +25,7 @@ export default async function Pricing() {
         <li>{t("pricing.ci")}</li>
         {key === "week" && <li>{t("pricing.expires")}</li>}{key === "day" && <li>{t("pricing.expiresDay")}</li>}
         {key !== "week" && key !== "day" && <li>{t("pricing.cancel")}</li>}</ul>
-      <Link className="cta-button" href={`/checkout?plan=${key}`}>{key === "day" ? t("pricing.cta.day") : key === "week" ? t("pricing.cta.week") : t("pricing.cta.choose")} →</Link>
+      <ScanCheckoutButton plan={key}>{key === "day" ? t("pricing.cta.day") : key === "week" ? t("pricing.cta.week") : t("pricing.cta.choose")} →</ScanCheckoutButton>
     </article>)}
   </section><section className="pricing-notes"><h2>{t("pricing.notesTitle")}</h2>
     <p>{t("pricing.note2")}</p>

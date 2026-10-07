@@ -1,15 +1,21 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { customerSession, cookieOptions } from "@/lib/access";
+import { checkoutContext, checkoutSessionParams, isProbeHeader } from "@/lib/checkout-guard";
 import { digest } from "@/lib/session-token";
-import { isPlan, isScanPlan, plans } from "@/lib/plans";
+import { isPlan, isScanPlan } from "@/lib/plans";
 import { getReport } from "@/lib/reports";
 import { priceFor, sameOrigin, stripeClient } from "@/lib/stripe";
 import { langFromRequest, t } from "@/lib/i18n";
 import { appOrigin } from "@/lib/site";
 import { FIX_SERVICE_ENABLED, isFixPlan } from "@/lib/fix-service";
 
+function probeResponse() {
+  return Response.json({ ok: true, skipped: "probe" });
+}
+
 export async function POST(request: Request) {
+  if (isProbeHeader(request.headers)) return probeResponse();
   const lang = langFromRequest(request);
   if (!sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });
   try {
@@ -36,23 +42,11 @@ export async function POST(request: Request) {
     const existing = await customerSession();
     const nonce = randomBytes(32).toString("hex");
     const origin = appOrigin(request);
-    const metadata = { app: "deploydoctor", plan, reportId, checkId,
-      context: typeof body.context === "string" ? body.context.slice(0, 300) : "",
-      browser: digest(`checkout:${nonce}`) };
-    const session = await stripe.checkout.sessions.create({
-      mode: plans[plan].mode,
-      line_items: [priceFor(plan, lang)],
-      locale: lang,
-      ...(existing ? { customer: existing.customerId } : plans[plan].mode === "payment" ? { customer_creation: "always" as const } : {}),
-      metadata,
-      ...(plans[plan].mode === "subscription" ? { subscription_data: { metadata: { app: "deploydoctor", plan } } } : {}),
-      success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/checkout?plan=${plan}${reportId ? `&report=${reportId}&check=${checkId}` : ""}`,
-      integration_identifier: `deploydoctor-${Array.from(randomBytes(8), (b) => String.fromCharCode(97 + b % 26)).join("")}`,
-      custom_fields: [{ key: "context", label: { type: "custom", custom: t(lang, "pay.field") },
-        type: "text", optional: true, text: { maximum_length: 255, ...(metadata.context ? { default_value: metadata.context.slice(0, 255) } : {}) } }],
-      // Stripe's Dashboard decides which eligible payment methods to show.
-    });
+    const session = await stripe.checkout.sessions.create(checkoutSessionParams({
+      plan, lang, reportId, checkId, context: checkoutContext(body.context), browser: digest(`checkout:${nonce}`),
+      origin, customerId: existing?.customerId, lineItem: priceFor(plan, lang),
+      integrationIdentifier: `deploydoctor-${Array.from(randomBytes(8), (b) => String.fromCharCode(97 + b % 26)).join("")}`,
+    }));
     (await cookies()).set("dd_checkout", nonce, { ...cookieOptions, maxAge: 24 * 60 * 60 });
     return Response.json({ url: session.url });
   } catch (error) {
