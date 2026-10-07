@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { db, query, rpc } from "@/lib/db";
-import { digest, verifySession, type CustomerSession } from "@/lib/session-token";
+import { digest, verifyApiToken, verifySession, type CustomerSession } from "@/lib/session-token";
 
 export const SESSION_COOKIE = "dd_customer";
 export const cookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/" };
@@ -11,6 +11,22 @@ export type Entitlement = {
 };
 export async function customerSession() {
   return verifySession((await cookies()).get(SESSION_COOKIE)?.value);
+}
+/** The API token from an Authorization header, or null when the request carries none. */
+export function bearerToken(request: Request): string | null {
+  const header = request.headers.get("authorization");
+  const match = header ? /^Bearer\s+(\S+)$/i.exec(header.trim()) : null;
+  return match ? match[1] : null;
+}
+/**
+ * Who is calling an API route: a CI token when one is sent, otherwise the browser cookie.
+ * A token that does not verify is an error (the caller clearly meant to authenticate), never a silent fallback to the cookie.
+ */
+export async function requestCustomer(request: Request): Promise<{ customer: CustomerSession | null; viaToken: boolean; invalidToken: boolean }> {
+  const token = bearerToken(request);
+  if (token === null) return { customer: await customerSession(), viaToken: false, invalidToken: false };
+  const customer = verifyApiToken(token);
+  return { customer, viaToken: true, invalidToken: customer === null };
 }
 export async function activePlan(session: CustomerSession | null): Promise<Entitlement | null> {
   if (!session) return null;

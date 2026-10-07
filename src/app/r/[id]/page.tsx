@@ -28,7 +28,27 @@ const severityOf: Record<CheckId, "build" | "runtime" | "security"> = {
   env: "runtime", "server-libs": "runtime", supabase: "runtime", prisma: "runtime",
   secrets: "security",
 };
+/** Official docs for each failure class, so a report never asks you to take its word for it. */
+const docsFor: Record<CheckId, string> = {
+  "next-entry": "https://nextjs.org/docs/app/getting-started/project-structure",
+  imports: "https://vercel.com/guides/how-do-i-resolve-a-module-not-found-error",
+  "server-libs": "https://nextjs.org/docs/app/api-reference/edge",
+  "build-config": "https://vercel.com/docs/deployments/configure-a-build",
+  dependencies: "https://vercel.com/docs/package-managers",
+  env: "https://vercel.com/docs/environment-variables",
+  secrets: "https://vercel.com/docs/environment-variables/sensitive-environment-variables",
+  supabase: "https://supabase.com/docs/guides/auth/server-side/nextjs",
+  prisma: "https://www.prisma.io/docs/orm/prisma-client/deployment/serverless/deploy-to-vercel",
+};
 const partialReasonKeys = ["truncated_tree", "file_limit", "file_size", "time_limit", "rate_limit", "read_error"] as const;
+
+/** A ready-to-paste GitHub issue for one failed check. */
+function issueMarkdown(title: string, explanation: string, evidence: string[], fix: string, link: string): string {
+  const lines = [`## ${title}`, "", explanation, ""];
+  if (evidence.length) lines.push("**Evidence**", "", ...evidence.map((item) => `- ${item}`), "");
+  lines.push("**Suggested fix**", "", fix, "", `Found by DeployDoctor: ${link}`);
+  return lines.join("\n");
+}
 
 const statusSymbols: Record<CheckStatus, string> = {
   red: "×",
@@ -169,6 +189,16 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                       <pre><code>{check.suggestedFile.content}</code></pre>
                     </div>
                   ) : null}
+                  {check.status !== "green" && (
+                    <div className="card-links">
+                      {docsFor[check.id] && <a href={docsFor[check.id]} target="_blank" rel="noreferrer">{t("report.docsLink")} ↗</a>}
+                      {check.status === "red" && (
+                        <CopyTextButton
+                          text={issueMarkdown(check.title, check.explanation, check.evidence, check.fix, `${SITE_URL}/r/${id}#check-${check.id}`)}
+                          label={t("report.copyIssue")} copiedLabel={t("report.copied")} />
+                      )}
+                    </div>
+                  )}
                   {FIX_SERVICE_ENABLED && check.status === "red" && <div className="repair-cta"><p>{t("report.fixCta")}</p>
                     <Link href={`/checkout?plan=fix-one&report=${id}&check=${check.id}`}>{t("report.fixOne")}</Link>
                     <Link href={`/checkout?plan=fix-all&report=${id}`}>{t("report.fixAll")}</Link>
