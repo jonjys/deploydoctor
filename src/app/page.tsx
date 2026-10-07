@@ -79,6 +79,24 @@ export default async function Home() {
         </ol>
       </section>
 
+      <section className="offer-panel" aria-labelledby="offer-heading">
+        <div>
+          <p className="section-kicker">{t("home.offer.kicker")}</p>
+          <h2 id="offer-heading">{t("home.offer.h2")}</h2>
+        </div>
+        <div>
+          <ul className="offer-list">
+            <li>{t("home.offer.free")}</li>
+            <li>{t("home.offer.day")}</li>
+            <li>{t("home.offer.week")}</li>
+          </ul>
+          <p className="offer-actions">
+            <Link className="offer-cta" href="/checkout?plan=day">{t("home.offer.cta")}</Link>
+            <Link href="/pricing">{t("home.offer.all")}</Link>
+          </p>
+        </div>
+      </section>
+
       <footer className="footer">
         <span>DeployDoctor</span>
         <span>{t("home.footerNote")} <Link href="/guides">{t("nav.guides")}</Link></span>
