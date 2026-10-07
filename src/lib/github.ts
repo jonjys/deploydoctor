@@ -1,6 +1,6 @@
 import "server-only";
 
-import { analyzeSnapshot, type RepositorySnapshot } from "@/lib/analyzer";
+import { analyzeSnapshot, MISNAMED_ENV_TEMPLATE, type RepositorySnapshot } from "@/lib/analyzer";
 import { detectStack, type Stack } from "@/lib/stack";
 import { t, type Lang, type MessageKey } from "@/lib/i18n";
 import type { Category, ReportResults } from "@/types/report";
@@ -107,7 +107,7 @@ async function githubRequest<T>(pathname: string, token?: string): Promise<T> {
 
 function priorityFor(pathname: string): number {
   if (pathname === "package.json") return 0;
-  if (/(?:^|\/)\.env(?:\..+)?$/.test(pathname) || pathname === ".gitignore") return 1;
+  if (/(?:^|\/)\.env(?:\..+)?$/.test(pathname) || MISNAMED_ENV_TEMPLATE.test(pathname) || pathname === ".gitignore") return 1;
   if (/^(?:tsconfig|jsconfig|vercel)\.json$/.test(pathname) || /\.prisma$/.test(pathname) || ROOT_LOCKFILE.test(pathname)
     || /^next\.config\.[cm]?[jt]s$/.test(pathname)) return 2;
   if (API_ROUTE.test(pathname)) return 3;
@@ -156,6 +156,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
           entry.path === "vercel.json" ||
           /^(?:tsconfig|jsconfig)\.json$/.test(entry.path) ||
           /\.prisma$/.test(entry.path) ||
+          MISNAMED_ENV_TEMPLATE.test(entry.path) ||
           /(?:^|\/)\.env(?:\..+)?$/.test(entry.path)))),
     )
     .sort((left, right) => priorityFor(left.path) - priorityFor(right.path) || left.path.localeCompare(right.path));
