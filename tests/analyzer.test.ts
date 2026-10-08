@@ -322,6 +322,19 @@ test("env reads through destructuring and optional chaining are found", () => {
   assert.deepEqual(results.checks[0].findings?.map((finding) => [finding.problem, finding.line]), [["API_KEY is missing from .env.example", 1]]);
 });
 
+test("GitHub Actions runner variables are not app env vars, but GITHUB_TOKEN still is", () => {
+  const results = analyzeSnapshot(snapshot([...nextEntries, { path: ".env.example", type: "blob" }, { path: "action", type: "tree" }, { path: "action/scan.mjs", type: "blob" }], {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "DATABASE_URL=\n",
+    "action/scan.mjs": [
+      "const out = process.env.GITHUB_OUTPUT; const sum = process.env.GITHUB_STEP_SUMMARY; const ev = process.env.GITHUB_EVENT_PATH;",
+      "const url = process.env.ACTIONS_ID_TOKEN_REQUEST_URL; const tmp = process.env.RUNNER_TEMP; const input = process.env.INPUT_FAIL_ON;",
+      "const gh = process.env.GITHUB_TOKEN;",
+    ].join("\n"),
+  }), { checks: ["env"] });
+  assert.deepEqual(results.checks[0].findings?.map((finding) => finding.problem), ["GITHUB_TOKEN is missing from .env.example"]);
+});
+
 test("env names inside comments are not env reads", () => {
   const source = [
     "/** Reads process.env.X and `const { Y } = process.env` at start-up. */",
