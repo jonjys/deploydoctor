@@ -278,6 +278,18 @@ test("Vercel system env variables are built in, but custom variables must be doc
   assert.deepEqual(env.findings?.map((finding) => finding.problem), ["MY_SECRET is missing from .env.example"]);
 });
 
+test("GitHub Actions runner variables are built in, but an app's own GITHUB_TOKEN still must be documented", () => {
+  const results = analyzeSnapshot(snapshot(nextEntries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "app/page.tsx": "const a = process.env.GITHUB_OUTPUT; const b = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;"
+      + " const c = process.env.RUNNER_TEMP; const d = process.env.GITHUB_SHA; const e = process.env.GITHUB_TOKEN;"
+      + " export default function Page() { return null }",
+  }), { checks: ["env"] });
+  const env = results.checks[0];
+  assert.equal(env.status, "red");
+  assert.deepEqual(env.findings?.map((finding) => finding.problem), ["GITHUB_TOKEN is missing from .env.example"]);
+});
+
 test("an import that only matches a file with different letter case is red with the exact name", () => {
   const entries: RepositorySnapshot["entries"] = [...nextEntries,
     { path: "components", type: "tree" }, { path: "components/ui", type: "tree" },
