@@ -40,6 +40,11 @@ const en = {
   "home.preflight": "THE PRE-FLIGHT",
   "home.checksHeading": "Only the checks your stack needs.",
   "home.checkWhenUsed": "only when your stack uses it",
+  "home.pass.kicker": "PRIVATE REPO OR TEAM WORK?",
+  "home.pass.h2": "Scan your private code for 19 kr.",
+  "home.pass.copy": "A 24-hour pass: unlimited scans on public and private repos, with a read-only GitHub token you control. One-time payment ($2), no subscription, nothing renews.",
+  "home.pass.cta": "Get 24 hours · 19 kr →",
+  "home.pass.more": "See all plans",
   "home.footerNote": "Reads metadata and source through the GitHub REST API.",
 
   "form.urlLabel": "Public GitHub repository URL",
@@ -340,6 +345,11 @@ const sv: Record<MessageKey, string> = {
   "home.preflight": "FÖRE AVFÄRD",
   "home.checksHeading": "Bara de kontroller din stack behöver.",
   "home.checkWhenUsed": "bara när din stack använder det",
+  "home.pass.kicker": "PRIVAT REPO ELLER TEAMARBETE?",
+  "home.pass.h2": "Skanna din privata kod för 19 kr.",
+  "home.pass.copy": "Ett 24-timmarspass: obegränsade skanningar av publika och privata repon, med en skrivskyddad GitHub-token som du styr själv. Engångsbetalning ($2), ingen prenumeration, inget förnyas.",
+  "home.pass.cta": "Köp 24 timmar · 19 kr →",
+  "home.pass.more": "Se alla planer",
   "home.footerNote": "Läser metadata och källkod via GitHubs REST-API.",
 
   "form.urlLabel": "URL till publikt GitHub-repo",

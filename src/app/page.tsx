@@ -7,6 +7,7 @@ import { activePlan, customerSession } from "@/lib/access";
 import { SiteNav } from "@/components/site-nav";
 import { analysisText } from "@/lib/analysis-text";
 import { getT } from "@/lib/lang";
+import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 
 export default async function Home() {
   const plan = await activePlan(await customerSession());
@@ -78,6 +79,20 @@ export default async function Home() {
           ))}
         </ol>
       </section>
+
+      {!plan && (
+        <section className="pass-strip" aria-labelledby="pass-heading">
+          <div>
+            <p className="section-kicker">{t("home.pass.kicker")}</p>
+            <h2 id="pass-heading">{t("home.pass.h2")}</h2>
+            <p>{t("home.pass.copy")}</p>
+          </div>
+          <div className="pass-actions">
+            <ScanCheckoutButton plan="day">{t("home.pass.cta")}</ScanCheckoutButton>
+            <Link href="/pricing">{t("home.pass.more")}</Link>
+          </div>
+        </section>
+      )}
 
       <footer className="footer">
         <span>DeployDoctor</span>

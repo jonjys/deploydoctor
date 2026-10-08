@@ -562,3 +562,19 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .guide-more ul { margin: 0; padding-left: 20px; }
 .guide-more a { color: var(--ink); }
 @media (prefers-color-scheme: dark) { .guide-cta { background: #050b09; border-color: var(--line); } }
+
+.pass-strip {
+  display: grid;
+  grid-template-columns: 1.4fr auto;
+  align-items: center;
+  gap: 40px;
+  margin: 0 0 56px;
+  padding: 36px 40px;
+  border: 1px solid var(--ink);
+  border-radius: 12px;
+}
+.pass-strip h2 { margin: 10px 0 8px; font-size: clamp(26px, 3vw, 36px); line-height: 1.1; letter-spacing: -0.035em; }
+.pass-strip p:not(.section-kicker) { margin: 0; max-width: 560px; color: var(--muted); }
+.pass-actions { display: flex; flex-direction: column; align-items: stretch; gap: 12px; text-align: center; }
+.pass-actions a:not(.cta-button) { color: var(--muted); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 760px) { .pass-strip { grid-template-columns: 1fr; gap: 22px; padding: 26px 22px; } }
