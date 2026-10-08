@@ -1,0 +1,13 @@
+name: DeployDoctor
+on:
+  pull_request:
+jobs:
+  deploydoctor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # GitHub proves which public repo is asking; no token needed
+    steps:
+      - uses: actions/checkout@v4
+      # This repository dogfoods the Action from its own source, so a change to it is tested on the PR that makes it.
+      - uses: ./action
