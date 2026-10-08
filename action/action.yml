@@ -6,7 +6,7 @@ branding:
   color: green
 inputs:
   token:
-    description: "Optional. DeployDoctor API token from My scans while a pass is active, for private repositories and unlimited scans. Leave it out on a public repository to scan for free (3 scans a day per repository); the workflow then needs `permissions: id-token: write`."
+    description: "Optional. DeployDoctor API token from My scans while a pass is active, for private repositories and unlimited scans. Leave it out on a public repository to scan for free (3 scans a day per repository); the workflow then needs the id-token write permission."
     required: false
     default: ""
   repository:
@@ -18,7 +18,7 @@ inputs:
     required: false
     default: ${{ github.event.pull_request.head.sha || github.sha }}
   github-token:
-    description: Only for private repositories. A token with read access to the repository contents, usually `${{ github.token }}`. It is forwarded to DeployDoctor for this scan and never stored.
+    description: Only for private repositories. A token with read access to the repository contents, usually the workflow's own github.token. It is forwarded to DeployDoctor for this scan and never stored.
     required: false
     default: ""
   fail-on:
