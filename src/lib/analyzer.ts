@@ -149,11 +149,19 @@ function possibleImportTargets(base: string): string[] {
   return targets;
 }
 
-function aliasRoots(snapshot: RepositorySnapshot): string[] {
+/**
+ * Every `@/...` alias from tsconfig paths, longest prefix first, so `@/public/*` wins over `@/*` the way
+ * TypeScript resolves it. Without a tsconfig entry, `@/` means `src/` or the repository root.
+ */
+function aliasRoots(snapshot: RepositorySnapshot): Array<{ prefix: string; roots: string[] }> {
   const tsconfig = snapshot.contents.get("tsconfig.json") ?? snapshot.contents.get("jsconfig.json") ?? "";
-  const mapped = tsconfig.match(/["']@\/\*["']\s*:\s*\[\s*["']([^"']+)\*["']/)?.[1];
-  if (mapped) return [mapped.replace(/^\.\//, "").replace(/\/$/, "")];
-  return ["src", ""];
+  const aliases: Array<{ prefix: string; roots: string[] }> = [];
+  for (const match of tsconfig.matchAll(/["'](@\/(?:[^"'*]*\/)?)\*["']\s*:\s*\[([^\]]*)\]/g)) {
+    const roots = [...match[2].matchAll(/["']([^"']*)\*["']/g)].map((target) => target[1].replace(/^\.\//, "").replace(/\/$/, ""));
+    if (roots.length) aliases.push({ prefix: match[1], roots });
+  }
+  if (!aliases.some((alias) => alias.prefix === "@/")) aliases.push({ prefix: "@/", roots: ["src", ""] });
+  return aliases.sort((left, right) => right.prefix.length - left.prefix.length);
 }
 
 /** Rebuilds `wanted` with the letter case of `actual` wherever the two only differ in case. */
@@ -183,8 +191,9 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
           return relative.startsWith("../") ? relative : `./${relative}`;
         } }];
       } else if (specifier.startsWith("@/")) {
-        bases = aliases.map((root) => ({ base: path.posix.join(root, specifier.slice(2)),
-          toSpecifier: (resolved: string) => `@/${root ? resolved.slice(root.length + 1) : resolved}` }));
+        const alias = aliases.find((candidate) => specifier.startsWith(candidate.prefix))!;
+        bases = alias.roots.map((root) => ({ base: path.posix.join(root, specifier.slice(alias.prefix.length)),
+          toSpecifier: (resolved: string) => `${alias.prefix}${root ? resolved.slice(root.length + 1) : resolved}` }));
       } else {
         continue;
       }
@@ -278,10 +287,15 @@ function edgeRuntimeFindings(snapshot: RepositorySnapshot, x: AnalysisText): Fin
 
 function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const manifest = parsePackageJson(snapshot);
-  const packages = { ...manifest?.devDependencies, ...manifest?.dependencies };
-  const riskyPackages = Object.keys(packages).filter((name) =>
-    /^(?:playwright|playwright-core|@playwright\/test|puppeteer|puppeteer-core|sqlite3|better-sqlite3)$/.test(name),
-  );
+  const RISKY = /^(?:playwright|playwright-core|@playwright\/test|puppeteer|puppeteer-core|sqlite3|better-sqlite3)$/;
+  // A devDependency only matters when application code imports it: Playwright as an end-to-end test runner never ships.
+  const TOOLING_FILE = /(?:^|\/)(?:e2e|playwright|cypress|\.storybook)\/|\.config\.[cm]?[jt]s$/i;
+  const importedByApp = (name: string) => [...snapshot.contents].some(([file, source]) =>
+    SOURCE_EXTENSION.test(file) && !TEST_FILE.test(file) && !TOOLING_FILE.test(file) && extractImports(source).some(({ specifier }) => specifier === name || specifier.startsWith(`${name}/`)));
+  const riskyPackages = [
+    ...Object.keys(manifest?.dependencies ?? {}).filter((name) => RISKY.test(name)),
+    ...Object.keys(manifest?.devDependencies ?? {}).filter((name) => RISKY.test(name) && !(name in (manifest?.dependencies ?? {})) && importedByApp(name)),
+  ];
   const fsWrites: string[] = [];
   const writePattern = /\b(?:writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream|mkdir|mkdirSync|rename|renameSync|unlink|unlinkSync|rm|rmSync)\s*\(/;
 
