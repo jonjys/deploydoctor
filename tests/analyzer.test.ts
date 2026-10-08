@@ -454,6 +454,41 @@ test("build configuration: one lockfile, a build script and supported Node range
   assert.equal(viaVercel.checks.find((check) => check.id === "build-config")?.status, "green");
 });
 
+test("Playwright as a test-only devDependency is not flagged, but an app import of it is", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "app/api/pdf/route.ts", type: "blob" }, { path: "e2e/home.spec.ts", type: "blob" }];
+  const devOnly = analyzeSnapshot(snapshot(entries, {
+    ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" }, devDependencies: { "@playwright/test": "^1.63.0", playwright: "^1.63.0" } }),
+    "e2e/home.spec.ts": 'import { test } from "@playwright/test"; test("home", async () => {});',
+    "app/api/pdf/route.ts": 'export async function GET() { return new Response("ok") }',
+  }), { checks: ["vercel"] });
+  assert.equal(devOnly.checks.find((check) => check.id === "server-libs")?.status, "green");
+
+  const imported = analyzeSnapshot(snapshot(entries, {
+    ...page,
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" }, devDependencies: { playwright: "^1.63.0" } }),
+    "app/api/pdf/route.ts": 'import { chromium } from "playwright"; export async function GET() { await chromium.launch(); return new Response("ok") }',
+  }), { checks: ["vercel"] });
+  assert.equal(imported.checks.find((check) => check.id === "server-libs")?.status, "red");
+});
+
+test("a second tsconfig alias such as @/public/* resolves before @/*", () => {
+  const entries: RepositorySnapshot["entries"] = [
+    { path: "package.json", type: "blob" }, { path: "tsconfig.json", type: "blob" },
+    { path: "src", type: "tree" }, { path: "src/app", type: "tree" }, { path: "src/app/page.tsx", type: "blob" }, { path: "src/lib", type: "tree" }, { path: "src/lib/util.ts", type: "blob" },
+    { path: "public", type: "tree" }, { path: "public/logo.svg", type: "blob" },
+  ];
+  const results = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "tsconfig.json": JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"], "@/public/*": ["./public/*"] } } }),
+    "src/app/page.tsx": 'import logo from "@/public/logo.svg"; import { util } from "@/lib/util"; import missing from "@/public/missing.svg"; export default function Page() { return null }',
+    "src/lib/util.ts": "export const util = 1;",
+  }), { checks: ["next"] });
+  const imports = results.checks.find((check) => check.id === "imports");
+  assert.equal(imports?.status, "red");
+  assert.deepEqual(imports?.findings?.map((finding) => finding.problem.includes("missing.svg")), [true]);
+});
+
 test("Node-only imports in Edge runtime code are red in server-libs", () => {
   const entries: RepositorySnapshot["entries"] = [...nextEntries,
     { path: "middleware.ts", type: "blob" }, { path: "app/api/og/route.ts", type: "blob" }];
