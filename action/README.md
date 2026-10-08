@@ -18,7 +18,7 @@ jobs:
       - uses: jonjys/deploydoctor/action@master
 ```
 
-When the free scans for the day are used, the job prints a warning and passes; it never blocks a pull request for that.
+When the free scans for the day are used, the job prints a warning and passes; it never blocks a pull request for that. Pull requests from forks and from Dependabot are skipped the same way, because GitHub does not give them an OIDC token.
 
 Private repository or unlimited scans: create an API token under My scans while a pass is active and pass it as `token`. For a private repository, also add `github-token: ${{ github.token }}` so the scan can read it.
 

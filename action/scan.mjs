@@ -1,7 +1,7 @@
 // DeployDoctor GitHub Action. Plain Node, no dependencies: it POSTs to /api/reports with the API token,
 // or without one with a GitHub OIDC token (free on public repositories), writes the result to the job
 // summary, exposes outputs and fails the job according to `fail-on`.
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 
 const env = (name, fallback = "") => (process.env[name] ?? fallback).trim();
 const token = env("DD_TOKEN");
@@ -17,12 +17,31 @@ const warn = (message) => { console.log(`::warning::${message}`); process.exit(0
 const output = (name, value) => { if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`); };
 const summary = (markdown) => { if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${markdown}\n`); };
 
+// True for a pull request from a fork or from Dependabot, which run without OIDC.
+function untrustedPullRequest() {
+  if (env("GITHUB_ACTOR") === "dependabot[bot]") return true;
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (!eventPath) return false;
+  try {
+    const head = JSON.parse(readFileSync(eventPath, "utf8"))?.pull_request?.head;
+    if (!head) return false;
+    return head.repo?.full_name !== env("GITHUB_REPOSITORY");
+  } catch {
+    return false;
+  }
+}
 
 // Without a token, ask GitHub for an OIDC token that proves which repository this workflow runs in.
 async function githubOidcToken() {
   const url = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
   const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
   if (!url || !requestToken) {
+    // GitHub never issues OIDC tokens to pull requests from forks or Dependabot. Skip instead of failing,
+    // so a free setup does not put a red check on every outside contributor's pull request.
+    if (untrustedPullRequest()) {
+      summary("DeployDoctor skipped this pull request: GitHub does not issue OIDC tokens to pull requests from forks or Dependabot. The free scan runs on pull requests from this repository's own branches.");
+      warn("DeployDoctor skipped: GitHub does not issue OIDC tokens to pull requests from forks or Dependabot.");
+    }
     fail("No `token` given and no GitHub OIDC token available. For a free scan of a public repository add `permissions: id-token: write` (and `contents: read`) to the job, or pass an API token from My scans.");
   }
   const response = await fetch(`${url}&audience=${encodeURIComponent(apiUrl)}`, {
