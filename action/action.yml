@@ -18,7 +18,7 @@ inputs:
     required: false
     default: ${{ github.event.pull_request.head.sha || github.sha }}
   github-token:
-    description: Only for private repositories. A token with read access to the repository contents, usually `${{ github.token }}`. It is forwarded to DeployDoctor for this scan and never stored.
+    description: Only for private repositories. A token with read access to the repository contents, usually the workflow's own github.token. It is forwarded to DeployDoctor for this scan and never stored.
     required: false
     default: ""
   fail-on:
