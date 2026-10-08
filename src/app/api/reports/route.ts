@@ -1,7 +1,8 @@
 import { analyzeGitHubRepository, GitHubApiError, parseGitHubRepoUrl } from "@/lib/github";
 import { parseGitRef } from "@/lib/git-ref";
 import { saveReport } from "@/lib/reports";
-import { activePlan, finishScan, requestCustomer, reserveScan } from "@/lib/access";
+import { activePlan, bearerToken, finishScan, requestCustomer, reserveScan } from "@/lib/access";
+import { OIDC_HEADER, verifyGitHubOidc } from "@/lib/github-oidc";
 import { sameOrigin } from "@/lib/stripe";
 import { parseChecks } from "@/lib/categories";
 import { allowsPrivate } from "@/lib/plans";
@@ -18,12 +19,26 @@ export const maxDuration = 60;
  * CI and scripts: `Authorization: Bearer ddt_...` (an API token from /account), same body plus an optional
  * `ref` (branch, tag or commit), answered with the full report as JSON. A token needs an active pass and
  * is never subject to the free daily limit, so a GitHub Actions runner's shared IP does not matter.
+ * Free CI: the GitHub Action sends a GitHub OIDC token in `x-github-oidc-token` instead. It only scans
+ * the public repository the workflow runs in, against that repository's own free daily quota.
  */
 export async function POST(request: Request) {
   const lang = langFromRequest(request);
   const { customer, viaToken, invalidToken } = await requestCustomer(request);
   if (invalidToken) return Response.json({ error: t(lang, "err.badToken") }, { status: 401 });
-  if (!viaToken && !sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });
+  // Free Action scans: GitHub vouches for the repository; an API token, when sent, always wins.
+  let oidcRepo: string | null = null;
+  const oidcToken = bearerToken(request) === null ? request.headers.get(OIDC_HEADER) : null;
+  if (oidcToken) {
+    const claims = await verifyGitHubOidc(oidcToken, SITE_URL);
+    if (!claims) return Response.json({ error: t(lang, "err.badOidc") }, { status: 401 });
+    if (claims.repository_visibility !== "public") {
+      return Response.json({ error: t(lang, "err.oidcPrivate"), paywall: true, pricingUrl: `${SITE_URL}/pricing` }, { status: 402 });
+    }
+    oidcRepo = claims.repository;
+  }
+  const viaCi = viaToken || oidcRepo !== null;
+  if (!viaCi && !sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });
   let reservation: string | undefined;
   let saved = false;
   try {
@@ -39,20 +54,23 @@ export async function POST(request: Request) {
       return Response.json({ error: t(lang, "err.repoUrl") }, { status: 400 });
     }
 
-    parseGitHubRepoUrl(body.repoUrl);
+    const parsed = parseGitHubRepoUrl(body.repoUrl);
+    if (oidcRepo && `${parsed.owner}/${parsed.name}`.toLowerCase() !== oidcRepo.toLowerCase()) {
+      return Response.json({ error: t(lang, "err.oidcRepo") }, { status: 403 });
+    }
     // Validate before reserving a scan so a bad payload never costs one of the day's free scans.
     const checks = parseChecks(body.checks);
     if (checks === null) return Response.json({ error: t(lang, "err.badChecks") }, { status: 400 });
-    const ref = viaToken ? parseGitRef(body.ref) : undefined;
+    const ref = viaCi ? parseGitRef(body.ref) : undefined;
     if (ref === null) return Response.json({ error: t(lang, "err.badRef") }, { status: 400 });
     const plan = await activePlan(customer);
     if (viaToken && !plan) return Response.json({ error: t(lang, "err.tokenPlan"), paywall: true, pricingUrl: `${SITE_URL}/pricing` }, { status: 402 });
     const privateToken = typeof body.privateToken === "string" ? body.privateToken.trim() : undefined;
-    if (privateToken && (!allowsPrivate(plan?.plan) || privateToken.length > 300)) {
+    if (privateToken && (oidcRepo || !allowsPrivate(plan?.plan) || privateToken.length > 300)) {
       return Response.json({ error: t(lang, "err.privatePlan"), paywall: true }, { status: 402 });
     }
     if (!plan) {
-      const quota = await reserveScan(request);
+      const quota = await reserveScan(request, oidcRepo ? `repo:${oidcRepo.toLowerCase()}` : undefined);
       if (!quota.allowed) return Response.json({ error: t(lang, "err.dailyLimit"),
         paywall: true, resetsAt: quota.resetsAt }, { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((Date.parse(quota.resetsAt) - Date.now()) / 1000))) } });
       reservation = quota.id;
@@ -60,7 +78,7 @@ export async function POST(request: Request) {
     const { canonicalUrl, results, isPrivate } = await analyzeGitHubRepository(body.repoUrl, { privateToken, checks, lang, ref });
     const report = await saveReport(canonicalUrl, results, customer?.customerId, isPrivate);
     saved = true;
-    if (viaToken) return Response.json(reportJson(report), { status: 201, headers: { "Cache-Control": "no-store" } });
+    if (viaCi) return Response.json(reportJson(report), { status: 201, headers: { "Cache-Control": "no-store" } });
     return Response.json({ id: report.id, href: `/r/${report.id}` }, { status: 201 });
   } catch (error) {
     if (error instanceof SyntaxError) {

@@ -42,10 +42,11 @@ export function hashRequestIp(request: Request) {
   if (!ip) throw new Error("Could not check today's scan allowance; try again.");
   return digest(`ip:${ip}`);
 }
-export async function reserveScan(request: Request) {
+/** Reserves one of today's free scans: per visitor IP, or per repository for free GitHub Action scans. */
+export async function reserveScan(request: Request, key?: string) {
   const id = crypto.randomUUID();
   const result = await rpc<{ allowed: boolean; remaining: number; resetsAt: string }>("reserve_scan", {
-    p_ip_hash: hashRequestIp(request), p_id: id,
+    p_ip_hash: key ? digest(key) : hashRequestIp(request), p_id: id,
   });
   return { ...result, id };
 }

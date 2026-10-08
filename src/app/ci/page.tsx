@@ -19,12 +19,17 @@ on:
 jobs:
   deploydoctor:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # lets GitHub prove which public repo is asking; no account, no secret
     steps:
-      - uses: jonjys/deploydoctor/action@master
+      - uses: jonjys/deploydoctor/action@master`;
+
+const PAID_WORKFLOW = `      - uses: jonjys/deploydoctor/action@master
         with:
           token: \${{ secrets.DEPLOYDOCTOR_TOKEN }}
           # Private repository? Let the scan read it:
-          # github-token: \${{ github.token }}`;
+          github-token: \${{ github.token }}`;
 
 const CURL = `curl -s -X POST ${SITE_URL}/api/reports \\
   -H "Authorization: Bearer $DEPLOYDOCTOR_TOKEN" \\
@@ -35,7 +40,7 @@ export default function CiPage() {
   const schema = { "@context": "https://schema.org", "@type": "SoftwareApplication", name: "DeployDoctor GitHub Action",
     applicationCategory: "DeveloperApplication", operatingSystem: "GitHub Actions", url: `${SITE_URL}/ci`,
     description: "Scans a pull request for the mistakes that break a Vercel deploy, before Vercel builds it.",
-    offers: { "@type": "Offer", price: "5", priceCurrency: "USD", description: "Included in every DeployDoctor pass." } };
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free on public repositories, 3 scans a day per repository. Unlimited and private repositories with any DeployDoctor pass." } };
   return (
     <main className="site-shell">
       <SiteNav current="ci" />
@@ -50,19 +55,24 @@ export default function CiPage() {
         </p>
 
         <section>
-          <h2>1. Create an API token</h2>
+          <h2>1. Add the workflow. Free on public repositories.</h2>
           <p>
-            Open <Link href="/account">My scans</Link> in the browser you paid in and click Create API token. Tokens work while a pass is
-            active, which is any pass: {plans.day.price} for 24 hours, {plans.week.price} for 7 days or {plans.public.price} a month.
-            Store it as a repository secret named <code>DEPLOYDOCTOR_TOKEN</code> under Settings, Secrets and variables, Actions.
+            Save this as <code>.github/workflows/deploydoctor.yml</code>. No account, no token, no secret: the <code>id-token: write</code> permission lets
+            GitHub sign a short-lived proof of which repository is asking, and DeployDoctor only scans that repository. Each public repository gets
+            3 free scans a day; when they are used, the job warns and passes instead of blocking the pull request.
           </p>
+          <pre><code>{WORKFLOW}</code></pre>
+          <p className="ci-copy"><CopyTextButton text={WORKFLOW} label="Copy workflow" copiedLabel="Copied" /></p>
         </section>
 
         <section>
-          <h2>2. Add the workflow</h2>
-          <p>Save this as <code>.github/workflows/deploydoctor.yml</code>. The action scans the pull request head, not the default branch.</p>
-          <pre><code>{WORKFLOW}</code></pre>
-          <p className="ci-copy"><CopyTextButton text={WORKFLOW} label="Copy workflow" copiedLabel="Copied" /></p>
+          <h2>2. Private repository or more than 3 pull requests a day</h2>
+          <p>
+            Open <Link href="/account">My scans</Link> in the browser you paid in and click Create API token. Tokens work while a pass is
+            active, which is any pass: {plans.day.price} for 24 hours, {plans.week.price} for 7 days or {plans.public.price} a month, and are never
+            subject to the daily limit. Store it as a repository secret named <code>DEPLOYDOCTOR_TOKEN</code> under Settings, Secrets and variables, Actions.
+          </p>
+          <pre><code>{PAID_WORKFLOW}</code></pre>
           <p>
             For a private repository, pass <code>github-token</code> so the scan can read it. The job&apos;s own token has read access to the
             repository, is forwarded for that one scan and is never stored. Private reports open only in the browser you paid in, or through your API token.
@@ -109,11 +119,11 @@ export default function CiPage() {
         <aside className="guide-cta">
           <div>
             <h2>Try it on a public repository first</h2>
-            <p>Three free scans a day on the website, no account. When the report is useful, a pass puts the same check on every pull request.</p>
+            <p>Three free scans a day on the website and in the Action, no account. A pass removes the limit and adds private repositories.</p>
           </div>
           <Link className="cta-button" href="/">Scan a repository →</Link>
         </aside>
-        <p className="guide-updated">Updated 2026-10-06 · <a href="https://github.com/jonjys/deploydoctor/tree/master/action">Action source</a></p>
+        <p className="guide-updated">Updated 2026-10-08 · <a href="https://github.com/jonjys/deploydoctor/tree/master/action">Action source</a></p>
       </article>
     </main>
   );
