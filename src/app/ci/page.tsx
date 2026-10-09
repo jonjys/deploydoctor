@@ -70,7 +70,7 @@ export default function CiPage() {
           <h2>2. Private repository or more than 3 pull requests a day</h2>
           <p>
             Open <Link href="/account">My scans</Link> in the browser you paid in and click Create API token. Tokens work while a pass is
-            active, which is any pass: {plans.day.price} for 24 hours, {plans.week.price} for 7 days or {plans.public.price} a month, and are never
+            active, which is any pass: {plans.day.usd} for 24 hours, {plans.week.usd} for 7 days or {plans.public.usd} a month, and are never
             subject to the daily limit. Store it as a repository secret named <code>DEPLOYDOCTOR_TOKEN</code> under Settings, Secrets and variables, Actions.
           </p>
           <pre><code>{PAID_WORKFLOW}</code></pre>
