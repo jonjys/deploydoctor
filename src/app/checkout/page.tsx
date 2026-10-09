@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { SiteNav } from "@/components/site-nav";
 import { CheckoutForm } from "@/components/checkout-form";
-import { isPlan, isScanPlan, plans } from "@/lib/plans";
+import { isPlan, isScanPlan, planPrice, plans } from "@/lib/plans";
 import { getReport } from "@/lib/reports";
 import { getT } from "@/lib/lang";
 import { FIX_SERVICE_ENABLED, isFixPlan } from "@/lib/fix-service";
@@ -11,7 +11,7 @@ export const metadata = { robots: { index: false, follow: false } };
 
 export default async function Checkout({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
-  const { t } = await getT();
+  const { t, lang } = await getT();
   if (!isPlan(params.plan)) notFound();
   const plan = params.plan;
   const reportId = typeof params.report === "string" ? params.report : undefined;
@@ -30,7 +30,7 @@ export default async function Checkout({ searchParams }: { searchParams: Promise
   const item = plans[plan];
   const configured = Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET && (!item.env || process.env[item.env]));
   return <main className="site-shell"><SiteNav /><section className="checkout-card"><p className="section-kicker">{t("checkout.kicker")}</p>
-    <h1>{t(`plan.${plan}.name`)}</h1><p className="price">{item.price}<small>{t(`plan.${plan}.cadence`)}</small></p>
+    <h1>{t(`plan.${plan}.name`)}</h1><p className="price">{planPrice(plan, lang)}<small>{t(`plan.${plan}.cadence`)}</small></p>
     {report && <p>{report.repo_url}<br />{plan === "fix-one" ? t("checkout.check", { check: checkId ?? "" }) : t("checkout.allRed")}</p>}
     {!isScanPlan(plan) && <p>{t("checkout.manual")}</p>}
     <CheckoutForm plan={plan} reportId={reportId} checkId={checkId} configured={configured} />
