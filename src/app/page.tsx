@@ -8,9 +8,11 @@ import { SiteNav } from "@/components/site-nav";
 import { analysisText } from "@/lib/analysis-text";
 import { getT } from "@/lib/lang";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
+import { reposScanned } from "@/lib/stats";
+import { formatCount } from "@/lib/format-count";
 
 export default async function Home() {
-  const plan = await activePlan(await customerSession());
+  const [plan, scanned] = await Promise.all([customerSession().then(activePlan), reposScanned()]);
   const { lang, t } = await getT();
   const { titles } = analysisText(lang);
   // The same titles the analyzer prints, in report order. Supabase and Prisma only run when the stack uses them.
@@ -44,6 +46,11 @@ export default async function Home() {
         </div>
 
         <div className="trust-row" aria-label={t("home.trust.aria")}>
+          {scanned !== null && (
+            <span className="scan-count">
+              <strong>{formatCount(lang, scanned)}</strong> {t("home.trust.scanned")}
+            </span>
+          )}
           <span>
             <span className="mini-check">✓</span> {plan ? t("home.trust.unlimited") : t("home.trust.free")}
           </span>
