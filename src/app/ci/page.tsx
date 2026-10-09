@@ -23,9 +23,9 @@ jobs:
       contents: read
       id-token: write # lets GitHub prove which public repo is asking; no account, no secret
     steps:
-      - uses: jonjys/deploydoctor/action@master`;
+      - uses: jonjys/deploydoctor-action@v1`;
 
-const PAID_WORKFLOW = `      - uses: jonjys/deploydoctor/action@master
+const PAID_WORKFLOW = `      - uses: jonjys/deploydoctor-action@v1
         with:
           token: \${{ secrets.DEPLOYDOCTOR_TOKEN }}
           # Private repository? Let the scan read it:
@@ -63,6 +63,7 @@ export default function CiPage() {
           </p>
           <pre><code>{WORKFLOW}</code></pre>
           <p className="ci-copy"><CopyTextButton text={WORKFLOW} label="Copy workflow" copiedLabel="Copied" /></p>
+          <p>Also listed on the <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a>.</p>
         </section>
 
         <section>
@@ -123,7 +124,7 @@ export default function CiPage() {
           </div>
           <Link className="cta-button" href="/">Scan a repository →</Link>
         </aside>
-        <p className="guide-updated">Updated 2026-10-08 · <a href="https://github.com/jonjys/deploydoctor/tree/master/action">Action source</a></p>
+        <p className="guide-updated">Updated 2026-10-09 · <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a> · <a href="https://github.com/jonjys/deploydoctor-action">Action source</a></p>
       </article>
     </main>
   );

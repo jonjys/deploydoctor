@@ -24,7 +24,7 @@ jobs:
   deploydoctor:
     runs-on: ubuntu-latest
     steps:
-      - uses: jonjys/deploydoctor/action@master
+      - uses: jonjys/deploydoctor-action@v1
         with:
           token: ${{ secrets.DEPLOYDOCTOR_TOKEN }}
 ```
