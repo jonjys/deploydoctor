@@ -1,5 +1,7 @@
 # DeployDoctor GitHub Action
 
+> Published as [`jonjys/deploydoctor-action`](https://github.com/jonjys/deploydoctor-action) on the [GitHub Marketplace](https://github.com/marketplace/actions/deploydoctor). This folder is the copy this repository runs on its own pull requests; change both together.
+
 Scans a pull request for the mistakes that break a Vercel deploy, before Vercel builds it. Static analysis through the GitHub API; nothing is cloned, installed or executed.
 
 **Free on public repositories**: no account, no token, 3 scans a day per repository.
@@ -15,7 +17,7 @@ jobs:
       contents: read
       id-token: write # GitHub proves which public repository is asking
     steps:
-      - uses: jonjys/deploydoctor/action@master
+      - uses: jonjys/deploydoctor-action@v1
 ```
 
 When the free scans for the day are used, the job prints a warning and passes; it never blocks a pull request for that. Pull requests from forks and from Dependabot are skipped the same way, because GitHub does not give them an OIDC token.
