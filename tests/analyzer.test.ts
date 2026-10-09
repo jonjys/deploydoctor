@@ -785,3 +785,44 @@ test("import statements inside template strings are text, not imports", () => {
   assert.deepEqual(check?.findings?.map((finding) => `${finding.file}:${finding.line} ${finding.problem.split(",")[0]}`), ["app/docs.tsx:9 imports three"]);
   assert.equal(check?.status, "red");
 });
+
+test("commented-out defaults in .env.example count as documented (no empty KEY= that would break validation)", () => {
+  // Shape of a real template (Vatidence): required keys set, optional ones commented with their default.
+  const template = [
+    "# Required.",
+    'DATABASE_URL="postgresql://user:password@host/db"',
+    "# The single external API this product depends on.",
+    '# VIES_BASE_URL="https://ec.europa.eu/taxation_customs/vies/rest-api"',
+    '#LOG_LEVEL="info"',
+    "# note: a=b is prose, not a variable",
+  ].join("\n");
+  const scan = (envExample: string, source: string) => analyzeSnapshot(snapshot(
+    [{ path: "package.json", type: "blob" }, { path: ".env.example", type: "blob" }, { path: "src/env.ts", type: "blob" }],
+    {
+      "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+      ".env.example": envExample,
+      "src/env.ts": source,
+    },
+  )).checks.find((check) => check.id === "env")!;
+
+  const ok = scan(template, "export const env = [process.env.DATABASE_URL, process.env.VIES_BASE_URL, process.env.LOG_LEVEL];");
+  assert.equal(ok.status, "green", ok.explanation);
+  assert.equal(ok.suggestedFile, undefined);
+
+  // A variable that is truly undocumented is still reported, and a commented lower-case word is not a variable.
+  const missing = scan(template, "export const env = [process.env.LOG_LEVEL, process.env.NOTE, process.env.CRON_SECRET];");
+  assert.equal(missing.status, "red");
+  assert.match(missing.explanation, /missing from \.env\.example: CRON_SECRET, NOTE/);
+  assert.doesNotMatch(missing.explanation, /LOG_LEVEL/);
+
+  // Commented assignments in a real .env (not a template) do not count: they are simply not set.
+  const real = analyzeSnapshot(snapshot(
+    [{ path: "package.json", type: "blob" }, { path: ".env.local", type: "blob" }, { path: "src/env.ts", type: "blob" }],
+    {
+      "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+      ".env.local": '# LOG_LEVEL="info"\n',
+      "src/env.ts": "export const level = process.env.LOG_LEVEL;",
+    },
+  )).checks.find((check) => check.id === "env")!;
+  assert.equal(real.status, "red");
+});
