@@ -7,7 +7,7 @@ import type { Lang } from "@/lib/i18n";
 import { ignoringRule } from "@/lib/gitignore";
 import { nodeRangeAllowsMajor } from "@/lib/node-range";
 import { findSecrets } from "@/lib/secrets";
-import { lockfileMentions, manifestSpecifiers, moduleImports, npmRootSpecifiers, packageName, pnpmOverrides, pnpmRootSpecifiers, stripComments,
+import { lockfileMentions, manifestSpecifiers, moduleImports, npmMissingLinuxBinaries, npmRootSpecifiers, packageName, pnpmOverrides, pnpmRootSpecifiers, stripComments,
   specifierDrift, tsconfigAliases } from "@/lib/dependencies";
 
 export type RepositorySnapshot = {
@@ -543,15 +543,25 @@ function checkDependencies(snapshot: RepositorySnapshot, x: AnalysisText): Check
     }
   }
 
+  // A package-lock.json written on macOS or Windows can leave out the Linux binaries of native packages.
+  const native = lockfiles[0] === "package-lock.json" && lockfile !== undefined ? npmMissingLinuxBinaries(lockfile) : [];
+  for (const name of native) {
+    const index = lockfile!.indexOf(`node_modules/${name}"`);
+    findings.push({ file: "package-lock.json", line: index === -1 ? 1 : lineAt(lockfile!, index), red: false,
+      problem: x.deps.nativeMissing(name), fix: x.deps.nativeFix, command: "git add -- package-lock.json" });
+  }
+
   const red = findings.filter((item) => item.red);
   const ordered: Finding[] = [...red, ...findings.filter((item) => !item.red)]
     .map((item) => ({ file: item.file, line: item.line, problem: item.problem, fix: item.fix, command: item.command }));
   if (ordered.length) {
     const missingRed = red.length - (driftRed ? drifted : 0);
-    const explanation = red.length
-      ? [missingRed ? x.deps.red(missingRed) : "", red.length > missingRed ? x.deps.pnpmRed(red.length - missingRed) : ""].filter(Boolean).join(" ")
-      : [ordered.length > drifted ? x.deps.yellow(ordered.length - drifted) : "",
-        drifted ? (pnpm ? x.deps.pnpmYellow(drifted) : x.deps.npmYellow(drifted)) : ""].filter(Boolean).join(" ");
+    const otherYellow = ordered.length - red.length - (driftRed ? 0 : drifted) - native.length;
+    const explanation = [
+      ...(red.length ? [missingRed ? x.deps.red(missingRed) : "", red.length > missingRed ? x.deps.pnpmRed(red.length - missingRed) : ""]
+        : [otherYellow ? x.deps.yellow(otherYellow) : "", drifted ? (pnpm ? x.deps.pnpmYellow(drifted) : x.deps.npmYellow(drifted)) : ""]),
+      native.length ? x.deps.nativeYellow(native.length) : "",
+    ].filter(Boolean).join(" ");
     return makeCheck("dependencies", title, red.length ? "red" : "yellow", explanation, ordered[0].fix,
       ordered.map((item) => `${item.file}:${item.line} → ${item.problem}`), ordered);
   }

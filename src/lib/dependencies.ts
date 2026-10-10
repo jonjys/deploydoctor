@@ -236,6 +236,34 @@ export function npmRootSpecifiers(lockfile: string): Specifiers | null {
   }
 }
 
+/**
+ * Packages whose native binary for Linux x64 is missing from package-lock.json while binaries for other
+ * platforms are present. That is npm's optional-dependency bug (npm/cli#4828): a lockfile written on macOS
+ * or Windows leaves out the Linux build, `npm ci` on Vercel installs exactly the lockfile, and the build
+ * fails with `Cannot find module '../lightningcss.linux-x64-gnu.node'` or `@rollup/rollup-linux-x64-gnu`.
+ * Returns the parent package names, for example ["lightningcss", "@tailwindcss/oxide"].
+ */
+export function npmMissingLinuxBinaries(lockfile: string): string[] {
+  let packages: Record<string, { optionalDependencies?: Record<string, string> }> | undefined;
+  try {
+    const parsed = JSON.parse(lockfile) as { lockfileVersion?: number; packages?: typeof packages };
+    if (!parsed.lockfileVersion || parsed.lockfileVersion < 2) return [];
+    packages = parsed.packages;
+  } catch { return []; }
+  if (!packages) return [];
+  const installed = new Set(Object.keys(packages).map((key) => key.replace(/^.*node_modules\//, "")));
+  const missing = new Set<string>();
+  for (const [key, entry] of Object.entries(packages)) {
+    const optional = Object.keys(entry.optionalDependencies ?? {});
+    // Vercel builds on glibc Linux x64; musl and arm variants do not count.
+    const linux = optional.filter((name) => /linux-x64(?:-gnu)?$/.test(name));
+    if (!key || !linux.length) continue;
+    const otherPlatform = optional.some((name) => /darwin|win32/.test(name) && installed.has(name));
+    if (otherPlatform && !linux.some((name) => installed.has(name))) missing.add(key.replace(/^.*node_modules\//, ""));
+  }
+  return [...missing].sort();
+}
+
 /** Differences between package.json and a lockfile's record of the root project's direct dependencies. */
 export function specifierDrift(manifest: Specifiers, locked: Specifiers, ignore: ReadonlySet<string> = new Set()) {
   const drift: Array<{ name: string; manifest?: string; locked?: string }> = [];
