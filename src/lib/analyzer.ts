@@ -550,8 +550,12 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
 
   for (const [file, source] of snapshot.contents) {
     if (/(?:^|\/)\.env(?:\..+)?$/.test(file) || file === misnamed) {
+      // In a template, a commented-out assignment (`# LOG_LEVEL="info"`) is the usual way to document an
+      // optional variable with a default. Asking for `LOG_LEVEL=` instead would set it to an empty string,
+      // which breaks apps that validate it (an enum or a URL), so the commented form counts as documented.
+      const template = file === misnamed || ENV_TEMPLATE_FILE.test(file);
       for (const line of source.split(/\r?\n/)) {
-        const name = line.match(ENV_ASSIGNMENT)?.[1];
+        const name = line.match(ENV_ASSIGNMENT)?.[1] ?? (template ? line.match(ENV_COMMENTED_ASSIGNMENT)?.[1] : undefined);
         if (name) declared.add(name);
       }
       continue;
@@ -623,6 +627,10 @@ function completeEnvExample(existing: string | undefined, missing: string[]): st
 
 const ENV_EXAMPLE_EXCEPTION = "!.env.example";
 const ENV_ASSIGNMENT = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/;
+/** `# NAME=value` in a template. Upper-case names only, so prose such as `# note: a=b` is never read as a variable. */
+const ENV_COMMENTED_ASSIGNMENT = /^\s*#\s*(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=/;
+/** Committed env templates (never a real .env), where commented assignments document optional variables. */
+const ENV_TEMPLATE_FILE = /(?:^|\/)\.env\.(?:example|sample|template)$/;
 /** Root files people name their env template when they do not know the convention. */
 export const MISNAMED_ENV_TEMPLATE = /^(?:env\.example|env\.sample|env\.template|example\.env|sample\.env|template\.env|\.env\.sample|\.env\.template|\.env\.example\.txt)$/i;
 /** Keeps the assignment and comment lines of a template written as prose or markdown, so the suggested file is a real dotenv file. */
