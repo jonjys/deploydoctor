@@ -548,6 +548,22 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .guide-cta p { margin: 0; color: #bdc8c3; font-size: 14px; max-width: 520px; }
 .guide-cta .cta-button { color: #10231c; }
 .guide-updated { color: var(--muted); font-size: 13px; }
+.diag-form { display: grid; gap: 12px; }
+.diag-form label { font-weight: 600; }
+.diag-form textarea { width: 100%; min-height: 260px; padding: 14px 16px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; resize: vertical; }
+.diag-form textarea:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+.diag-form > .cta-button { justify-self: start; }
+.diag-form > .cta-button:disabled { opacity: 0.55; cursor: not-allowed; }
+.diag-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; color: var(--muted); font-size: 13px; }
+.diag-result { margin-top: 8px; padding: 26px 28px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.diag-result h2 { margin: 0 0 8px; font-size: 24px; line-height: 1.25; }
+.diag-result h3 { margin: 22px 0 6px; font-size: 16px; }
+.diag-result ol, .diag-result ul { padding-left: 22px; }
+.diag-result pre { background: var(--paper, transparent); }
+.diag-note { color: var(--muted); font-size: 13px; margin-top: 22px; }
+.diag-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 16px; }
+.diag-actions a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 640px) { .diag-result { padding: 20px 18px; } }
 .guide code, .ci-token-actions code { font-size: 0.92em; padding: 1px 5px; border-radius: 4px; background: var(--panel); border: 1px solid var(--line); }
 .guide pre code { padding: 0; border: 0; background: none; }
 .guide ul { padding-left: 22px; }
