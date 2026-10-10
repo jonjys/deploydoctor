@@ -852,3 +852,49 @@ test("commented-out defaults in .env.example count as documented (no empty KEY= 
   )).checks.find((check) => check.id === "env")!;
   assert.equal(real.status, "red");
 });
+
+test("build configuration: a Vite SPA with a history router needs a rewrite to index.html", () => {
+  const vitePkg = JSON.stringify({ dependencies: { react: "19.0.0", "react-router-dom": "7.1.0" }, devDependencies: { vite: "7.0.0" } });
+  const main = 'import { BrowserRouter } from "react-router-dom";\n// <BrowserRouter> in a comment\nexport const app = <BrowserRouter><App /></BrowserRouter>;';
+  const entries: RepositorySnapshot["entries"] = [{ path: "index.html", type: "blob" }, { path: "src/main.tsx", type: "blob" }];
+  const build = (files: Record<string, string>, extra: RepositorySnapshot["entries"] = []) =>
+    analyzeSnapshot(snapshot([...entries, ...extra], { "package.json": vitePkg, "src/main.tsx": main, ...files }), { checks: ["vercel"] })
+      .checks.find((check) => check.id === "build-config");
+  const missing = build({});
+  assert.equal(missing?.status, "yellow");
+  assert.equal(missing?.findings?.[0].file, "src/main.tsx");
+  assert.equal(missing?.findings?.[0].line, 3);
+  assert.match(missing?.findings?.[0].problem ?? "", /BrowserRouter.*404 NOT_FOUND/);
+  assert.match(missing?.findings?.[0].command ?? "", /> vercel\.json && git add -- vercel\.json$/);
+  // vercel.json without rewrites: same finding, but no command that would overwrite the file.
+  const noRewrite = build({ "vercel.json": '{ "cleanUrls": true }' }, [{ path: "vercel.json", type: "blob" }]);
+  assert.equal(noRewrite?.status, "yellow");
+  assert.equal(noRewrite?.findings?.[0].command, undefined);
+  assert.equal(build({ "vercel.json": '{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }' }, [{ path: "vercel.json", type: "blob" }])?.status, "green");
+  assert.equal(build({}, [{ path: "vercel.ts", type: "blob" }])?.status, "green");
+  assert.equal(build({ "src/main.tsx": 'import { HashRouter } from "react-router-dom"; export const app = <HashRouter />;' })?.status, "green");
+  assert.equal(build({ "package.json": JSON.stringify({ dependencies: { "react-router": "7.1.0" }, devDependencies: { vite: "7.0.0", "@react-router/dev": "7.1.0" } }) })?.status, "green");
+  const vue = build({ "package.json": JSON.stringify({ dependencies: { vue: "3.5.0", "vue-router": "4.5.0" }, devDependencies: { vite: "7.0.0" } }),
+    "src/main.tsx": 'import { createRouter, createWebHistory } from "vue-router";\nexport default createRouter({ history: createWebHistory(), routes: [] });' });
+  assert.match(vue?.findings?.[0].problem ?? "", /createWebHistory/);
+});
+
+test("dependencies: pnpm 10 skips install scripts of native packages that are not allowed", () => {
+  const lock = "lockfileVersion: '9.0'\n\nimporters:\n\n  .:\n    dependencies:\n      bcrypt:\n        specifier: ^5.1.1\n        version: 5.1.1\n";
+  const pkg = (extra: object = {}) => JSON.stringify({ name: "api", dependencies: { bcrypt: "^5.1.1" }, ...extra });
+  const entries: RepositorySnapshot["entries"] = [{ path: "pnpm-lock.yaml", type: "blob" }, { path: "server.js", type: "blob" }];
+  const deps = (files: Record<string, string>, extra: RepositorySnapshot["entries"] = []) =>
+    analyzeSnapshot(snapshot([...entries, ...extra], { "pnpm-lock.yaml": lock, "package.json": pkg(), ...files }), { checks: ["vercel"] })
+      .checks.find((check) => check.id === "dependencies");
+  const flagged = deps({});
+  assert.equal(flagged?.status, "yellow");
+  assert.equal(flagged?.findings?.length, 1);
+  assert.match(flagged?.findings?.[0].problem ?? "", /^bcrypt needs its install script/);
+  assert.match(flagged?.findings?.[0].fix ?? "", /"onlyBuiltDependencies": \["bcrypt"\]/);
+  assert.match(flagged?.explanation ?? "", /1 package needs an install script/);
+  assert.equal(deps({ "package.json": pkg({ pnpm: { onlyBuiltDependencies: ["bcrypt"] } }) })?.status, "green");
+  assert.equal(deps({ "package.json": pkg({ packageManager: "pnpm@9.15.0" }) })?.status, "green");
+  assert.equal(deps({ "package.json": pkg({ packageManager: "pnpm@10.4.1" }) })?.status, "yellow");
+  assert.equal(deps({}, [{ path: "pnpm-workspace.yaml", type: "blob" }])?.status, "green");
+  assert.equal(deps({ "pnpm-lock.yaml": lock.replace("'9.0'", "'6.0'") })?.status, "green");
+});
