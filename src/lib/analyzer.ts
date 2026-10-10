@@ -403,6 +403,27 @@ function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
       command: "git add -- package.json" });
   }
 
+  // A framework other than nextjs in vercel.json makes Vercel serve a Next.js app as something else:
+  // the build passes and every URL returns 404 NOT_FOUND. null means the Other preset.
+  const vercelRaw = snapshot.contents.get("vercel.json");
+  if (vercelRaw && packages.next) {
+    let framework: unknown;
+    try { framework = (JSON.parse(vercelRaw) as { framework?: unknown }).framework; } catch { framework = undefined; }
+    if (framework !== undefined && framework !== "nextjs") {
+      const shown = framework === null ? "null" : String(framework);
+      findings.push({ file: "vercel.json", line: Math.max(1, lineAt(vercelRaw, Math.max(0, vercelRaw.indexOf('"framework"')))),
+        problem: x.build.framework(shown), fix: x.build.frameworkFix, command: "git add -- vercel.json" });
+    }
+  }
+
+  // Static sites: Vercel serves index.html for /, and Linux file names are case-sensitive.
+  const files = new Set(snapshot.entries.filter((entry) => entry.type === "blob").map((entry) => entry.path));
+  if (!packages.next && !files.has("index.html")) {
+    const wrongCase = [...files].find((file) => /^index\.html?$/i.test(file) && file !== "index.html");
+    if (wrongCase) findings.push({ file: wrongCase, line: 1, problem: x.build.indexCase(wrongCase), fix: x.build.indexCaseFix(wrongCase),
+      command: `git mv ${shellQuote(wrongCase)} tmp-index.html && git mv tmp-index.html index.html` });
+  }
+
   if (findings.length) {
     return makeCheck("build-config", title, "yellow", x.build.yellow(findings.length), findings[0].fix,
       findings.map((item) => `${item.file}:${item.line} → ${item.problem}`), findings);

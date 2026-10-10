@@ -144,6 +144,32 @@ export const guides: Guide[] = [
       ] },
     ],
   },
+  {
+    slug: "vercel-404-not-found-ready-deployment",
+    title: "Vercel 404 NOT_FOUND on a Ready deployment: check the Framework Preset first",
+    description: "The build is green, the deployment says Ready, and every URL returns 404 NOT_FOUND with nothing in the logs. The usual cause is a project setting, not your code. How to find it and stop it from coming back.",
+    updated: "2026-10-10",
+    check: "Build configuration",
+    sections: [
+      { heading: "What this 404 means", body: [
+        "A plain white page with 404: NOT_FOUND and a Vercel error ID, on every path including the root, means the request never reached your application. Runtime Logs stay empty because no function ran. DEPLOYMENT_NOT_FOUND would mean the whole deployment is missing; NOT_FOUND means the deployment exists but has nothing to serve at that path.",
+        "That points at how Vercel built and served the output, not at your routes. Removing middleware or proxy.ts rarely changes anything, which is a good sign you are in this case.",
+      ] },
+      { heading: "1. The Framework Preset is not Next.js", body: [
+        "This is the cause in most of the recent threads on the Vercel Community forum. The preset is chosen when the project is imported. If the repository only had a README at that moment, or was a different kind of app, the preset stays on Other. Vercel then builds your code but serves the output as a plain static site, so none of the Next.js routes exist.",
+        "Fix: open Project Settings, Build and Deployment, set Framework Preset to Next.js, save and redeploy. To make sure it never drifts again, pin it in vercel.json at the repository root.",
+      ], code: "{\n  \"framework\": \"nextjs\"\n}" },
+      { heading: "2. The app lives in a subfolder", body: [
+        "In a monorepo, or a repository where the Next.js app sits in a folder such as web or apps/site, Vercel builds from the repository root unless you tell it otherwise. Set Root Directory in the project settings to the folder that contains the app's package.json.",
+      ] },
+      { heading: "3. A static site with Index.html", body: [
+        "For a plain HTML site, Vercel serves index.html for the root path, in lower case. Linux file names are case sensitive, so Index.html gives a 404 even though it opens fine on macOS or Windows. Rename it to index.html. Git ignores a rename that only changes letter case on those systems, so rename in two steps.",
+      ], code: "git mv Index.html tmp-index.html\ngit mv tmp-index.html index.html" },
+      { heading: "4. Check the output, not the logs", body: [
+        "Open the deployment, go to the Source tab and choose Output. If the files you expect are not there, the build settings are wrong. If they are there and the domain still returns 404, check that the domain is assigned to this project and this production deployment under Settings, Domains.",
+      ] },
+    ],
+  },
 ];
 
 export function guideBySlug(slug: string): Guide | undefined {
