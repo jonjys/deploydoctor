@@ -42,6 +42,7 @@ export type AnalysisText = {
     missingRed: (name: string) => string; missingYellow: (name: string) => string; missingFix: (name: string, command: string) => string;
     red: (n: number) => string; yellow: (n: number) => string; partial: string; ok: string; okNotTraced: string;
     nativeMissing: (name: string) => string; nativeFix: string; nativeYellow: (n: number) => string;
+    pnpmBuilds: (name: string) => string; pnpmBuildsFix: (names: string[]) => string; pnpmBuildsYellow: (n: number) => string;
     driftChanged: (name: string, wanted: string, lockfile: string, locked: string) => string;
     driftAdded: (name: string, lockfile: string) => string; driftRemoved: (name: string, lockfile: string) => string;
     pnpmRed: (n: number) => string; pnpmYellow: (n: number) => string; npmYellow: (n: number) => string; pnpmFix: string; npmFix: string;
@@ -55,6 +56,7 @@ export type AnalysisText = {
     noBuild: string; noBuildFix: string; engines: (range: string) => string; enginesFix: string;
     framework: (value: string) => string; frameworkFix: string;
     indexCase: (file: string) => string; indexCaseFix: (file: string) => string;
+    spaRewrite: (router: string) => string; spaRewriteFix: string;
     yellow: (n: number) => string; ok: string;
   };
   prisma: {
@@ -149,6 +151,9 @@ const en: AnalysisText = {
     nativeMissing: (name) => `package-lock.json has ${name} for macOS or Windows but not its Linux x64 binary; npm ci on Vercel installs exactly the lockfile, so anything that loads ${name} fails with Cannot find module`,
     nativeFix: "Delete package-lock.json and node_modules, run npm install, check that package-lock.json now has a linux-x64 entry for the package, and commit it. If it still does not, add that entry to optionalDependencies in package.json.",
     nativeYellow: (n) => `${n} native package${n === 1 ? " is missing its Linux binary" : "s are missing their Linux binaries"} in package-lock.json, a known npm bug when the lockfile is written on macOS or Windows.`,
+    pnpmBuilds: (name) => `${name} needs its install script to get its native binary, and pnpm 10 skips the install scripts of dependencies that are not allowed; if Vercel installs with pnpm 10, ${name} fails to load with a missing binding error`,
+    pnpmBuildsFix: (names) => `Allow the build in package.json: "pnpm": { "onlyBuiltDependencies": [${names.map((name) => `"${name}"`).join(", ")}] }. Run pnpm install and commit package.json and pnpm-lock.yaml. Running pnpm approve-builds locally does the same.`,
+    pnpmBuildsYellow: (n) => `${n} package${n === 1 ? " needs" : "s need"} an install script that pnpm 10 does not run unless the package is allowed.`,
     driftChanged: (name, wanted, lockfile, locked) => `package.json asks for ${name} "${wanted}", but ${lockfile} has "${locked}"`,
     driftAdded: (name, lockfile) => `${name} is in package.json but not in ${lockfile}`,
     driftRemoved: (name, lockfile) => `${name} is still in ${lockfile} but no longer in package.json`,
@@ -183,6 +188,8 @@ const en: AnalysisText = {
     frameworkFix: 'Set "framework": "nextjs" in vercel.json. If you remove the line instead, check that Framework Preset is Next.js under Project Settings, Build and Deployment, then redeploy.',
     indexCase: (file) => `the home page is ${file}, but Vercel serves index.html in lower case for /, so the site returns 404 NOT_FOUND on Linux`,
     indexCaseFix: (file) => `Rename ${file} to index.html. Git ignores a rename that only changes case on macOS and Windows, so rename it in two steps through a temporary name.`,
+    spaRewrite: (router) => `this Vite app routes in the browser with ${router}, but vercel.json has no rewrite to index.html, so opening or reloading any page other than / returns 404 NOT_FOUND`,
+    spaRewriteFix: 'Add a rewrite to vercel.json at the repository root: "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]. If vercel.json sets cleanUrls, use / as the destination. Redeploy and reload a deep link to confirm.',
     yellow: (n) => `${n} project setting${n === 1 ? "" : "s"} may make the Vercel build behave differently from your machine.`,
     ok: "One lockfile, a build script and a Node version Vercel supports.",
   },
@@ -285,6 +292,9 @@ const sv: AnalysisText = {
     nativeMissing: (name) => `package-lock.json har ${name} för macOS eller Windows men inte dess Linux x64-binär; npm ci på Vercel installerar exakt lockfilen, så allt som laddar ${name} faller med Cannot find module`,
     nativeFix: "Ta bort package-lock.json och node_modules, kör npm install, kontrollera att package-lock.json nu har en linux-x64-post för paketet och committa den. Saknas den fortfarande, lägg till den posten under optionalDependencies i package.json.",
     nativeYellow: (n) => `${n} ${n === 1 ? "inbyggt paket saknar sin" : "inbyggda paket saknar sina"} Linux-binär${n === 1 ? "" : "er"} i package-lock.json, ett känt npm-fel när lockfilen skrivs på macOS eller Windows.`,
+    pnpmBuilds: (name) => `${name} behöver sitt installationsskript för att hämta sin inbyggda binär, och pnpm 10 hoppar över installationsskript för beroenden som inte är tillåtna; installerar Vercel med pnpm 10 går ${name} inte att ladda och ger ett fel om saknad binding`,
+    pnpmBuildsFix: (names) => `Tillåt bygget i package.json: "pnpm": { "onlyBuiltDependencies": [${names.map((name) => `"${name}"`).join(", ")}] }. Kör pnpm install och committa package.json och pnpm-lock.yaml. pnpm approve-builds lokalt gör samma sak.`,
+    pnpmBuildsYellow: (n) => `${n} paket behöver ett installationsskript som pnpm 10 inte kör om paketet inte är tillåtet.`,
     driftChanged: (name, wanted, lockfile, locked) => `package.json vill ha ${name} "${wanted}", men ${lockfile} har "${locked}"`,
     driftAdded: (name, lockfile) => `${name} finns i package.json men inte i ${lockfile}`,
     driftRemoved: (name, lockfile) => `${name} finns kvar i ${lockfile} men inte längre i package.json`,
@@ -319,6 +329,8 @@ const sv: AnalysisText = {
     frameworkFix: 'Sätt "framework": "nextjs" i vercel.json. Tar du bort raden i stället, kontrollera att Framework Preset är Next.js under Project Settings, Build and Deployment, och driftsätt igen.',
     indexCase: (file) => `startsidan heter ${file}, men Vercel visar index.html med små bokstäver för /, så sajten ger 404 NOT_FOUND på Linux`,
     indexCaseFix: (file) => `Döp om ${file} till index.html. Git ignorerar ett namnbyte som bara ändrar skiftläge på macOS och Windows, så byt namn i två steg via ett tillfälligt namn.`,
+    spaRewrite: (router) => `Vite-appen routar i webbläsaren med ${router}, men vercel.json har ingen rewrite till index.html, så den som öppnar eller laddar om en annan sida än / får 404 NOT_FOUND`,
+    spaRewriteFix: 'Lägg till en rewrite i vercel.json i repots rot: "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]. Sätter vercel.json cleanUrls, använd / som destination. Driftsätt igen och ladda om en djuplänk för att bekräfta.',
     yellow: (n) => `${n} projektinställning${n === 1 ? "" : "ar"} kan göra att Vercel-bygget beter sig annorlunda än på din dator.`,
     ok: "En lockfil, ett build-skript och en Node-version som Vercel stöder.",
   },

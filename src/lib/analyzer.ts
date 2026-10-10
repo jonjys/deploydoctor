@@ -108,7 +108,7 @@ function parsePackageJson(snapshot: RepositorySnapshot) {
       engines?: Record<string, unknown>;
       workspaces?: unknown;
       packageManager?: string;
-      pnpm?: { overrides?: Record<string, string> };
+      pnpm?: { overrides?: Record<string, string>; onlyBuiltDependencies?: string[] };
     };
   } catch {
     return null;
@@ -372,6 +372,28 @@ const LOCKFILES: Record<string, string> = {
 };
 const SUPPORTED_NODE_MAJORS = [20, 22, 24];
 
+// Vite-based frameworks that render on the server and route requests themselves.
+const VITE_SERVER_FRAMEWORKS = new Set(["@remix-run/dev", "@react-router/dev", "@sveltejs/kit", "nuxt", "astro", "@tanstack/react-start",
+  "@tanstack/start", "@tanstack/solid-start", "vike", "vite-plugin-ssr", "@analogjs/platform", "@solidjs/start", "@builder.io/qwik-city", "waku"]);
+const HISTORY_ROUTERS: Array<{ name: string; pattern: RegExp }> = [
+  { name: "BrowserRouter", pattern: /<BrowserRouter\b/ },
+  { name: "createBrowserRouter", pattern: /\bcreateBrowserRouter\s*\(/ },
+  { name: "createWebHistory", pattern: /\bcreateWebHistory\s*\(/ },
+];
+
+/** The first source file that sets up browser history routing, if any. Hash routing needs no rewrite. */
+function historyRouter(snapshot: RepositorySnapshot) {
+  for (const [file, source] of snapshot.contents) {
+    if (!SOURCE_EXTENSION.test(file) || /(?:^|\/)node_modules\//.test(file)) continue;
+    const code = stripComments(source);
+    for (const router of HISTORY_ROUTERS) {
+      const match = router.pattern.exec(code);
+      if (match) return { file, line: lineAt(code, match.index), name: router.name };
+    }
+  }
+  return undefined;
+}
+
 function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const title = x.titles.buildConfig;
   const manifest = parsePackageJson(snapshot);
@@ -416,6 +438,15 @@ function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
     }
   }
 
+  // A Vite single page app with a history router needs a catch-all rewrite, or every deep link is a 404 on Vercel.
+  const router = !packages.next && packages.vite && !Object.keys(packages).some((name) => VITE_SERVER_FRAMEWORKS.has(name))
+    && !/"(?:rewrites|routes)"\s*:/.test(vercelRaw ?? "") && !snapshot.entries.some((entry) => /^vercel\.[cm]?[jt]s$/.test(entry.path))
+    ? historyRouter(snapshot) : undefined;
+  if (router) {
+    findings.push({ file: router.file, line: router.line, problem: x.build.spaRewrite(router.name), fix: x.build.spaRewriteFix,
+      ...(vercelRaw === undefined ? { command: `printf '%s\\n' '{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }' > vercel.json && git add -- vercel.json` } : {}) });
+  }
+
   // Static sites: Vercel serves index.html for /, and Linux file names are case-sensitive.
   const files = new Set(snapshot.entries.filter((entry) => entry.type === "blob").map((entry) => entry.path));
   if (!packages.next && !files.has("index.html")) {
@@ -435,6 +466,7 @@ function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
 const NEXT_BUILD_ENTRY = /^(?:src\/)?(?:app|pages)\/|^(?:src\/)?(?:middleware|proxy|instrumentation|instrumentation-client|mdx-components)\.[cm]?[jt]sx?$|^next\.config\.[cm]?[jt]s$/;
 // Next.js resolves these itself, so they build without being installed.
 const PROVIDED_BY_NEXT = new Set(["server-only", "client-only"]);
+const NEEDS_INSTALL_SCRIPT = ["bcrypt", "better-sqlite3", "sqlite3", "canvas", "node-sass"];
 const TEXT_LOCKFILES = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock"];
 const ADD_COMMAND: Record<string, string> = { npm: "npm install", pnpm: "pnpm add", yarn: "yarn add", bun: "bun add" };
 
@@ -551,16 +583,31 @@ function checkDependencies(snapshot: RepositorySnapshot, x: AnalysisText): Check
       problem: x.deps.nativeMissing(name), fix: x.deps.nativeFix, command: "git add -- package-lock.json" });
   }
 
+  // pnpm 10 skips dependency install scripts unless allowed; these packages fetch or build their binary in one.
+  const pnpmMajor = /^pnpm@(\d+)/.exec(manifest?.packageManager ?? "")?.[1];
+  const settingsElsewhere = snapshot.entries.some((entry) => entry.path === "pnpm-workspace.yaml" || entry.path === ".npmrc")
+    || raw.includes("dangerouslyAllowAllBuilds");
+  const builds = manifest && pnpm && lockfile !== undefined && /^lockfileVersion:\s*'?9\./m.test(lockfile)
+    && (pnpmMajor === undefined || Number(pnpmMajor) >= 10) && !settingsElsewhere
+    ? NEEDS_INSTALL_SCRIPT.filter((name) => name in { ...manifest.dependencies, ...manifest.optionalDependencies, ...manifest.devDependencies }
+      && !manifest.pnpm?.onlyBuiltDependencies?.includes(name))
+    : [];
+  for (const name of builds) {
+    findings.push({ file: "package.json", line: lineAt(raw, Math.max(0, raw.indexOf(`"${name}"`))), red: false,
+      problem: x.deps.pnpmBuilds(name), fix: x.deps.pnpmBuildsFix(builds), command: "git add -- package.json pnpm-lock.yaml" });
+  }
+
   const red = findings.filter((item) => item.red);
   const ordered: Finding[] = [...red, ...findings.filter((item) => !item.red)]
     .map((item) => ({ file: item.file, line: item.line, problem: item.problem, fix: item.fix, command: item.command }));
   if (ordered.length) {
     const missingRed = red.length - (driftRed ? drifted : 0);
-    const otherYellow = ordered.length - red.length - (driftRed ? 0 : drifted) - native.length;
+    const otherYellow = ordered.length - red.length - (driftRed ? 0 : drifted) - native.length - builds.length;
     const explanation = [
       ...(red.length ? [missingRed ? x.deps.red(missingRed) : "", red.length > missingRed ? x.deps.pnpmRed(red.length - missingRed) : ""]
         : [otherYellow ? x.deps.yellow(otherYellow) : "", drifted ? (pnpm ? x.deps.pnpmYellow(drifted) : x.deps.npmYellow(drifted)) : ""]),
       native.length ? x.deps.nativeYellow(native.length) : "",
+      builds.length ? x.deps.pnpmBuildsYellow(builds.length) : "",
     ].filter(Boolean).join(" ");
     return makeCheck("dependencies", title, red.length ? "red" : "yellow", explanation, ordered[0].fix,
       ordered.map((item) => `${item.file}:${item.line} → ${item.problem}`), ordered);
