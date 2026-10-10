@@ -479,6 +479,32 @@ test("build configuration: one lockfile, a build script and supported Node range
   assert.equal(viaVercel.checks.find((check) => check.id === "build-config")?.status, "green");
 });
 
+test("build configuration: a vercel.json framework other than nextjs is the 404 NOT_FOUND trap", () => {
+  const nextPkg = JSON.stringify({ dependencies: { next: "16.3.6" }, scripts: { build: "next build" } });
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "vercel.json", type: "blob" }];
+  const run = (vercel: string) => analyzeSnapshot(snapshot(entries, { ...page, "package.json": nextPkg, "vercel.json": vercel }), { checks: ["vercel"] })
+    .checks.find((check) => check.id === "build-config");
+  for (const vercel of ['{\n  "framework": null\n}', '{ "framework": "vite" }']) {
+    const build = run(vercel);
+    assert.equal(build?.status, "yellow", vercel);
+    assert.equal(build?.findings?.[0].file, "vercel.json");
+    assert.match(build?.findings?.[0].problem ?? "", /404 NOT_FOUND/);
+    assert.match(build?.findings?.[0].fix ?? "", /"framework": "nextjs"/);
+  }
+  assert.equal(run('{\n  "regions": ["iad1"],\n  "framework": null\n}')?.findings?.[0].line, 3);
+  for (const vercel of ['{ "framework": "nextjs" }', '{ "buildCommand": "next build" }', "not json"]) assert.equal(run(vercel)?.status, "green", vercel);
+});
+
+test("build configuration: a static site whose home page is not lower-case index.html", () => {
+  const entries: RepositorySnapshot["entries"] = [{ path: "Index.html", type: "blob" }, { path: "style.css", type: "blob" }];
+  const build = analyzeSnapshot(snapshot(entries, {}), { checks: ["vercel"] }).checks.find((check) => check.id === "build-config");
+  assert.equal(build?.status, "yellow");
+  assert.equal(build?.findings?.[0].file, "Index.html");
+  assert.equal(build?.findings?.[0].command, "git mv 'Index.html' tmp-index.html && git mv tmp-index.html index.html");
+  const fine = analyzeSnapshot(snapshot([{ path: "index.html", type: "blob" }], {}), { checks: ["vercel"] }).checks.find((check) => check.id === "build-config");
+  assert.equal(fine?.status, "green");
+});
+
 test("Playwright as a test-only devDependency is not flagged, but an app import of it is", () => {
   const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "app/api/pdf/route.ts", type: "blob" }, { path: "e2e/home.spec.ts", type: "blob" }];
   const devOnly = analyzeSnapshot(snapshot(entries, {

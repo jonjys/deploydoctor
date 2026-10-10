@@ -52,6 +52,8 @@ export type AnalysisText = {
   build: {
     lockfiles: (files: string) => string; lockfilesFix: (keep: string | undefined, files: string[]) => string;
     noBuild: string; noBuildFix: string; engines: (range: string) => string; enginesFix: string;
+    framework: (value: string) => string; frameworkFix: string;
+    indexCase: (file: string) => string; indexCaseFix: (file: string) => string;
     yellow: (n: number) => string; ok: string;
   };
   prisma: {
@@ -173,6 +175,10 @@ const en: AnalysisText = {
     noBuildFix: 'Add "build": "next build" under scripts in package.json so npm run build works locally and on every host.',
     engines: (range) => `engines.node is "${range}", which allows none of Node 20, 22 or 24 that Vercel builds with`,
     enginesFix: 'Change engines.node in package.json to a range Vercel supports, for example ">=20" or "22.x".',
+    framework: (value) => `vercel.json sets framework to ${value}, so Vercel does not run Next.js routing for this app; the build passes and every URL can return 404 NOT_FOUND`,
+    frameworkFix: 'Set "framework": "nextjs" in vercel.json. If you remove the line instead, check that Framework Preset is Next.js under Project Settings, Build and Deployment, then redeploy.',
+    indexCase: (file) => `the home page is ${file}, but Vercel serves index.html in lower case for /, so the site returns 404 NOT_FOUND on Linux`,
+    indexCaseFix: (file) => `Rename ${file} to index.html. Git ignores a rename that only changes case on macOS and Windows, so rename it in two steps through a temporary name.`,
     yellow: (n) => `${n} project setting${n === 1 ? "" : "s"} may make the Vercel build behave differently from your machine.`,
     ok: "One lockfile, a build script and a Node version Vercel supports.",
   },
@@ -302,6 +308,10 @@ const sv: AnalysisText = {
     noBuildFix: 'Lägg till "build": "next build" under scripts i package.json så att npm run build fungerar lokalt och hos alla värdar.',
     engines: (range) => `engines.node är "${range}", vilket inte tillåter någon av Node 20, 22 eller 24 som Vercel bygger med`,
     enginesFix: 'Ändra engines.node i package.json till ett intervall som Vercel stöder, t.ex. ">=20" eller "22.x".',
+    framework: (value) => `vercel.json sätter framework till ${value}, så Vercel kör inte Next.js-routningen för appen; bygget går igenom men alla adresser kan ge 404 NOT_FOUND`,
+    frameworkFix: 'Sätt "framework": "nextjs" i vercel.json. Tar du bort raden i stället, kontrollera att Framework Preset är Next.js under Project Settings, Build and Deployment, och driftsätt igen.',
+    indexCase: (file) => `startsidan heter ${file}, men Vercel visar index.html med små bokstäver för /, så sajten ger 404 NOT_FOUND på Linux`,
+    indexCaseFix: (file) => `Döp om ${file} till index.html. Git ignorerar ett namnbyte som bara ändrar skiftläge på macOS och Windows, så byt namn i två steg via ett tillfälligt namn.`,
     yellow: (n) => `${n} projektinställning${n === 1 ? "" : "ar"} kan göra att Vercel-bygget beter sig annorlunda än på din dator.`,
     ok: "En lockfil, ett build-skript och en Node-version som Vercel stöder.",
   },
