@@ -23,9 +23,9 @@ jobs:
       contents: read
       id-token: write # lets GitHub prove which public repo is asking; no account, no secret
     steps:
-      - uses: jonjys/deploydoctor/action@master`;
+      - uses: jonjys/deploydoctor-action@v1`;
 
-const PAID_WORKFLOW = `      - uses: jonjys/deploydoctor/action@master
+const PAID_WORKFLOW = `      - uses: jonjys/deploydoctor-action@v1
         with:
           token: \${{ secrets.DEPLOYDOCTOR_TOKEN }}
           # Private repository? Let the scan read it:
@@ -63,13 +63,14 @@ export default function CiPage() {
           </p>
           <pre><code>{WORKFLOW}</code></pre>
           <p className="ci-copy"><CopyTextButton text={WORKFLOW} label="Copy workflow" copiedLabel="Copied" /></p>
+          <p>Also listed on the <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a>.</p>
         </section>
 
         <section>
           <h2>2. Private repository or more than 3 pull requests a day</h2>
           <p>
             Open <Link href="/account">My scans</Link> in the browser you paid in and click Create API token. Tokens work while a pass is
-            active, which is any pass: {plans.day.price} for 24 hours, {plans.week.price} for 7 days or {plans.public.price} a month, and are never
+            active, which is any pass: {plans.day.usd} for 24 hours, {plans.week.usd} for 7 days or {plans.public.usd} a month, and are never
             subject to the daily limit. Store it as a repository secret named <code>DEPLOYDOCTOR_TOKEN</code> under Settings, Secrets and variables, Actions.
           </p>
           <pre><code>{PAID_WORKFLOW}</code></pre>
@@ -123,7 +124,7 @@ export default function CiPage() {
           </div>
           <Link className="cta-button" href="/">Scan a repository →</Link>
         </aside>
-        <p className="guide-updated">Updated 2026-10-08 · <a href="https://github.com/jonjys/deploydoctor/tree/master/action">Action source</a></p>
+        <p className="guide-updated">Updated 2026-10-09 · <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a> · <a href="https://github.com/jonjys/deploydoctor-action">Action source</a></p>
       </article>
     </main>
   );
