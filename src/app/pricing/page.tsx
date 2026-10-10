@@ -22,6 +22,7 @@ export default async function Pricing() {
       <h2>{t(`plan.${key}.name`)}</h2><p className="price">{planPrice(key, lang)}<small>{t(`plan.${key}.cadence`)}</small></p>
       <ul><li>{t("pricing.unlimited")}</li><li>{t("pricing.shareable")}</li>{key !== "week" && key !== "day" && <li>{t("pricing.history")}</li>}
         <li>{t("pricing.privateRepos")}</li><li className="plan-note">{t("pricing.privateToken")}</li><li className="plan-note">{t("pricing.privateSession")}</li>
+        <li>{t("pricing.diag")}</li>
         <li>{t("pricing.ci")}</li>
         {key === "week" && <li>{t("pricing.expires")}</li>}{key === "day" && <li>{t("pricing.expiresDay")}</li>}
         {key !== "week" && key !== "day" && <li>{t("pricing.cancel")}</li>}</ul>
