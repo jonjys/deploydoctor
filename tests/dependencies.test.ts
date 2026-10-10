@@ -77,3 +77,23 @@ test("template strings are blanked with their line breaks kept, and code around 
   assert.doesNotMatch(blanked, /inside-template|nested|deep|escaped/);
   assert.deepEqual(moduleImports(source).map((use) => `${use.specifier}:${use.line}`), ["after:4", "same-line:5", "last:6"]);
 });
+
+test("a package-lock.json written on macOS without the Linux binary of a native package is reported", async () => {
+  const { npmMissingLinuxBinaries } = await import("../src/lib/dependencies");
+  const lock = (withLinux: boolean) => JSON.stringify({ lockfileVersion: 3, packages: {
+    "": { dependencies: { tailwindcss: "4.1.0" } },
+    "node_modules/lightningcss": { version: "1.30.1", optionalDependencies: {
+      "lightningcss-darwin-arm64": "1.30.1", "lightningcss-linux-x64-gnu": "1.30.1", "lightningcss-linux-x64-musl": "1.30.1", "lightningcss-win32-x64-msvc": "1.30.1" } },
+    "node_modules/lightningcss-darwin-arm64": { version: "1.30.1", optional: true, os: ["darwin"] },
+    ...(withLinux ? { "node_modules/lightningcss-linux-x64-gnu": { version: "1.30.1", optional: true, os: ["linux"] } } : {}),
+    "node_modules/@tailwindcss/oxide": { version: "4.1.0", optionalDependencies: { "@tailwindcss/oxide-darwin-arm64": "4.1.0", "@tailwindcss/oxide-linux-x64-gnu": "4.1.0" } },
+    "node_modules/@tailwindcss/oxide-darwin-arm64": { version: "4.1.0", optional: true },
+    ...(withLinux ? { "node_modules/@tailwindcss/oxide-linux-x64-gnu": { version: "4.1.0", optional: true } } : {}),
+    // Only a musl binary present does not count as the Vercel binary; no other platform present means nothing to compare.
+    "node_modules/esbuild": { version: "0.25.0", optionalDependencies: { "@esbuild/linux-x64": "0.25.0" } },
+  } });
+  assert.deepEqual(npmMissingLinuxBinaries(lock(false)), ["@tailwindcss/oxide", "lightningcss"]);
+  assert.deepEqual(npmMissingLinuxBinaries(lock(true)), []);
+  assert.deepEqual(npmMissingLinuxBinaries("not json"), []);
+  assert.deepEqual(npmMissingLinuxBinaries(JSON.stringify({ lockfileVersion: 1, dependencies: {} })), []);
+});

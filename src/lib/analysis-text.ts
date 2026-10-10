@@ -41,6 +41,7 @@ export type AnalysisText = {
   deps: {
     missingRed: (name: string) => string; missingYellow: (name: string) => string; missingFix: (name: string, command: string) => string;
     red: (n: number) => string; yellow: (n: number) => string; partial: string; ok: string; okNotTraced: string;
+    nativeMissing: (name: string) => string; nativeFix: string; nativeYellow: (n: number) => string;
     driftChanged: (name: string, wanted: string, lockfile: string, locked: string) => string;
     driftAdded: (name: string, lockfile: string) => string; driftRemoved: (name: string, lockfile: string) => string;
     pnpmRed: (n: number) => string; pnpmYellow: (n: number) => string; npmYellow: (n: number) => string; pnpmFix: string; npmFix: string;
@@ -145,6 +146,9 @@ const en: AnalysisText = {
     partial: "No dependency problems in the files we read, but the scan did not finish.",
     ok: "Every package the Next.js build imports is declared in package.json, and the lockfile matches it.",
     okNotTraced: "No dependency problems found. Imports are traced for a Next.js app at the repository root.",
+    nativeMissing: (name) => `package-lock.json has ${name} for macOS or Windows but not its Linux x64 binary; npm ci on Vercel installs exactly the lockfile, so anything that loads ${name} fails with Cannot find module`,
+    nativeFix: "Delete package-lock.json and node_modules, run npm install, check that package-lock.json now has a linux-x64 entry for the package, and commit it. If it still does not, add that entry to optionalDependencies in package.json.",
+    nativeYellow: (n) => `${n} native package${n === 1 ? " is missing its Linux binary" : "s are missing their Linux binaries"} in package-lock.json, a known npm bug when the lockfile is written on macOS or Windows.`,
     driftChanged: (name, wanted, lockfile, locked) => `package.json asks for ${name} "${wanted}", but ${lockfile} has "${locked}"`,
     driftAdded: (name, lockfile) => `${name} is in package.json but not in ${lockfile}`,
     driftRemoved: (name, lockfile) => `${name} is still in ${lockfile} but no longer in package.json`,
@@ -278,6 +282,9 @@ const sv: AnalysisText = {
     partial: "Inga beroendeproblem i filerna vi läste, men skanningen blev inte klar.",
     ok: "Alla paket som Next.js-bygget importerar finns i package.json, och lockfilen stämmer med den.",
     okNotTraced: "Inga beroendeproblem hittades. Importer följs för en Next.js-app i repots rot.",
+    nativeMissing: (name) => `package-lock.json har ${name} för macOS eller Windows men inte dess Linux x64-binär; npm ci på Vercel installerar exakt lockfilen, så allt som laddar ${name} faller med Cannot find module`,
+    nativeFix: "Ta bort package-lock.json och node_modules, kör npm install, kontrollera att package-lock.json nu har en linux-x64-post för paketet och committa den. Saknas den fortfarande, lägg till den posten under optionalDependencies i package.json.",
+    nativeYellow: (n) => `${n} ${n === 1 ? "inbyggt paket saknar sin" : "inbyggda paket saknar sina"} Linux-binär${n === 1 ? "" : "er"} i package-lock.json, ett känt npm-fel när lockfilen skrivs på macOS eller Windows.`,
     driftChanged: (name, wanted, lockfile, locked) => `package.json vill ha ${name} "${wanted}", men ${lockfile} har "${locked}"`,
     driftAdded: (name, lockfile) => `${name} finns i package.json men inte i ${lockfile}`,
     driftRemoved: (name, lockfile) => `${name} finns kvar i ${lockfile} men inte längre i package.json`,
