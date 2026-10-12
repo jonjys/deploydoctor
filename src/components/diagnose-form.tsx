@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useT } from "@/components/lang";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
+import { SolvedPrompt } from "@/components/solved-prompt";
 
 type Diagnosis = {
   verdict: "diagnosed" | "needs_more_context" | "not_a_build_log";
@@ -28,6 +29,7 @@ export function DiagnoseForm() {
   const [error, setError] = useState("");
   const [paywall, setPaywall] = useState(false);
   const [result, setResult] = useState<Diagnosis | null>(null);
+  const [resultId, setResultId] = useState("");
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -39,6 +41,7 @@ export function DiagnoseForm() {
         setPaywall(Boolean(data.paywall));
         throw new Error(data.error || t("diag.failed"));
       }
+      setResultId(crypto.randomUUID());
       setResult(data.diagnosis);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("diag.failed"));
@@ -78,6 +81,7 @@ export function DiagnoseForm() {
           <ul>{result.missingContext.map((item, index) => <li key={index}>{item}</li>)}</ul>
         </>}
         <p className="diag-note">{t("diag.ai")}</p>
+        {resultId && <SolvedPrompt key={resultId} kind="diagnosis" target={resultId} />}
         <div className="diag-actions">
           <button className="cta-button" type="button" onClick={() => { setResult(null); setLog(""); }}>{t("diag.again")}</button>
           <Link href="/">{t("diag.scanCta")} →</Link>
