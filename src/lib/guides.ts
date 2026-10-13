@@ -170,6 +170,33 @@ export const guides: Guide[] = [
       ] },
     ],
   },
+  {
+    slug: "supabase-42501-permission-denied-new-table",
+    title: "Supabase 42501 permission denied for table: the missing GRANT on new tables",
+    description: "A new table returns 42501 permission denied through the Supabase Data API even though RLS policies look right. Supabase is removing the automatic grants on new tables in public. What changed, how to fix it with the right GRANT, and how to catch it in your migrations.",
+    updated: "2026-10-13",
+    check: "Supabase",
+    sections: [
+      { heading: "What the error means", body: [
+        "The Data API (supabase-js, REST and GraphQL) answers with code 42501 and permission denied for table your_table when the role making the request has no privilege on that table at all. This happens before row level security is even looked at, so changing policies does not help.",
+        "Grants and RLS do different jobs. A GRANT decides whether a role such as anon or authenticated can reach the table. RLS policies decide which rows that role sees once it gets there. A table needs both.",
+      ], code: "{\n  \"code\": \"42501\",\n  \"message\": \"permission denied for table todos\",\n  \"hint\": \"Grant the required privileges to the current role with: GRANT SELECT ON public.todos TO anon;\"\n}" },
+      { heading: "Why it started now", body: [
+        "Until now, tables you created in the public schema were automatically granted select, insert, update and delete to anon, authenticated and service_role. That made every new table reachable the moment it was created, even if you forgot to enable RLS.",
+        "Supabase is moving the platform default to revoke those automatic grants, so exposure becomes opt in. Where the new default applies, a migration that only creates a table and its policies leaves the table unreachable, and the app gets 42501. The Supabase docs describe the change under Securing your API, Default privileges for new tables and functions.",
+      ] },
+      { heading: "The fix: grant only what each role needs", body: [
+        "Add the grants in the same migration that creates the table and enables RLS. They belong together. Grant the minimum each role needs: read only for anonymous visitors if the data is public, full access for signed in users (still filtered by your policies), and full access for server code that uses the service role.",
+      ], code: "alter table public.todos enable row level security;\n\ngrant select on table public.todos to anon;\ngrant select, insert, update, delete on table public.todos to authenticated;\ngrant select, insert, update, delete on table public.todos to service_role;\n\ncreate policy \"own todos\" on public.todos\n  for all to authenticated\n  using ((select auth.uid()) = user_id)\n  with check ((select auth.uid()) = user_id);" },
+      { heading: "Do not fix it by granting everything", body: [
+        "grant all on all tables in schema public to anon makes the error go away and exposes every table, including ones you never meant to put behind the Data API. If a table has no RLS, anyone with your anon key can then read and change every row. Grant table by table, and keep RLS enabled on every table the Data API can reach.",
+        "Also look for policies with using (true) or with check (true) on insert, update or delete for anon. A public read policy can be intentional. A write policy that lets anyone write any row usually is not.",
+      ] },
+      { heading: "Catch it before you deploy", body: [
+        "DeployDoctor reads supabase/migrations in order and reports, per table in public: tables with no row level security, tables with no GRANT to anon, authenticated or service_role, and policies that let anyone write without a condition. The fix for a missing grant comes with the exact SQL for that table. Scan your repository for free on the home page, or run it on every pull request with the GitHub Action.",
+      ] },
+    ],
+  },
 ];
 
 export function guideBySlug(slug: string): Guide | undefined {
