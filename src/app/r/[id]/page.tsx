@@ -9,6 +9,7 @@ import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { SiteNav } from "@/components/site-nav";
 import { CopyFixesButton } from "@/components/copy-fixes-button";
 import { CopyTextButton } from "@/components/copy-text-button";
+import { SolvedPrompt } from "@/components/solved-prompt";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { PatchOffer } from "@/components/patch-offer";
 import { SITE_URL } from "@/lib/site";
@@ -213,6 +214,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           );
         })}
       </section>
+
+      <SolvedPrompt kind="report" target={id} repo={report.repo_url} />
 
       <section className="report-actions" aria-labelledby="action-heading">
         <div>

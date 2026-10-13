@@ -7,6 +7,7 @@ import type { Lang } from "@/lib/i18n";
 import { ignoringRule } from "@/lib/gitignore";
 import { nodeRangeAllowsMajor } from "@/lib/node-range";
 import { findSecrets } from "@/lib/secrets";
+import { auditMigrations, grantSql, MIGRATION_FILE } from "@/lib/supabase-sql";
 import { lockfileMentions, manifestSpecifiers, moduleImports, npmMissingLinuxBinaries, npmRootSpecifiers, packageName, pnpmOverrides, pnpmRootSpecifiers, stripComments,
   specifierDrift, tsconfigAliases } from "@/lib/dependencies";
 
@@ -784,8 +785,29 @@ function checkSupabase(snapshot: RepositorySnapshot, x: AnalysisText): CheckResu
     }
   }
 
+  // Migrations: replayed in order, only when every migration file was read (a gap could hide the grant or the RLS line).
+  const migrations = snapshot.entries.filter((entry) => entry.type === "blob" && MIGRATION_FILE.test(entry.path)).map((entry) => entry.path).sort();
+  const audit = migrations.length && migrations.every((file) => snapshot.contents.has(file))
+    ? auditMigrations(migrations.map((file) => ({ file, source: snapshot.contents.get(file)! }))) : { tables: [], openPolicies: [] };
+  const noRls: Finding[] = audit.tables.filter((table) => !table.rls).map((table) => ({ file: table.file, line: table.line,
+    problem: x.supabase.rlsMissing(table.name), fix: x.supabase.rlsFix(table.name) }));
+  const noGrant: Finding[] = audit.tables.filter((table) => !table.granted).map((table) => ({ file: table.file, line: table.line,
+    problem: x.supabase.grantsMissing(table.name), fix: x.supabase.grantsFix(grantSql(table.name)) }));
+  const open: Finding[] = audit.openPolicies.map((policy) => ({ file: policy.file, line: policy.line,
+    problem: x.supabase.openPolicy(policy.policy, policy.table, policy.command), fix: x.supabase.openPolicyFix }));
+  const findings = [...noRls, ...open, ...noGrant];
+
   const title = x.titles.supabase;
-  if (violations.size) return makeCheck("supabase", title, "red", x.supabase.red, x.supabase.fix, [...violations]);
+  const evidence = [...violations, ...findings.map((item) => `${item.file}:${item.line} → ${item.problem}`)];
+  if (violations.size || noRls.length) {
+    const explanation = [violations.size ? x.supabase.red : "", noRls.length ? x.supabase.rlsRed(noRls.length) : "",
+      open.length ? x.supabase.openYellow(open.length) : "", noGrant.length ? x.supabase.grantsYellow(noGrant.length) : ""].filter(Boolean).join(" ");
+    return makeCheck("supabase", title, "red", explanation, violations.size ? x.supabase.fix : noRls[0].fix, evidence, findings);
+  }
+  if (findings.length) {
+    const explanation = [open.length ? x.supabase.openYellow(open.length) : "", noGrant.length ? x.supabase.grantsYellow(noGrant.length) : ""].filter(Boolean).join(" ");
+    return makeCheck("supabase", title, "yellow", explanation, findings[0].fix, evidence, findings);
+  }
   if (snapshot.partial) return makeCheck("supabase", title, "yellow", x.supabase.partial, partialFix(snapshot, x));
   return makeCheck("supabase", title, "green", x.supabase.ok, x.noChange);
 }

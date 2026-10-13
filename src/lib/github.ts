@@ -2,6 +2,7 @@ import "server-only";
 
 import { analyzeSnapshot, MISNAMED_ENV_TEMPLATE, type RepositorySnapshot } from "@/lib/analyzer";
 import { detectStack, type Stack } from "@/lib/stack";
+import { MIGRATION_FILE } from "@/lib/supabase-sql";
 import { t, type Lang, type MessageKey } from "@/lib/i18n";
 import type { Category, ReportResults } from "@/types/report";
 
@@ -111,6 +112,7 @@ function priorityFor(pathname: string): number {
   if (/^(?:tsconfig|jsconfig|vercel)\.json$/.test(pathname) || /\.prisma$/.test(pathname) || ROOT_LOCKFILE.test(pathname)
     || /^next\.config\.[cm]?[jt]s$/.test(pathname)) return 2;
   if (API_ROUTE.test(pathname)) return 3;
+  if (MIGRATION_FILE.test(pathname)) return 4;
   if (/(?:^|\/)(?:src\/)?app\/.*\/(?:page|layout|loading|default|not-found)\.[jt]sx$/i.test(pathname)) return 4;
   return 5;
 }
@@ -156,6 +158,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
           entry.path === "vercel.json" ||
           /^(?:tsconfig|jsconfig)\.json$/.test(entry.path) ||
           /\.prisma$/.test(entry.path) ||
+          MIGRATION_FILE.test(entry.path) ||
           MISNAMED_ENV_TEMPLATE.test(entry.path) ||
           /(?:^|\/)\.env(?:\..+)?$/.test(entry.path)))),
     )
