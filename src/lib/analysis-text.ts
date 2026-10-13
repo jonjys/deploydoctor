@@ -37,6 +37,9 @@ export type AnalysisText = {
   supabase: {
     serverBrowser: (file: string) => string; clientKey: (file: string) => string;
     red: string; fix: string; partial: string; ok: string;
+    rlsMissing: (table: string) => string; rlsFix: (table: string) => string; rlsRed: (n: number) => string;
+    grantsMissing: (table: string) => string; grantsFix: (sql: string) => string; grantsYellow: (n: number) => string;
+    openPolicy: (policy: string, table: string, command: string) => string; openPolicyFix: string; openYellow: (n: number) => string;
   };
   deps: {
     missingRed: (name: string) => string; missingYellow: (name: string) => string; missingFix: (name: string, command: string) => string;
@@ -138,6 +141,15 @@ const en: AnalysisText = {
     fix: "Use Supabase credentials only in server-only modules, and keep SUPABASE_SECRET_KEY or the legacy service role key out of Client Components.",
     partial: "No Supabase mix-up found, but the scan did not finish.",
     ok: "No Supabase browser client is used in server code and no service role key is referenced in client code.",
+    rlsMissing: (table) => `public.${table} has no row level security in the migrations, so anyone with the anon key can read and change every row through the Data API`,
+    rlsFix: (table) => `Add a migration with alter table public.${table} enable row level security; and then policies for the rows each role may see. With RLS on and no policy, the Data API returns no rows.`,
+    rlsRed: (n) => `${n} table${n === 1 ? " has" : "s have"} no row level security.`,
+    grantsMissing: (table) => `public.${table} is created without a GRANT to anon, authenticated or service_role; Supabase is removing the automatic grants on new tables, and where that default applies the Data API answers 42501 permission denied`,
+    grantsFix: (sql) => `Add a migration that grants only what each role needs, for example:\n${sql}\nKeep row level security on: grants decide which roles reach the table, policies decide which rows.`,
+    grantsYellow: (n) => `${n} table${n === 1 ? " has" : "s have"} no Data API grants in the migrations and will answer 42501 once the automatic grants are gone.`,
+    openPolicy: (policy, table, command) => `policy ${policy} on public.${table} lets anyone ${({ all: "read and change", insert: "insert", update: "update", delete: "delete" } as Record<string, string>)[command] ?? command} rows with no condition`,
+    openPolicyFix: "Limit the policy to the role that needs it, such as to authenticated, and give it a real condition, for example using ((select auth.uid()) = user_id). Keep true only for data meant to be public.",
+    openYellow: (n) => `${n} polic${n === 1 ? "y lets" : "ies let"} anyone write without a condition.`,
   },
   deps: {
     missingRed: (name) => `imports ${name}, which is in neither package.json nor the lockfile, so Vercel never installs it and the build fails`,
@@ -279,6 +291,15 @@ const sv: AnalysisText = {
     fix: "Använd Supabase-uppgifter bara i server-only-moduler, och håll SUPABASE_SECRET_KEY eller den gamla service role-nyckeln borta från Client Components.",
     partial: "Ingen Supabase-förväxling hittad, men skanningen blev inte klar.",
     ok: "Ingen Supabase-webbläsarklient används i serverkod och ingen service role-nyckel refereras i klientkod.",
+    rlsMissing: (table) => `public.${table} saknar row level security i migreringarna, så vem som helst med anon-nyckeln kan läsa och ändra varje rad via Data API`,
+    rlsFix: (table) => `Lägg till en migrering med alter table public.${table} enable row level security; och sedan policys för de rader varje roll får se. Med RLS på och ingen policy ger Data API inga rader.`,
+    rlsRed: (n) => `${n} tabell${n === 1 ? "" : "er"} saknar row level security.`,
+    grantsMissing: (table) => `public.${table} skapas utan GRANT till anon, authenticated eller service_role; Supabase tar bort de automatiska rättigheterna på nya tabeller, och där det gäller svarar Data API med 42501 permission denied`,
+    grantsFix: (sql) => `Lägg till en migrering som bara ger varje roll det den behöver, till exempel:\n${sql}\nBehåll row level security: rättigheter styr vilka roller som når tabellen, policys styr vilka rader.`,
+    grantsYellow: (n) => `${n} tabell${n === 1 ? "" : "er"} saknar rättigheter för Data API i migreringarna och svarar 42501 när de automatiska rättigheterna försvinner.`,
+    openPolicy: (policy, table, command) => `policyn ${policy} på public.${table} låter vem som helst ${({ all: "läsa och ändra", insert: "lägga till", update: "uppdatera", delete: "ta bort" } as Record<string, string>)[command] ?? command} rader utan villkor`,
+    openPolicyFix: "Begränsa policyn till rollen som behöver den, till exempel to authenticated, och ge den ett riktigt villkor, till exempel using ((select auth.uid()) = user_id). Behåll true bara för data som ska vara publik.",
+    openYellow: (n) => `${n} policy${n === 1 ? "" : "s"} låter vem som helst skriva utan villkor.`,
   },
   deps: {
     missingRed: (name) => `importerar ${name}, som varken finns i package.json eller i lockfilen, så Vercel installerar det aldrig och bygget kraschar`,
