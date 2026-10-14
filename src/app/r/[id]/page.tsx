@@ -17,6 +17,7 @@ import { getT } from "@/lib/lang";
 import { FIX_SERVICE_ENABLED } from "@/lib/fix-service";
 import { dateLocale, type MessageKey } from "@/lib/i18n";
 import { overallLabel } from "@/lib/report-summary";
+import { activePlan, customerSession } from "@/lib/access";
 
 const statusLabelKeys: Record<CheckStatus, MessageKey> = {
   red: "report.fail",
@@ -81,6 +82,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const { lang, t } = await getT();
   const report = await getReport(id);
   if (!report) notFound();
+  // Someone with an active pass is never asked to buy another one.
+  const plan = await activePlan(await customerSession());
 
   const { results } = report;
   const repoName = `${results.repository.owner}/${results.repository.name}`;
@@ -224,7 +227,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         </div>
         <div className="action-buttons">
           <CopyFixes parts={parts} />
-          <ScanCheckoutButton plan="day" style={{ background: "transparent" }} context={report.repo_url}>{t("report.dayCta")}</ScanCheckoutButton>
+          {!plan && <ScanCheckoutButton plan="day" style={{ background: "transparent" }} context={report.repo_url}>{t("report.dayCta")}</ScanCheckoutButton>}
           {FIX_SERVICE_ENABLED && <WhenOpenRed checks={checkStates}>
             <Link className="cta-button" href={`/checkout?plan=fix-all&report=${id}`}>
               {t("report.fixAll")}
