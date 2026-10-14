@@ -622,3 +622,11 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .recent-scans ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .recent-scans li { display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
 .recent-scans li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+
+/* Next steps under a diagnosis: scan the repository the log cloned, or keep going with a day pass. */
+.diag-box { margin: 22px 0 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); overflow-wrap: anywhere; }
+.diag-box p { margin: 0 0 12px; }
+.diag-box a:not(.cta-button) { color: var(--ink); font-weight: 650; text-underline-offset: 3px; }
+.diag-offer { border-color: var(--ink); background: var(--yellow-soft); }
+.guide-cta-links { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.guide-cta-links a:not(.cta-button) { font-size: 14px; text-underline-offset: 3px; }
