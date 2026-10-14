@@ -19,7 +19,7 @@ type GitHubRepository = {
   private: boolean;
 };
 
-type GitTree = {
+export type GitTree = {
   truncated: boolean;
   tree: Array<{
     path: string;
@@ -29,7 +29,7 @@ type GitTree = {
   }>;
 };
 
-type GitBlob = {
+export type GitBlob = {
   content: string;
   encoding: "base64" | string;
 };
@@ -81,7 +81,7 @@ export function parseGitHubRepoUrl(input: string): {
   return { owner, name, canonicalUrl: `https://github.com/${owner}/${name}` };
 }
 
-async function githubRequest<T>(pathname: string, token?: string): Promise<T> {
+export async function githubRequest<T>(pathname: string, token?: string): Promise<T> {
   const response = await fetch(`${GITHUB_API}${pathname}`, {
     headers: {
       Accept: "application/vnd.github+json",

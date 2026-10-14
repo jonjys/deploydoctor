@@ -185,13 +185,21 @@ function withCaseOf(wanted: string, actual: string): string {
   return [...wanted].map((char, index) => actual[index]?.toLowerCase() === char.toLowerCase() ? actual[index] : char).join("");
 }
 
-function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
+/**
+ * An import that does not resolve on Linux. `case` means a tracked file matches except for letter case,
+ * and `exact` is the specifier spelled the way the file is named; `missing` means no file matches at all.
+ */
+export type ImportProblem =
+  | { kind: "case"; file: string; line: number; specifier: string; actual: string; exact: string }
+  | { kind: "missing"; file: string; line: number; specifier: string; target: string };
+
+/** Every unresolved relative or `@/` import in the snapshot's source files. The imports check and the patch service share it. */
+export function importProblems(snapshot: RepositorySnapshot): ImportProblem[] {
   const files = new Set(snapshot.entries.filter((entry) => entry.type === "blob").map((entry) => entry.path));
   // Linux file systems (and so Vercel builds) are case-sensitive; macOS and Windows are not.
   const filesByLowerCase = new Map([...files].map((file) => [file.toLowerCase(), file]));
   const aliases = aliasRoots(snapshot);
-  const missing: Finding[] = [];
-  let caseMismatches = 0;
+  const problems: ImportProblem[] = [];
 
   for (const [file, source] of snapshot.contents) {
     // next-env.d.ts intentionally references generated .next type files that are gitignored.
@@ -221,16 +229,23 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
           .find((item) => item.actual);
         if (caseMatch?.actual) {
           const exact = caseMatch.toSpecifier(withCaseOf(caseMatch.base, caseMatch.actual));
-          missing.push({ file, line, problem: x.imports.caseProblem(original, caseMatch.actual), fix: x.imports.caseFix(exact, line) });
-          caseMismatches += 1;
+          problems.push({ kind: "case", file, line, specifier: original, actual: caseMatch.actual, exact });
           continue;
         }
-        const target = candidates[0];
-        missing.push({ file, line, problem: x.imports.problem(original), fix: x.imports.fix(target, line),
-          command: `git add -- ${shellQuote(target)}` });
+        problems.push({ kind: "missing", file, line, specifier: original, target: candidates[0] });
       }
     }
   }
+  return problems;
+}
+
+function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
+  const problems = importProblems(snapshot);
+  const caseMismatches = problems.filter((problem) => problem.kind === "case").length;
+  const missing: Finding[] = problems.map((problem) => problem.kind === "case"
+    ? { file: problem.file, line: problem.line, problem: x.imports.caseProblem(problem.specifier, problem.actual), fix: x.imports.caseFix(problem.exact, problem.line) }
+    : { file: problem.file, line: problem.line, problem: x.imports.problem(problem.specifier), fix: x.imports.fix(problem.target, problem.line),
+      command: `git add -- ${shellQuote(problem.target)}` });
 
   if (missing.length) {
     return makeCheck(

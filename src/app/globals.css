@@ -389,6 +389,13 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .repair-cta p { margin: 0; }
 .repair-cta a { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; text-decoration: none; }
 .repair-cta a:hover { background: var(--acid); }
+.patch-offer { margin-top: 22px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); font-size: 13px; line-height: 1.5; }
+.patch-offer .section-kicker { margin: 0 0 6px; }
+.patch-offer p { margin: 8px 0; overflow-wrap: anywhere; }
+.patch-offer code { overflow-wrap: anywhere; }
+.patch-consent { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0; }
+.patch-error { color: #9b1c1c; }
+.patch-file { max-height: 360px; overflow: auto; padding: 14px; background: white; border: 1px solid var(--line); border-radius: 7px; font-size: 12px; }
 .account-list { margin-bottom: 70px; }
 .account-list > a, .account-list > div { display: block; padding: 20px; margin: 12px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; overflow-wrap: anywhere; }
 .account-list small { display: block; color: var(--muted); margin-top: 5px; }

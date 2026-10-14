@@ -11,6 +11,7 @@ import { CopyFixesButton } from "@/components/copy-fixes-button";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { SolvedPrompt } from "@/components/solved-prompt";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
+import { PatchOffer } from "@/components/patch-offer";
 import { SITE_URL } from "@/lib/site";
 import { getT } from "@/lib/lang";
 import { FIX_SERVICE_ENABLED } from "@/lib/fix-service";
@@ -200,6 +201,9 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                       )}
                     </div>
                   )}
+                  {/* Letter-case findings are the ones without a `git add` command; only those can be patched. */}
+                  {check.id === "imports" && check.status === "red" && !report.is_private
+                    && check.findings?.some((finding) => !finding.command) && <PatchOffer reportId={id} />}
                   {FIX_SERVICE_ENABLED && check.status === "red" && <div className="repair-cta"><p>{t("report.fixCta")}</p>
                     <Link href={`/checkout?plan=fix-one&report=${id}&check=${check.id}`}>{t("report.fixOne")}</Link>
                     <Link href={`/checkout?plan=fix-all&report=${id}`}>{t("report.fixAll")}</Link>
