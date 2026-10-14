@@ -32,7 +32,10 @@ export async function POST(request: Request) {
     const plan = await activePlan(customer);
     if (!plan) {
       const quota = await reserveScan(request, `diagnose:${hashRequestIp(request)}`);
-      if (!quota.allowed) return Response.json({ error: t(lang, "diag.limit"), paywall: true, resetsAt: quota.resetsAt }, { status: 429 });
+      if (!quota.allowed) {
+        console.log("dd-funnel", JSON.stringify({ step: "paywall", plan: null, reason: "diagnose_limit" }));
+        return Response.json({ error: t(lang, "diag.limit"), paywall: true, resetsAt: quota.resetsAt }, { status: 429 });
+      }
       reservation = quota.id;
     }
 

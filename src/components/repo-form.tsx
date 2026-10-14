@@ -6,21 +6,13 @@ import Link from "next/link";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { CATEGORIES } from "@/lib/categories";
 import { describeStack, type Stack } from "@/lib/stack";
+import { repoUrlFromParam } from "@/lib/repo-input";
 import { useLang, useT } from "@/components/lang";
 import type { Category } from "@/types/report";
 
-const GITHUB_REPO_URL = /^https:\/\/(?:www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/i;
 const FALLBACK_CHECKS: Category[] = ["next", "vercel", "env"];
-type Detection = { status: "loading" } | { status: "ready"; stack: Stack } | { status: "error" };
+type Detection = { status: "loading" } | { status: "ready"; stack: Stack } | { status: "error"; privateRepo: boolean };
 const STEP_KEYS = ["form.step.tree", "form.step.stack", "form.step.checks", "form.step.report"] as const;
-
-/** ?repo=owner/name or a full GitHub URL, so a shared link can start a scan on arrival. */
-function repoUrlFromParam(value: string | null): string {
-  const trimmed = (value ?? "").trim();
-  if (!trimmed) return "";
-  const url = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(trimmed) ? `https://github.com/${trimmed}` : trimmed;
-  return GITHUB_REPO_URL.test(url) ? url : "";
-}
 
 function GitHubIcon() {
   return (
@@ -37,13 +29,17 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
   const router = useRouter();
   const lang = useLang();
   const t = useT();
-  const autoRepoUrl = repoUrlFromParam(useSearchParams().get("repo"));
+  const searchParams = useSearchParams();
+  const autoRepoUrl = repoUrlFromParam(searchParams.get("repo"));
+  // Back from checkout for a private repo: the scan waits for the token instead of starting on arrival.
+  const privateStart = searchParams.get("private") === "1";
   const [repoUrl, setRepoUrl] = useState(autoRepoUrl);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const [paywall, setPaywall] = useState(false);
+  const [privateRepo, setPrivateRepo] = useState(false);
   const [privateToken, setPrivateToken] = useState("");
   const [detection, setDetection] = useState<Detection | null>(null);
   const [selected, setSelected] = useState<Set<Category>>(new Set());
@@ -83,6 +79,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
     const current = new AbortController();
     controller.current = current;
     setDetection({ status: "loading" });
+    let maybePrivate = false;
     try {
       const response = await fetch("/api/detect", {
         method: "POST",
@@ -90,14 +87,15 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         body: JSON.stringify({ repoUrl: url, ...(tokenRef.current ? { privateToken: tokenRef.current } : {}) }),
         signal: current.signal,
       });
-      const payload = (await response.json()) as { stack?: Stack; checks?: Category[] };
+      const payload = (await response.json()) as { stack?: Stack; checks?: Category[]; privateRepo?: boolean };
+      maybePrivate = Boolean(payload.privateRepo);
       if (!response.ok || !payload.stack || !payload.checks) throw new Error("detect failed");
       setSelected(new Set(payload.checks));
       setDetection({ status: "ready", stack: payload.stack });
     } catch {
       if (current.signal.aborted) return;
       setSelected(new Set(FALLBACK_CHECKS));
-      setDetection({ status: "error" });
+      setDetection({ status: "error", privateRepo: maybePrivate });
     }
   }
 
@@ -105,8 +103,9 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
     setRepoUrl(value);
     cancelDetection();
     setDetection(null);
-    if (GITHUB_REPO_URL.test(value.trim())) {
-      timer.current = window.setTimeout(() => void detectStack(value.trim()), 500);
+    const url = repoUrlFromParam(value);
+    if (url) {
+      timer.current = window.setTimeout(() => void detectStack(url), 500);
     }
   }
 
@@ -126,12 +125,14 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
       setError(t("form.pickOne"));
       return;
     }
-    await startScan(repoUrl, sendChecks);
+    // Anything the normalizer cannot read goes as typed, so the server explains what is wrong with it.
+    await startScan(repoUrlFromParam(repoUrl) || repoUrl.trim(), sendChecks);
   }
 
   async function startScan(url: string, sendChecks: boolean) {
     setError("");
     setPaywall(false);
+    setPrivateRepo(false);
     cancelDetection();
     setStep(0);
     setIsLoading(true);
@@ -150,10 +151,12 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         id?: string;
         error?: string;
         paywall?: boolean;
+        privateRepo?: boolean;
       };
 
       if (!response.ok || !payload.id) {
         setPaywall(Boolean(payload.paywall));
+        setPrivateRepo(Boolean(payload.privateRepo));
         throw new Error(payload.error || t("form.scanFailed"));
       }
 
@@ -171,7 +174,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
 
   const autoStarted = useRef(false);
   useEffect(() => {
-    if (!autoRepoUrl || autoStarted.current) return;
+    if (!autoRepoUrl || privateStart || autoStarted.current) return;
     autoStarted.current = true;
     const handle = window.setTimeout(() => void startScan(autoRepoUrl, false), 0);
     return () => window.clearTimeout(handle);
@@ -190,9 +193,11 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
           className="repo-input"
           id="repo-url"
           name="repoUrl"
-          type="url"
+          type="text"
           inputMode="url"
           autoComplete="url"
+          autoCapitalize="none"
+          spellCheck={false}
           placeholder="https://github.com/owner/repository"
           value={repoUrl}
           onChange={(event) => handleUrlChange(event.target.value)}
@@ -222,7 +227,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
           <p className="stack-summary" aria-live="polite">
             {detection.status === "loading" ? t("form.detecting")
               : detection.status === "ready" ? <>{t("form.detected")} <strong>{describeStack(detection.stack, lang)}</strong></>
-              : t("form.detectFailed")}
+              : detection.privateRepo ? t("gh.maybePrivate") : t("form.detectFailed")}
           </p>
           {detection.status !== "loading" && (
             <div className="check-options">
@@ -236,21 +241,24 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
           )}
         </fieldset>
       )}
-      {privateAccess && <details className="private-input"><summary>{t("form.private.summary")}</summary>
+      {/* Shown to everyone: without a pass, a token scan answers with the $2 offer. */}
+      <details className="private-input" open={privateStart}><summary>{t("form.private.summary")}</summary>
+        {!privateAccess && <p>{t("form.private.needsPass")}</p>}
         <label htmlFor="private-token">{t("form.private.label")}</label>
         <input id="private-token" type="password" autoComplete="off" value={privateToken} onChange={(event) => { setPrivateToken(event.target.value); tokenRef.current = event.target.value.trim(); }} />
-        <p>{t("form.private.note")}</p>
-      </details>}
+        <p>{t("form.private.note")} <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">{t("form.private.tokenLink")}</a></p>
+      </details>
       {error ? (
         <p className="form-error" role="alert">
           {error}
         </p>
       ) : null}
-      {paywall && <div className="paywall" role="status"><strong>{t("paywall.title")}</strong>
-        <p>{t("paywall.body")}</p>
+      {paywall && <div className="paywall" role="status"><strong>{privateRepo ? t("paywall.privateTitle") : t("paywall.title")}</strong>
+        {/* The error above already says why; the daily limit text does not apply to a private repo. */}
+        {!privateRepo && <p>{t("paywall.body")}</p>}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 14 }}>
-          <ScanCheckoutButton plan="day" context={repoUrl.trim() || undefined}>{t("paywall.day")}</ScanCheckoutButton>
-          <ScanCheckoutButton plan="week" style={{ background: "transparent" }} context={repoUrl.trim() || undefined}>{t("paywall.week")}</ScanCheckoutButton>
+          <ScanCheckoutButton plan="day" context={repoUrlFromParam(repoUrl) || undefined}>{t("paywall.day")}</ScanCheckoutButton>
+          <ScanCheckoutButton plan="week" style={{ background: "transparent" }} context={repoUrlFromParam(repoUrl) || undefined}>{t("paywall.week")}</ScanCheckoutButton>
           <Link className="cta-button" style={{ background: "transparent" }} href="/pricing">{t("paywall.cta")}</Link>
         </div>
       </div>}
