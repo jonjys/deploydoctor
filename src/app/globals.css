@@ -423,6 +423,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .plugin-line + .plugin-line { margin-top: 8px; }
 .plugin-line a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
 .plugin-line a:hover { color: var(--ink); }
+.plugin-line.is-hint { color: var(--muted); }
 .repo-input-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .slash-hint { display: none; flex: 0 0 auto; padding: 2px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 11px; }
 @media (hover: hover) and (min-width: 761px) { .input-shell:not(:focus-within) .slash-hint { display: inline-block; } }
