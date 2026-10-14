@@ -3,6 +3,7 @@ import "server-only";
 import { analyzeSnapshot, MISNAMED_ENV_TEMPLATE, type RepositorySnapshot } from "@/lib/analyzer";
 import { detectStack, type Stack } from "@/lib/stack";
 import { MIGRATION_FILE } from "@/lib/supabase-sql";
+import { githubFailure } from "@/lib/github-status";
 import { t, type Lang, type MessageKey } from "@/lib/i18n";
 import type { Category, ReportResults } from "@/types/report";
 
@@ -81,7 +82,8 @@ export function parseGitHubRepoUrl(input: string): {
   return { owner, name, canonicalUrl: `https://github.com/${owner}/${name}` };
 }
 
-export async function githubRequest<T>(pathname: string, token?: string): Promise<T> {
+/** `userToken`: the token is the buyer's own, so a 401, 403 or 404 means it cannot read the repository. */
+export async function githubRequest<T>(pathname: string, token?: string, userToken = false): Promise<T> {
   const response = await fetch(`${GITHUB_API}${pathname}`, {
     headers: {
       Accept: "application/vnd.github+json",
@@ -94,13 +96,10 @@ export async function githubRequest<T>(pathname: string, token?: string): Promis
   });
 
   if (!response.ok) {
-    if (response.status === 404) {
-      throw new GitHubApiError("Repository not found; make sure it is public and the URL is correct.", 404, "gh.notFound");
-    }
-    if (response.status === 403 || response.status === 429) {
-      throw new GitHubApiError("GitHub's API rate limit was reached; add GITHUB_TOKEN or try again later.", 429, "gh.rateLimit");
-    }
-    throw new GitHubApiError(`GitHub returned an unexpected ${response.status} response.`, 502, "gh.unexpected");
+    // GitHub also answers 403 for primary (remaining 0) and secondary (Retry-After) rate limits.
+    const rateLimited = response.headers.get("x-ratelimit-remaining") === "0" || response.headers.has("retry-after");
+    const failure = githubFailure(response.status, { userToken, rateLimited });
+    throw new GitHubApiError(failure.message, failure.status, failure.key);
   }
 
   return (await response.json()) as T;
@@ -125,15 +124,17 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
   const { owner, name, canonicalUrl } = parseGitHubRepoUrl(repoUrl);
   const repoPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
   const token = options.privateToken || process.env.GITHUB_TOKEN;
-  const repository = await githubRequest<GitHubRepository>(repoPath, token);
+  const userToken = Boolean(options.privateToken);
+  const repository = await githubRequest<GitHubRepository>(repoPath, token, userToken);
   if (repository.private && !options.privateToken) {
     throw new GitHubApiError("DeployDoctor only scans public repositories.", 400, "gh.privateOnly");
   }
 
   // CI scans the pull request head; the website scans the default branch.
   const ref = options.ref && options.ref !== repository.default_branch ? options.ref : undefined;
+  // With a ref, a 404 means the ref is missing, not that the token lacks access.
   const tree = await githubRequest<GitTree>(
-    `${repoPath}/git/trees/${encodeURIComponent(ref ?? repository.default_branch)}?recursive=1`, token,
+    `${repoPath}/git/trees/${encodeURIComponent(ref ?? repository.default_branch)}?recursive=1`, token, userToken && !ref,
   ).catch((error: unknown) => {
     if (ref && error instanceof GitHubApiError && error.status === 404) throw new GitHubApiError(`Branch or commit "${ref}" was not found in the repository.`, 404, "gh.refNotFound");
     throw error;
@@ -232,7 +233,7 @@ export async function detectRepositoryStack(repoUrl: string, options: { privateT
   const { owner, name, canonicalUrl } = parseGitHubRepoUrl(repoUrl);
   const repoPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
   const token = options.privateToken || process.env.GITHUB_TOKEN;
-  const repository = await githubRequest<GitHubRepository>(repoPath, token);
+  const repository = await githubRequest<GitHubRepository>(repoPath, token, Boolean(options.privateToken));
   if (repository.private && !options.privateToken) {
     throw new GitHubApiError("DeployDoctor only scans public repositories.", 400, "gh.privateOnly");
   }
