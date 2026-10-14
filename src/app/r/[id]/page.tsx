@@ -83,7 +83,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const report = await getReport(id);
   if (!report) notFound();
   // Someone with an active pass is never asked to buy another one.
-  const plan = await activePlan(await customerSession());
+  const plan = await activePlan(await customerSession()).catch(() => null);
 
   const { results } = report;
   const repoName = `${results.repository.owner}/${results.repository.name}`;

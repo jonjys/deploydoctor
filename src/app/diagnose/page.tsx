@@ -16,8 +16,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function DiagnosePage() {
   const { t } = await getT();
-  // Someone with a pass already has no cap, so the result never asks them to buy one.
-  const plan = await activePlan(await customerSession());
+  // Someone with a pass already has no cap, so the result never asks them to buy one. A database hiccup only shows the offer.
+  const plan = await activePlan(await customerSession()).catch(() => null);
   return (
     <main className="site-shell">
       <SiteNav current="diagnose" />
