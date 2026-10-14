@@ -77,6 +77,7 @@ export default async function Home() {
         <p className="plugin-line">
           <Link href="/ai-plugin">{t("home.pluginLine")}</Link>
         </p>
+        <p className="plugin-line is-hint">{t("home.urlTrick")}</p>
       </section>
 
       <section className="checks-panel" aria-labelledby="checks-heading">
