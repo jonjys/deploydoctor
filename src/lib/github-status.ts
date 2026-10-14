@@ -1,4 +1,5 @@
 import type { MessageKey } from "@/lib/i18n";
+import { allowsPrivate, type Plan } from "@/lib/plans";
 
 /**
  * What a failed GitHub API response means for the visitor. With the buyer's own token, GitHub answers
@@ -16,4 +17,9 @@ export function githubFailure(status: number, options: { userToken?: boolean; ra
 /** GitHub hides a private repository behind a 404 when no token is sent, so a visitor without a pass gets the $2 offer instead of a dead end. */
 export function maybePrivateRepo(key: MessageKey | undefined, privateToken?: string): boolean {
   return (key === "gh.notFound" && !privateToken) || key === "gh.privateOnly";
+}
+
+/** A pass holder who scans a private repo without a token only needs to paste one; the public-only text would contradict the pass. */
+export function needsTokenPrompt(key: MessageKey | undefined, plan: Plan | null | undefined): boolean {
+  return key === "gh.privateOnly" && allowsPrivate(plan);
 }

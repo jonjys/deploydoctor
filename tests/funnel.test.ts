@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { githubFailure, maybePrivateRepo } from "../src/lib/github-status";
+import { githubFailure, maybePrivateRepo, needsTokenPrompt } from "../src/lib/github-status";
 import { repoUrlFromParam } from "../src/lib/repo-input";
 import { confirmFallbackEvent, scanRepoFromContext } from "../src/lib/checkout-guard";
 import { messages, t } from "../src/lib/i18n";
@@ -28,6 +28,15 @@ test("a repo GitHub would not show may be private, unless a token was already se
   assert.equal(maybePrivateRepo(undefined), false);
 });
 
+test("a pass holder who scans a private repo without a token is asked for one, not told it must be public", () => {
+  for (const plan of ["day", "week", "public", "private"] as const) assert.equal(needsTokenPrompt("gh.privateOnly", plan), true, plan);
+  assert.equal(needsTokenPrompt("gh.privateOnly", null), false);
+  assert.equal(needsTokenPrompt("gh.privateOnly", undefined), false);
+  // A 404 can still be a typo, so a pass holder keeps the plain not-found error.
+  assert.equal(needsTokenPrompt("gh.notFound", "day"), false);
+  assert.equal(needsTokenPrompt("gh.tokenNoAccess", "day"), false);
+});
+
 test("the repo field and ?repo= accept what people paste and give one canonical URL", () => {
   const canonical = "https://github.com/vercel/commerce";
   for (const input of [
@@ -39,6 +48,7 @@ test("the repo field and ?repo= accept what people paste and give one canonical 
   assert.equal(repoUrlFromParam("acme/site.github.io"), "https://github.com/acme/site.github.io");
   for (const input of [
     "", null, undefined, "vercel", "github.com/vercel", "https://github.com/vercel", "https://gitlab.com/vercel/commerce",
+    "gitlab.com/vercel", "bitbucket.org/team", "www.github.com/vercel",
     "https://github.com/vercel/commerce/pulls", "vercel/commerce/extra", "javascript:alert(1)", "owner/repo name",
   ]) assert.equal(repoUrlFromParam(input), "", String(input));
 });
@@ -62,7 +72,7 @@ test("the confirm fallback event never outranks or dedupes the real webhook even
 
 test("new funnel copy exists in both languages, prices match, and has no dashes or quotation marks", () => {
   const keys = ["gh.maybePrivate", "gh.tokenNoAccess", "paywall.privateTitle", "form.private.needsPass", "form.private.tokenLink",
-    "form.private.note", "confirm.scanNow", "account.passActive", "account.historyNote", "pricing.badge.week", "pricing.badge.public"] as const;
+    "form.private.note", "confirm.scanNow", "account.passActive", "gh.privateNeedsToken", "account.historyNote", "pricing.badge.week", "pricing.badge.public"] as const;
   for (const key of keys) {
     for (const lang of ["en", "sv"] as const) {
       assert.ok(messages[lang][key], `${lang} ${key}`);

@@ -2,7 +2,7 @@ import { analyzeGitHubRepository, GitHubApiError, parseGitHubRepoUrl } from "@/l
 import { parseGitRef } from "@/lib/git-ref";
 import { saveReport } from "@/lib/reports";
 import { activePlan, bearerToken, finishScan, requestCustomer, reserveScan, type Entitlement } from "@/lib/access";
-import { maybePrivateRepo } from "@/lib/github-status";
+import { maybePrivateRepo, needsTokenPrompt } from "@/lib/github-status";
 import { OIDC_HEADER, verifyGitHubOidc } from "@/lib/github-oidc";
 import { sameOrigin } from "@/lib/stripe";
 import { parseChecks } from "@/lib/categories";
@@ -72,7 +72,8 @@ export async function POST(request: Request) {
     privateToken = typeof body.privateToken === "string" ? body.privateToken.trim() : undefined;
     if (privateToken && (oidcRepo || !allowsPrivate(plan?.plan) || privateToken.length > 300)) {
       console.log("dd-funnel", JSON.stringify({ step: "paywall", plan: plan?.plan ?? null, reason: "private" }));
-      return Response.json({ error: t(lang, "err.privatePlan"), paywall: true }, { status: 402 });
+      // Without a pass the form shows the private repo offer, not the daily limit text.
+      return Response.json({ error: t(lang, "err.privatePlan"), paywall: true, privateRepo: !viaCi && !plan }, { status: 402 });
     }
     if (!plan) {
       const quota = await reserveScan(request, oidcRepo ? `repo:${oidcRepo.toLowerCase()}` : undefined);
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
         console.log("dd-funnel", JSON.stringify({ step: "paywall", plan: null, reason: "maybe_private" }));
         return Response.json({ error: t(lang, "gh.maybePrivate"), paywall: true, privateRepo: true }, { status: error.status });
       }
+      if (!viaCi && needsTokenPrompt(error.key, plan?.plan)) return Response.json({ error: t(lang, "gh.privateNeedsToken") }, { status: error.status });
       return Response.json({ error: error.localized(lang) }, { status: error.status });
     }
     if (error instanceof Error && error.name === "TimeoutError") {
