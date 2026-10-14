@@ -13,6 +13,21 @@ export function checkoutContext(context: unknown): string {
   return typeof context === "string" ? context.slice(0, 300) : "";
 }
 
+/** owner/name when a pass was bought from a scan of that repository, so the buyer can go straight back to it. */
+export function scanRepoFromContext(context: string | null | undefined): string | undefined {
+  return /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)$/.exec(context ?? "")?.[1];
+}
+
+/**
+ * The checkout.session.completed event the confirm route applies itself when the buyer is back before the webhook.
+ * Its own id keeps it apart from the real event, and dating it to the session's creation means every real event
+ * for the same row is at least as new, so apply_billing_event lets the real one overwrite it and never the reverse.
+ */
+export function confirmFallbackEvent(checkout: { id: string; created: number }): Stripe.Event {
+  return { id: `confirm_${checkout.id}`, type: "checkout.session.completed", created: checkout.created,
+    data: { object: { id: checkout.id } } } as Stripe.Event;
+}
+
 /** Prefer a Stripe-hosted answer from older sessions, then the metadata we store now. */
 export function orderContext(session: {
   custom_fields?: Array<{ key?: string | null; text?: { value?: string | null } | null }> | null;
