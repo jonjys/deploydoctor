@@ -6,6 +6,7 @@ import { useT } from "@/components/lang";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { SolvedPrompt } from "@/components/solved-prompt";
+import { clonedRepo } from "@/lib/vercel-log";
 
 type Diagnosis = {
   verdict: "diagnosed" | "needs_more_context" | "not_a_build_log";
@@ -22,7 +23,7 @@ type Diagnosis = {
 const MAX = 12_000;
 
 /** Paste a failing build log, get Claude's diagnosis. The free allowance and passes are enforced by /api/diagnose. */
-export function DiagnoseForm() {
+export function DiagnoseForm({ hasPass = false }: { hasPass?: boolean }) {
   const t = useT();
   const [log, setLog] = useState("");
   const [busy, setBusy] = useState(false);
@@ -51,6 +52,8 @@ export function DiagnoseForm() {
 
   if (result) {
     const patch = result.patch.code.trim();
+    // The web scan always reads the default branch, so the box names the repository and never the commit.
+    const repo = clonedRepo(log);
     return (
       <section className="diag-result" aria-live="polite">
         <p className="section-kicker">
@@ -81,10 +84,15 @@ export function DiagnoseForm() {
           <ul>{result.missingContext.map((item, index) => <li key={index}>{item}</li>)}</ul>
         </>}
         <p className="diag-note">{t("diag.ai")}</p>
+        {repo && <p className="diag-box"><Link href={`/?repo=${repo}`}>{t("diag.scanRepo", { repo })} →</Link></p>}
         {resultId && <SolvedPrompt key={resultId} kind="diagnosis" target={resultId} />}
+        {result.verdict === "diagnosed" && !hasPass && <div className="diag-box diag-offer">
+          <p>{t("diag.rescue.body")}</p>
+          <ScanCheckoutButton plan="day">{t("diag.rescue.cta")}</ScanCheckoutButton>
+        </div>}
         <div className="diag-actions">
           <button className="cta-button" type="button" onClick={() => { setResult(null); setLog(""); }}>{t("diag.again")}</button>
-          <Link href="/">{t("diag.scanCta")} →</Link>
+          {!repo && <Link href="/">{t("diag.scanCta")} →</Link>}
         </div>
       </section>
     );
@@ -104,6 +112,7 @@ export function DiagnoseForm() {
       </button>
       {error && <p className="form-error" role="alert">{error}</p>}
       {paywall && <div className="paywall" role="status"><strong>{t("paywall.title")}</strong>
+        <p>{t("paywall.body")}</p>
         <div className="pass-actions">
           <ScanCheckoutButton plan="day">{t("paywall.day")}</ScanCheckoutButton>
           <ScanCheckoutButton plan="week" style={{ background: "transparent" }}>{t("paywall.week")}</ScanCheckoutButton>

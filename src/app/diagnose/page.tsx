@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SiteNav } from "@/components/site-nav";
 import { DiagnoseForm } from "@/components/diagnose-form";
+import { activePlan, customerSession } from "@/lib/access";
 import { getT } from "@/lib/lang";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -15,6 +16,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function DiagnosePage() {
   const { t } = await getT();
+  // Someone with a pass already has no cap, so the result never asks them to buy one. A database hiccup only shows the offer.
+  const plan = await activePlan(await customerSession()).catch(() => null);
   return (
     <main className="site-shell">
       <SiteNav current="diagnose" />
@@ -22,7 +25,7 @@ export default async function DiagnosePage() {
         <p className="section-kicker">{t("diag.kicker")}</p>
         <h1>{t("diag.h1")}</h1>
         <p className="guide-lead">{t("diag.sub")}</p>
-        <DiagnoseForm />
+        <DiagnoseForm hasPass={Boolean(plan)} />
       </article>
     </main>
   );

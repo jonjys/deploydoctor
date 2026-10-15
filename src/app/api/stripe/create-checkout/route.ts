@@ -48,6 +48,7 @@ export async function POST(request: Request) {
       integrationIdentifier: `deploydoctor-${Array.from(randomBytes(8), (b) => String.fromCharCode(97 + b % 26)).join("")}`,
     }));
     (await cookies()).set("dd_checkout", nonce, { ...cookieOptions, maxAge: 24 * 60 * 60 });
+    console.log("dd-funnel", JSON.stringify({ step: "checkout_created", plan, reason: checkoutContext(body.context) ? "repo" : null }));
     return Response.json({ url: session.url });
   } catch (error) {
     if (error instanceof SyntaxError) return Response.json({ error: t(lang, "pay.invalidJson") }, { status: 400 });

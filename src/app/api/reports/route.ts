@@ -1,7 +1,8 @@
 import { analyzeGitHubRepository, GitHubApiError, parseGitHubRepoUrl } from "@/lib/github";
 import { parseGitRef } from "@/lib/git-ref";
 import { saveReport } from "@/lib/reports";
-import { activePlan, bearerToken, finishScan, requestCustomer, reserveScan } from "@/lib/access";
+import { activePlan, bearerToken, finishScan, requestCustomer, reserveScan, type Entitlement } from "@/lib/access";
+import { maybePrivateRepo, needsTokenPrompt } from "@/lib/github-status";
 import { OIDC_HEADER, verifyGitHubOidc } from "@/lib/github-oidc";
 import { sameOrigin } from "@/lib/stripe";
 import { parseChecks } from "@/lib/categories";
@@ -41,6 +42,9 @@ export async function POST(request: Request) {
   if (!viaCi && !sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });
   let reservation: string | undefined;
   let saved = false;
+  // Outside the try so a GitHub error can tell a possibly private repo from a plain typo.
+  let plan: Entitlement | null = null;
+  let privateToken: string | undefined;
   try {
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 10_000) {
@@ -63,16 +67,21 @@ export async function POST(request: Request) {
     if (checks === null) return Response.json({ error: t(lang, "err.badChecks") }, { status: 400 });
     const ref = viaCi ? parseGitRef(body.ref) : undefined;
     if (ref === null) return Response.json({ error: t(lang, "err.badRef") }, { status: 400 });
-    const plan = await activePlan(customer);
+    plan = await activePlan(customer);
     if (viaToken && !plan) return Response.json({ error: t(lang, "err.tokenPlan"), paywall: true, pricingUrl: `${SITE_URL}/pricing` }, { status: 402 });
-    const privateToken = typeof body.privateToken === "string" ? body.privateToken.trim() : undefined;
+    privateToken = typeof body.privateToken === "string" ? body.privateToken.trim() : undefined;
     if (privateToken && (oidcRepo || !allowsPrivate(plan?.plan) || privateToken.length > 300)) {
-      return Response.json({ error: t(lang, "err.privatePlan"), paywall: true }, { status: 402 });
+      console.log("dd-funnel", JSON.stringify({ step: "paywall", plan: plan?.plan ?? null, reason: "private" }));
+      // Without a pass the form shows the private repo offer, not the daily limit text.
+      return Response.json({ error: t(lang, "err.privatePlan"), paywall: true, privateRepo: !viaCi && !plan }, { status: 402 });
     }
     if (!plan) {
       const quota = await reserveScan(request, oidcRepo ? `repo:${oidcRepo.toLowerCase()}` : undefined);
-      if (!quota.allowed) return Response.json({ error: t(lang, "err.dailyLimit"),
-        paywall: true, resetsAt: quota.resetsAt }, { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((Date.parse(quota.resetsAt) - Date.now()) / 1000))) } });
+      if (!quota.allowed) {
+        console.log("dd-funnel", JSON.stringify({ step: "paywall", plan: null, reason: "limit" }));
+        return Response.json({ error: t(lang, "err.dailyLimit"),
+          paywall: true, resetsAt: quota.resetsAt }, { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((Date.parse(quota.resetsAt) - Date.now()) / 1000))) } });
+      }
       reservation = quota.id;
     }
     const { canonicalUrl, results, isPrivate } = await analyzeGitHubRepository(body.repoUrl, { privateToken, checks, lang, ref });
@@ -85,6 +94,11 @@ export async function POST(request: Request) {
       return Response.json({ error: t(lang, "err.invalidJson") }, { status: 400 });
     }
     if (error instanceof GitHubApiError) {
+      if (!viaCi && !plan && maybePrivateRepo(error.key, privateToken)) {
+        console.log("dd-funnel", JSON.stringify({ step: "paywall", plan: null, reason: "maybe_private" }));
+        return Response.json({ error: t(lang, "gh.maybePrivate"), paywall: true, privateRepo: true }, { status: error.status });
+      }
+      if (!viaCi && needsTokenPrompt(error.key, plan?.plan)) return Response.json({ error: t(lang, "gh.privateNeedsToken") }, { status: error.status });
       return Response.json({ error: error.localized(lang) }, { status: error.status });
     }
     if (error instanceof Error && error.name === "TimeoutError") {

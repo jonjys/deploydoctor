@@ -2,6 +2,7 @@ import { activePlan, customerSession } from "@/lib/access";
 import { defaultChecks, describeStack } from "@/lib/stack";
 import { langFromRequest, t } from "@/lib/i18n";
 import { detectRepositoryStack, GitHubApiError } from "@/lib/github";
+import { maybePrivateRepo } from "@/lib/github-status";
 import { sameOrigin } from "@/lib/stripe";
 import { allowsPrivate } from "@/lib/plans";
 
@@ -11,6 +12,7 @@ export const maxDuration = 30;
 export async function POST(request: Request) {
   const lang = langFromRequest(request);
   if (!sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });
+  let privateToken: string | undefined;
   try {
     const raw = await request.text();
     if (raw.length > 10_000) return Response.json({ error: t(lang, "err.tooLarge") }, { status: 413 });
@@ -18,7 +20,7 @@ export async function POST(request: Request) {
     if (typeof body.repoUrl !== "string" || body.repoUrl.length > 300) {
       return Response.json({ error: t(lang, "err.repoUrl") }, { status: 400 });
     }
-    let privateToken = typeof body.privateToken === "string" ? body.privateToken.trim() : undefined;
+    privateToken = typeof body.privateToken === "string" ? body.privateToken.trim() : undefined;
     if (privateToken) {
       const plan = await activePlan(await customerSession());
       if (!allowsPrivate(plan?.plan) || privateToken.length > 300) privateToken = undefined;
@@ -27,7 +29,13 @@ export async function POST(request: Request) {
     return Response.json({ stack, summary: describeStack(stack, lang), checks: defaultChecks(stack) });
   } catch (error) {
     if (error instanceof SyntaxError) return Response.json({ error: t(lang, "err.invalidJson") }, { status: 400 });
-    if (error instanceof GitHubApiError) return Response.json({ error: error.localized(lang) }, { status: error.status });
+    if (error instanceof GitHubApiError) {
+      // The plan is read only on this path: without a pass the visitor gets the $2 offer, with one the plain error.
+      if (maybePrivateRepo(error.key, privateToken) && await customerSession().then(activePlan).then((plan) => !plan, () => false)) {
+        return Response.json({ error: t(lang, "gh.maybePrivate"), paywall: true, privateRepo: true }, { status: error.status });
+      }
+      return Response.json({ error: error.localized(lang) }, { status: error.status });
+    }
     if (error instanceof Error && error.name === "TimeoutError") return Response.json({ error: t(lang, "err.detectTimeout") }, { status: 504 });
     console.error("Stack detection failed:", error instanceof Error ? error.name : "unknown");
     return Response.json({ error: t(lang, "err.detectFailed") }, { status: 500 });

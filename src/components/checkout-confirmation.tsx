@@ -9,6 +9,7 @@ export function CheckoutConfirmation({ sessionId }: { sessionId: string }) {
   const [ready, setReady] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [needsRestore, setNeedsRestore] = useState(false);
+  const [repo, setRepo] = useState("");
   useEffect(() => {
     let canceled = false;
     const controller = new AbortController();
@@ -23,7 +24,10 @@ export function CheckoutConfirmation({ sessionId }: { sessionId: string }) {
         if (result.pending) {
           setMessage(t("confirm.pending"));
           if (count < 8) timer = setTimeout(() => confirm(count + 1), 2500);
-        } else { setReady(true); setMessage(result.repair ? t("confirm.repair") : t("confirm.done")); }
+        } else {
+          setReady(true); setMessage(result.repair ? t("confirm.repair") : t("confirm.done"));
+          if (!result.repair && typeof result.repo === "string") setRepo(result.repo);
+        }
       } catch { if (!canceled) setMessage(t("confirm.failed")); }
     }
     void confirm();
@@ -31,5 +35,7 @@ export function CheckoutConfirmation({ sessionId }: { sessionId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- t only changes with the language
   }, [sessionId, attempt]);
   return <><p role="status">{message}</p>{needsRestore && <p><Link href="/restore">{t("confirm.restoreLink")}</Link></p>}<div className="action-buttons">{!ready && <button className="cta-button" onClick={() => setAttempt(attempt + 1)}>{t("confirm.recheck")}</button>}
-    <Link className="cta-button" href="/account">{t("nav.myScans")} →</Link></div></>;
+    {/* Back to the scan the buyer paid for; private=1 opens the token field instead of starting without one. */}
+    {ready && repo && <Link className="cta-button" href={`/?repo=${repo}&private=1`}>{t("confirm.scanNow", { repo })} →</Link>}
+    <Link className="cta-button" style={ready && repo ? { background: "transparent" } : undefined} href="/account">{t("nav.myScans")} →</Link></div></>;
 }

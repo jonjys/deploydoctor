@@ -23,8 +23,10 @@ export default async function Account() {
     stripe_customer_id: `eq.${customer.customerId}`, select: "id,plan,status,report_id", order: "created_at.desc", limit: "100",
   }));
   return <main className="site-shell"><SiteNav current="account" /><header className="pricing-header"><h1>{t("nav.myScans")}</h1><p>{customer.email}</p>
-    <p>{plan ? t("account.active", { plan: t(`plan.${plan.plan}.name`), date: new Date(plan.current_period_end).toLocaleDateString(dateLocale(lang)) }) : t("account.noPlan")}</p>
-    {/* A 7-day pass is a one-time payment: there is no subscription to manage or cancel. */}
+    {/* A 24-hour pass is stored as a week pass, so a pass shows its end time instead of a plan name. */}
+    <p>{!plan ? t("account.noPlan") : hasHistory(plan.plan) ? t("account.active", { plan: t(`plan.${plan.plan}.name`), date: new Date(plan.current_period_end).toLocaleDateString(dateLocale(lang)) })
+      : t("account.passActive", { date: new Date(plan.current_period_end).toLocaleString(dateLocale(lang), { timeZone: "UTC", timeZoneName: "short" }) })}</p>
+    {/* A pass is a one-time payment with nothing to manage or cancel. Without an active plan the portal stays, for a past_due card, invoices or a lapsed plan. */}
     {plan && !hasHistory(plan.plan) ? <p>{t("account.passNote")}</p> : <BillingPortalButton />}</header><section className="account-list">
     {plan && <><h2>{t("account.ciTitle")}</h2><p>{t("account.ciBody")} <Link href="/ci">{t("account.ciGuide")}</Link></p><CiTokenButton /></>}
     <h2>{t("account.history")}</h2>
