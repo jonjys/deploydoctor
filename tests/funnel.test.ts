@@ -46,6 +46,8 @@ test("a pass holder who scans a private repo without a token is asked for one, n
   assert.match(t("en", "gh.notFoundNeedsToken"), /check the URL/);
   for (const lang of ["en", "sv"] as const) {
     assert.doesNotMatch(`${t(lang, "gh.privateNeedsToken")} ${t(lang, "gh.notFoundNeedsToken")}`, /only scans public|make sure it is public|bara publika|att det är publikt/);
+    // The token field sits above a scan error and below the detection line, so the prompt names it without a direction.
+    assert.doesNotMatch(`${t(lang, "gh.privateNeedsToken")} ${t(lang, "gh.notFoundNeedsToken")}`, /\b(?:below|above|nedan|ovan)\b/);
   }
 });
 
@@ -90,7 +92,7 @@ test("the confirm fallback event never outranks or dedupes the real webhook even
 test("new funnel copy exists in both languages, prices match, and has no dashes or quotation marks", () => {
   const keys = ["gh.maybePrivate", "gh.tokenNoAccess", "paywall.privateTitle", "form.private.needsPass", "form.private.tokenLink",
     "form.private.note", "confirm.scanNow", "account.passActive", "gh.privateNeedsToken", "account.historyNote", "pricing.badge.week", "pricing.badge.public",
-    "gh.notFoundNeedsToken", "confirm.backToDiagnosis", "diag.rescue.body", "diag.rescue.cta", "report.dayCta"] as const;
+    "gh.notFoundNeedsToken", "confirm.backToDiagnosis", "confirm.diagnoseLog", "diag.rescue.body", "diag.rescue.cta", "report.dayCta"] as const;
   for (const key of keys) {
     for (const lang of ["en", "sv"] as const) {
       assert.ok(messages[lang][key], `${lang} ${key}`);

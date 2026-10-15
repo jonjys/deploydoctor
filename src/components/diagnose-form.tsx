@@ -21,7 +21,7 @@ export function DiagnoseForm({ hasPass = false }: { hasPass?: boolean }) {
   const [result, setResult] = useState<Diagnosis | null>(null);
   const [resultId, setResultId] = useState("");
 
-  // Back from Stripe after the rescue offer: show the diagnosis again instead of an empty form.
+  // Back from Stripe: show the diagnosis again, or the log the paywall stopped, instead of an empty form.
   useEffect(() => {
     const saved = loadDiagnosis();
     if (!saved) return;
@@ -32,11 +32,15 @@ export function DiagnoseForm({ hasPass = false }: { hasPass?: boolean }) {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true); setError(""); setPaywall(false); setResult(null);
+    // What this tab kept belongs to the log before, so a failed request must not bring it back.
+    clearDiagnosis();
     try {
       const response = await fetch("/api/diagnose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ log }) });
       const data = await response.json() as { diagnosis?: Diagnosis; error?: string; paywall?: boolean };
       if (!response.ok || !data.diagnosis) {
         setPaywall(Boolean(data.paywall));
+        // The paywall's pass buttons leave for Stripe in this tab: the log waits to be diagnosed on the way back.
+        if (data.paywall) saveDiagnosis({ id: "", log, diagnosis: null });
         throw new Error(data.error || t("diag.failed"));
       }
       const id = crypto.randomUUID();

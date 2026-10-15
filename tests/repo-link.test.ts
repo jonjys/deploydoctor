@@ -115,12 +115,17 @@ test("the route sends a repo link to the home page scan and anything else to the
     assert.equal(response.status, 302, path);
     assert.equal(response.headers.get("location"), "https://deploydoctor.example/?repo=vercel/commerce", path);
   }
-  for (const path of ["/api/a/b/c", "/a.b/c/d", "/orgs/vercel/repositories", "/stars/x/y", "/github.com/security/advisories",
+  for (const path of ["/a.b/c/d", "/orgs/vercel/repositories", "/stars/x/y", "/github.com/security/advisories",
     "/vercel/.git.git", ...publicFiles.map((file) => `/${file.split(sep).join("/")}/x`)]) {
     const response = await call(path);
     assert.equal(response.status, 302, path);
     assert.equal(response.headers.get("location"), `https://deploydoctor.example${NOT_FOUND_PATH}`, path);
   }
-  // Other methods keep a plain 404.
+  // An unknown API path keeps a plain 404 for scripts, and so do other methods.
+  for (const path of ["/api/a/b/c", "/api/typo/x", "/API/x/y"]) {
+    const response = await call(path);
+    assert.equal(response.status, 404, path);
+    assert.equal(response.headers.get("location"), null, path);
+  }
   assert.equal(POST().status, 404);
 });

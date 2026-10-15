@@ -11,7 +11,7 @@ export function CheckoutConfirmation({ sessionId }: { sessionId: string }) {
   const [attempt, setAttempt] = useState(0);
   const [needsRestore, setNeedsRestore] = useState(false);
   const [repo, setRepo] = useState("");
-  const [diagnosis, setDiagnosis] = useState(false);
+  const [diagnosis, setDiagnosis] = useState<"" | "result" | "log">("");
   useEffect(() => {
     let canceled = false;
     const controller = new AbortController();
@@ -29,8 +29,8 @@ export function CheckoutConfirmation({ sessionId }: { sessionId: string }) {
         } else {
           setReady(true); setMessage(result.repair ? t("confirm.repair") : t("confirm.done"));
           if (!result.repair && typeof result.repo === "string") setRepo(result.repo);
-          // Bought from the rescue offer under a diagnosis in this tab: the diagnose page shows it again.
-          else if (!result.repair) setDiagnosis(loadDiagnosis() !== null);
+          // Bought from the rescue offer or the paywall of the diagnose page: it shows the diagnosis or the stopped log again.
+          else if (!result.repair) { const saved = loadDiagnosis(); setDiagnosis(!saved ? "" : saved.diagnosis ? "result" : "log"); }
         }
       } catch { if (!canceled) setMessage(t("confirm.failed")); }
     }
@@ -41,6 +41,6 @@ export function CheckoutConfirmation({ sessionId }: { sessionId: string }) {
   return <><p role="status">{message}</p>{needsRestore && <p><Link href="/restore">{t("confirm.restoreLink")}</Link></p>}<div className="action-buttons">{!ready && <button className="cta-button" onClick={() => setAttempt(attempt + 1)}>{t("confirm.recheck")}</button>}
     {/* Back to the scan the buyer paid for; private=1 opens the token field instead of starting without one. */}
     {ready && repo && <Link className="cta-button" href={`/?repo=${repo}&private=1`}>{t("confirm.scanNow", { repo })} →</Link>}
-    {ready && diagnosis && <Link className="cta-button" href="/diagnose">{t("confirm.backToDiagnosis")} →</Link>}
+    {ready && diagnosis && <Link className="cta-button" href="/diagnose">{t(diagnosis === "result" ? "confirm.backToDiagnosis" : "confirm.diagnoseLog")} →</Link>}
     <Link className="cta-button" style={ready && (repo || diagnosis) ? { background: "transparent" } : undefined} href="/account">{t("nav.myScans")} →</Link></div></>;
 }
