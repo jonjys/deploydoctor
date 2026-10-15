@@ -360,16 +360,21 @@ function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): Ch
 
 const ENV_NAME = /^[A-Z][A-Z0-9_]*$/;
 const ENV_ACCESS = /process\.env(?:\??\.([A-Z][A-Z0-9_]*)\b|(?:\?\.)?\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\])/;
-/** Right after a read: `?? "x"`, `|| 3000` or `` || `x` `` (a string, number or template literal), or the `?` of a ternary. */
-const ENV_FALLBACK = /\s*(?:\?\?|\|\|)\s*(?:["'`]|-?\.?\d)|\s*\?(?![?.])/y;
+/** Right after a read: `?? "x"`, `|| 3000` or `` || `x` `` (a string, number or template literal), or the `?` of a ternary (captured). */
+const ENV_FALLBACK = /\s*(?:\?\?|\|\|)\s*(?:["'`]|-?\.?\d)|\s*(\?)(?![?.])/y;
 /** Right before a read: the test of a ternary on an env variable, as in `process.env.X ? process.env.X : "x"`. */
 const ENV_TERNARY_TEST = new RegExp(`${ENV_ACCESS.source}\\s*\\?\\s*$`);
+/**
+ * Right before a read: a binary operator, so a ternary after the read tests the whole expression, as in
+ * `a === process.env.X ? b : c`. So does a fallback, except after `&&`, `||` or `??` (captured), as in `process.env.A ?? process.env.B ?? "x"`.
+ */
+const ENV_OPERATOR = /(?:[=!]==?|(?<!=)[<>]=?|[+\-*/%&|^]|\binstanceof|\bin|(&&|\|\||\?\?))\s*$/;
 
 /**
  * process.env.X, process.env?.X, process.env["X"], process.env?.["X"] and `const { X, Y: y = "" } = process.env`.
  * A read is optional when the code already copes with the variable being unset: a literal fallback (`?? "x"`,
  * `|| 3000`), a literal destructuring default, or a ternary on the variable itself. A fallback to another
- * env variable or any other expression keeps the read required.
+ * env variable or any other expression, and a read inside a comparison or arithmetic, keeps the read required.
  */
 export function extractEnvReads(source: string): Array<{ name: string; index: number; optional: boolean }> {
   const reads: Array<{ name: string; index: number; optional: boolean }> = [];
@@ -377,11 +382,16 @@ export function extractEnvReads(source: string): Array<{ name: string; index: nu
   const code = stripComments(source);
   const access = new RegExp(ENV_ACCESS, "g");
   let match: RegExpExecArray | null;
+  const operatorBefore = (index: number) => ENV_OPERATOR.exec(code.slice(Math.max(0, index - 200), index));
   while ((match = access.exec(code))) {
     const name = match[1] || match[2];
+    const operator = operatorBefore(match.index);
     ENV_FALLBACK.lastIndex = access.lastIndex;
+    const fallback = ENV_FALLBACK.exec(code);
     const test = ENV_TERNARY_TEST.exec(code.slice(Math.max(0, match.index - 200), match.index));
-    reads.push({ name, index: match.index, optional: ENV_FALLBACK.test(code) || (test?.[1] || test?.[2]) === name });
+    const covered = fallback && (fallback[1] ? !operator : !operator || operator[1]);
+    const guarded = test && (test[1] || test[2]) === name && !operatorBefore(match.index - test[0].length);
+    reads.push({ name, index: match.index, optional: Boolean(covered || guarded) });
   }
 
   const destructure = /\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*process\.env\b(?!\s*(?:\?\.|\.|\[))/g;

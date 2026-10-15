@@ -391,6 +391,34 @@ test("env reads with a literal fallback, a literal destructuring default or a te
   ]);
 });
 
+test("an env read on the right of a comparison or arithmetic stays required before a ternary or a fallback", () => {
+  const source = [
+    'if (req.headers.get("x") === process.env.CRON_SECRET ? ok() : deny()) {}',
+    "const a = token !== process.env.API_TOKEN ? 401 : 200;",
+    'const b = key === process.env.SAME ? process.env.SAME : "";',
+    "const c = count >=\n    process.env.LIMIT ? 1 : 2;",
+    'const d = flag && process.env.BOTH ? "a" : "b";',
+    'const e = "https://" + process.env.HOST || "http://localhost:3000";',
+    'const f = mode === /* exact */ process.env.MODE || "dev";',
+    // A ternary or fallback on the variable itself, after an arrow, a logical operator or an assignment, stays optional.
+    "const g = () => process.env.ARROW ? 1 : 2;",
+    'const h = flag && process.env.AND_OR || "d";',
+    "total += process.env.ADDED ? 1 : 0;",
+  ].join("\n");
+  assert.deepEqual(extractEnvReads(source).map((read) => [read.name, read.optional]), [
+    ["CRON_SECRET", false], ["API_TOKEN", false], ["SAME", false], ["SAME", false], ["LIMIT", false], ["BOTH", false],
+    ["HOST", false], ["MODE", false], ["ARROW", true], ["AND_OR", true], ["ADDED", true],
+  ]);
+
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }];
+  const env = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), ".env.example": "\n",
+    "app/page.tsx": 'const ok = auth === process.env.CRON_SECRET ? "ok" : "deny";\nexport default function Page() { return null }',
+  }), { checks: ["env"] }).checks[0];
+  assert.equal(env.status, "red");
+  assert.equal(env.suggestedFile?.content, "CRON_SECRET=\n");
+});
+
 test("variables read only with a fallback are yellow, and the suggested .env.example keeps them commented", () => {
   const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }];
   const files = {
