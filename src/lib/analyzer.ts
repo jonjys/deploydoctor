@@ -360,21 +360,51 @@ function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): Ch
 }
 
 const ENV_NAME = /^[A-Z][A-Z0-9_]*$/;
+const ENV_ACCESS = /process\.env(?:\??\.([A-Z][A-Z0-9_]*)\b|(?:\?\.)?\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\])/;
+/**
+ * Right after a read: `?? "x"`, `|| 3000` or `` || `x` `` (a non-empty string, number or template literal), or the `?` of a
+ * ternary (captured). An empty string, as in `process.env.KEY || ""`, only quiets the type checker: the value is still missing.
+ */
+const ENV_FALLBACK = /\s*(?:\?\?|\|\|)\s*(?:"(?!")|'(?!')|`(?!`)|-?\.?\d)|\s*(\?)(?![?.])/y;
+/** Right before a read: the test of a ternary on an env variable, as in `process.env.X ? process.env.X : "x"`. */
+const ENV_TERNARY_TEST = new RegExp(`${ENV_ACCESS.source}\\s*\\?\\s*$`);
+/**
+ * Right before a read: a binary operator, so a ternary after the read tests the whole expression, as in
+ * `a === process.env.X ? b : c`. So does a fallback, except after `&&`, `||` or `??` (captured), as in `process.env.A ?? process.env.B ?? "x"`.
+ */
+const ENV_OPERATOR = /(?:[=!]==?|(?<!=)[<>]=?|[+\-*/%&|^]|\binstanceof|\bin|(&&|\|\||\?\?))\s*$/;
 
-/** process.env.X, process.env?.X, process.env["X"], process.env?.["X"] and `const { X, Y: y = "" } = process.env`. */
-export function extractEnvReads(source: string): Array<{ name: string; index: number }> {
-  const reads: Array<{ name: string; index: number }> = [];
+/**
+ * process.env.X, process.env?.X, process.env["X"], process.env?.["X"] and `const { X, Y: y = "" } = process.env`.
+ * A read is optional when the code already copes with the variable being unset: a non-empty literal fallback
+ * (`?? "x"`, `|| 3000`), a non-empty literal destructuring default, or a ternary on the variable itself. A fallback to another
+ * env variable or any other expression, and a read inside a comparison or arithmetic, keeps the read required.
+ */
+export function extractEnvReads(source: string): Array<{ name: string; index: number; optional: boolean }> {
+  const reads: Array<{ name: string; index: number; optional: boolean }> = [];
   // Comments are blanked (not removed), so every index still points into the original source.
   const code = stripComments(source);
-  const access = /process\.env(?:\??\.([A-Z][A-Z0-9_]*)\b|(?:\?\.)?\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\])/g;
+  const access = new RegExp(ENV_ACCESS, "g");
   let match: RegExpExecArray | null;
-  while ((match = access.exec(code))) reads.push({ name: match[1] || match[2], index: match.index });
+  const operatorBefore = (index: number) => ENV_OPERATOR.exec(code.slice(Math.max(0, index - 200), index));
+  while ((match = access.exec(code))) {
+    const name = match[1] || match[2];
+    const operator = operatorBefore(match.index);
+    ENV_FALLBACK.lastIndex = access.lastIndex;
+    const fallback = ENV_FALLBACK.exec(code);
+    const test = ENV_TERNARY_TEST.exec(code.slice(Math.max(0, match.index - 200), match.index));
+    const covered = fallback && (fallback[1] ? !operator : !operator || operator[1]);
+    const guarded = test && (test[1] || test[2]) === name && !operatorBefore(match.index - test[0].length);
+    reads.push({ name, index: match.index, optional: Boolean(covered || guarded) });
+  }
 
   const destructure = /\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*process\.env\b(?!\s*(?:\?\.|\.|\[))/g;
   while ((match = destructure.exec(code))) {
     for (const part of match[1].split(",")) {
       const key = part.trim().replace(/^["']|["']?\s*(?::[\s\S]*|=[\s\S]*)?$/g, "").trim();
-      if (!part.trim().startsWith("...") && ENV_NAME.test(key)) reads.push({ name: key, index: match.index });
+      if (!part.trim().startsWith("...") && ENV_NAME.test(key)) {
+        reads.push({ name: key, index: match.index, optional: /^[^=]*=\s*(?:"(?!")|'(?!')|`(?!`)|-?\.?\d)/.test(part) });
+      }
     }
   }
   return reads.sort((left, right) => left.index - right.index);
@@ -692,6 +722,8 @@ function checkDependencies(snapshot: RepositorySnapshot, x: AnalysisText): Check
 function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const declared = new Set<string>();
   const used = new Set<string>();
+  // Read at least once without a literal fallback or a ternary check, so an unset value reaches the code as undefined.
+  const required = new Set<string>();
   const exposed = new Set<string>();
   const locations = new Map<string, { file: string; line: number }>();
 
@@ -713,16 +745,20 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
     }
 
     if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file)) continue;
-    for (const { name, index } of extractEnvReads(source)) {
+    for (const { name, index, optional } of extractEnvReads(source)) {
       used.add(name);
       if (!locations.has(name)) locations.set(name, { file, line: lineAt(source, index) });
+      // A required variable points at its first read without a fallback.
+      if (!optional && !required.has(name)) { required.add(name); locations.set(name, { file, line: lineAt(source, index) }); }
       if (/^NEXT_PUBLIC_.*(?:SECRET|SERVICE_ROLE|PRIVATE|PASSWORD|TOKEN|ADMIN|DATABASE_URL)/.test(name)) {
         exposed.add(name);
       }
     }
   }
 
-  const missing = [...used].filter((name) => !declared.has(name) && !isBuiltInEnv(name)).sort();
+  const missing = [...used].filter((name) => required.has(name) && !declared.has(name) && !isBuiltInEnv(name)).sort();
+  // Every read has a literal fallback or a ternary check, so an unset variable cannot break the app: worth documenting, never red.
+  const optional = [...used].filter((name) => !required.has(name) && !declared.has(name) && !isBuiltInEnv(name)).sort();
   const ignored = envExampleIgnoreRule(snapshot, [...used].some((name) => !isBuiltInEnv(name)));
   const evidence = [
     ...missing.map((name) => x.env.evidenceMissing(name)),
@@ -736,44 +772,54 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
   const conventionEvidence = [...(misnamed ? [x.env.evidenceMisnamed(misnamed)] : []), ...(ignored ? [x.env.evidenceGitignore(ignored.pattern)] : [])];
   const conventionProblems = [misnamed ? x.env.misnamed(misnamed) : "", ignored ? x.env.gitignore(ignored.pattern) : ""].filter(Boolean);
   const conventionFixes = [misnamed ? x.env.misnamedFix(misnamed) : "", ignored ? x.env.gitignoreFix(ENV_EXAMPLE_EXCEPTION) : ""].filter(Boolean);
+  const optionalProblem = optional.length ? x.env.optional(optional.length, optional.join(", ")) : "";
+  const optionalFix = optional.length ? x.env.fixOptional(optional.map((name) => `# ${name}=`).join(" + ")) : "";
+  const optionalEvidence = optional.map((name) => x.env.evidenceOptional(name));
+  const optionalFindings: Finding[] = optional.map((name) => ({ ...locations.get(name)!, problem: x.env.optionalProblem(name),
+    fix: x.env.optionalFix(name), command: "git add -- .env.example" }));
+  const withEnvExample = (check: CheckResult) => {
+    if (missing.length || optional.length) {
+      const existing = snapshot.contents.get(".env.example") ?? (misnamed ? assignmentsOnly(snapshot.contents.get(misnamed) ?? "") : undefined);
+      check.suggestedFile = { path: ".env.example", content: completeEnvExample(existing, missing, optional), command: "git add -- .env.example" };
+    }
+    return check;
+  };
 
   if (evidence.length) {
-    const check = makeCheck("env", title, "red",
+    return withEnvExample(makeCheck("env", title, "red",
       [missing.length ? x.env.missing(missing.length, missing.join(", ")) : "",
         exposed.size ? x.env.exposed(exposed.size, [...exposed].join(", ")) : "",
-        ...conventionProblems].filter(Boolean).join("; ") + ".",
+        ...conventionProblems, optionalProblem].filter(Boolean).join("; ") + ".",
       [...conventionFixes,
         missing.length ? x.env.fixMissing(missing.map((name) => `${name}=`).join(" + ")) : "",
-        exposed.size ? x.env.fixExposed : ""].filter(Boolean).join("; ") + ".",
-      [...conventionEvidence, ...evidence],
+        exposed.size ? x.env.fixExposed : "", optionalFix].filter(Boolean).join("; ") + ".",
+      [...conventionEvidence, ...evidence, ...optionalEvidence],
       [...misnamedFinding, ...gitignoreFinding,
         ...missing.map((name) => ({ ...locations.get(name)!, problem: x.env.missingProblem(name),
           fix: x.env.missingFix(name), command: "git add -- .env.example" })),
         ...[...exposed].map((name) => ({ ...locations.get(name)!, problem: x.env.exposedProblem(name),
-          fix: x.env.exposedFix(name.replace(/^NEXT_PUBLIC_/, "")) }))],
-    );
-    if (missing.length) {
-      const existing = snapshot.contents.get(".env.example") ?? (misnamed ? assignmentsOnly(snapshot.contents.get(misnamed) ?? "") : undefined);
-      check.suggestedFile = { path: ".env.example", content: completeEnvExample(existing, missing), command: "git add -- .env.example" };
-    }
-    return check;
+          fix: x.env.exposedFix(name.replace(/^NEXT_PUBLIC_/, "")) })),
+        ...optionalFindings],
+    ));
   }
-  if (misnamed || ignored) {
-    return makeCheck("env", title, "yellow", conventionProblems.join("; ") + ".", conventionFixes.join("; ") + ".",
-      conventionEvidence, [...misnamedFinding, ...gitignoreFinding]);
+  if (misnamed || ignored || optional.length) {
+    return withEnvExample(makeCheck("env", title, "yellow", [...conventionProblems, optionalProblem].filter(Boolean).join("; ") + ".",
+      [...conventionFixes, optionalFix].filter(Boolean).join("; ") + ".",
+      [...conventionEvidence, ...optionalEvidence], [...misnamedFinding, ...gitignoreFinding, ...optionalFindings]));
   }
   if (snapshot.partial) return makeCheck("env", title, "yellow", x.env.partial, partialFix(snapshot, x));
   return makeCheck("env", title, "green", used.size ? x.env.okUsed : x.env.okNone, x.noChange);
 }
 
 /**
- * The committed .env.example plus an empty line for every missing variable. A value that looks like a
- * real secret is emptied, so the suggested file never repeats one (the secrets check reports it).
+ * The committed .env.example plus an empty line for every missing variable and a commented one for every
+ * optional variable (an empty value would replace its fallback). A value that looks like a real secret is
+ * emptied, so the suggested file never repeats one (the secrets check reports it).
  */
-function completeEnvExample(existing: string | undefined, missing: string[]): string {
+function completeEnvExample(existing: string | undefined, missing: string[], optional: string[]): string {
   const text = (existing ?? "").replace(/\r\n/g, "\n").replace(/\n+$/, "");
   const lines = (text ? text.split("\n") : []).map((line) => findSecrets(line).length ? line.replace(/=.*$/, "=") : line);
-  return [...lines, ...missing.map((name) => `${name}=`)].join("\n") + "\n";
+  return [...lines, ...missing.map((name) => `${name}=`), ...optional.map((name) => `# ${name}=`)].join("\n") + "\n";
 }
 
 const ENV_EXAMPLE_EXCEPTION = "!.env.example";
