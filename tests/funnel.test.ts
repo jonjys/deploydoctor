@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { githubFailure, maybePrivateRepo, needsTokenPrompt } from "../src/lib/github-status";
+import { githubFailure, maybePrivateRepo, needsTokenPrompt, tokenPromptKey } from "../src/lib/github-status";
 import { repoUrlFromParam } from "../src/lib/repo-input";
 import { confirmFallbackEvent, scanRepoFromContext } from "../src/lib/checkout-guard";
 import { messages, t } from "../src/lib/i18n";
+import { planPrice } from "../src/lib/plans";
 
 test("a buyer's token that cannot read the repo says so instead of blaming visibility or the rate limit", () => {
   for (const status of [401, 403, 404]) {
@@ -32,9 +33,20 @@ test("a pass holder who scans a private repo without a token is asked for one, n
   for (const plan of ["day", "week", "public", "private"] as const) assert.equal(needsTokenPrompt("gh.privateOnly", plan), true, plan);
   assert.equal(needsTokenPrompt("gh.privateOnly", null), false);
   assert.equal(needsTokenPrompt("gh.privateOnly", undefined), false);
-  // A 404 can still be a typo, so a pass holder keeps the plain not-found error.
-  assert.equal(needsTokenPrompt("gh.notFound", "day"), false);
+  // Without a token GitHub hides a private repo behind a 404, so a pass holder is asked for a token there too.
+  for (const plan of ["day", "week", "public", "private"] as const) assert.equal(needsTokenPrompt("gh.notFound", plan), true, plan);
+  assert.equal(needsTokenPrompt("gh.notFound", null), false);
+  // With a token sent, a 404 is not about a missing token.
+  assert.equal(needsTokenPrompt("gh.notFound", "day", "github_pat_x"), false);
   assert.equal(needsTokenPrompt("gh.tokenNoAccess", "day"), false);
+  assert.equal(needsTokenPrompt("gh.rateLimit", "day"), false);
+  // Only GitHub's own answer calls the repo private; a 404 can still be a typo.
+  assert.equal(tokenPromptKey("gh.privateOnly"), "gh.privateNeedsToken");
+  assert.equal(tokenPromptKey("gh.notFound"), "gh.notFoundNeedsToken");
+  assert.match(t("en", "gh.notFoundNeedsToken"), /check the URL/);
+  for (const lang of ["en", "sv"] as const) {
+    assert.doesNotMatch(`${t(lang, "gh.privateNeedsToken")} ${t(lang, "gh.notFoundNeedsToken")}`, /only scans public|make sure it is public|bara publika|att det är publikt/);
+  }
 });
 
 test("the repo field and ?repo= accept what people paste and give one canonical URL", () => {
@@ -46,9 +58,14 @@ test("the repo field and ?repo= accept what people paste and give one canonical 
     "https://github.com/vercel/commerce/blob/main/app/page.tsx", "https://github.com/vercel/commerce?tab=readme-ov-file", "HTTPS://GITHUB.COM/vercel/commerce",
   ]) assert.equal(repoUrlFromParam(input), canonical, input);
   assert.equal(repoUrlFromParam("acme/site.github.io"), "https://github.com/acme/site.github.io");
+  assert.equal(repoUrlFromParam("vercel/commerce.git.git"), canonical);
   for (const input of [
     "", null, undefined, "vercel", "github.com/vercel", "https://github.com/vercel", "https://gitlab.com/vercel/commerce",
     "gitlab.com/vercel", "bitbucket.org/team", "www.github.com/vercel",
+    // Another git host is never read as a GitHub owner, with or without a scheme.
+    "gitlab.com/vercel/commerce", "bitbucket.org/team/repo", "codeberg.org/team/repo", "gitea.com/team/repo",
+    "git.sr.ht/~team/repo", "sr.ht/team", "dev.azure.com/org/project", "https://codeberg.org/team/repo",
+    "http://bitbucket.org/team/repo", "https://dev.azure.com/org/project", "https://x.com/team/repo", "x.org/team",
     "https://github.com/vercel/commerce/pulls", "vercel/commerce/extra", "javascript:alert(1)", "owner/repo name",
   ]) assert.equal(repoUrlFromParam(input), "", String(input));
 });
@@ -72,7 +89,8 @@ test("the confirm fallback event never outranks or dedupes the real webhook even
 
 test("new funnel copy exists in both languages, prices match, and has no dashes or quotation marks", () => {
   const keys = ["gh.maybePrivate", "gh.tokenNoAccess", "paywall.privateTitle", "form.private.needsPass", "form.private.tokenLink",
-    "form.private.note", "confirm.scanNow", "account.passActive", "gh.privateNeedsToken", "account.historyNote", "pricing.badge.week", "pricing.badge.public"] as const;
+    "form.private.note", "confirm.scanNow", "account.passActive", "gh.privateNeedsToken", "account.historyNote", "pricing.badge.week", "pricing.badge.public",
+    "gh.notFoundNeedsToken", "confirm.backToDiagnosis", "diag.rescue.body", "diag.rescue.cta", "report.dayCta"] as const;
   for (const key of keys) {
     for (const lang of ["en", "sv"] as const) {
       assert.ok(messages[lang][key], `${lang} ${key}`);
@@ -82,6 +100,15 @@ test("new funnel copy exists in both languages, prices match, and has no dashes 
   assert.match(t("en", "gh.maybePrivate"), /\$2/);
   assert.match(t("sv", "gh.maybePrivate"), /19 kr/);
   assert.match(t("sv", "paywall.privateTitle"), /19 kr/);
+  // The 24-hour pass offers name its price: dollars in English, the kronor guide in Swedish, never the other one.
+  for (const key of ["diag.rescue.body", "diag.rescue.cta", "report.dayCta"] as const) {
+    assert.ok(t("en", key).includes(planPrice("day", "en")), `en ${key}`);
+    assert.ok(t("sv", key).includes(planPrice("day", "sv")), `sv ${key}`);
+    assert.doesNotMatch(t("en", key), /\bkr\b/, `en ${key}`);
+    assert.doesNotMatch(t("sv", key), /\$/, `sv ${key}`);
+  }
+  assert.match(t("en", "diag.rescue.body"), /\$2 once/);
+  assert.match(t("sv", "diag.rescue.body"), /19 kr en gång/);
   assert.equal(t("en", "confirm.scanNow", { repo: "a/b" }), "Scan a/b now");
   assert.doesNotMatch(`${messages.en["pricing.badge.week"]} ${messages.sv["pricing.badge.week"]}`, /POPULAR|POPULÄR/);
 });
