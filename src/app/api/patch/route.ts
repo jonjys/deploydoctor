@@ -18,7 +18,7 @@ const input = z.discriminatedUnion("action", [
   z.object({ action: z.literal("checkout"), quoteToken: z.string().max(13_000), consent: z.literal(true), expectedAmountMinor: z.literal(PATCH_AMOUNT) }),
 ]);
 
-/** Patchjouren: `prepare` checks a report for a verified automatic patch, `checkout` starts the payment for it. */
+/** Verified patch: `prepare` checks a report for a verified automatic patch, `checkout` starts the payment for it. */
 export async function POST(request: Request) {
   const lang = langFromRequest(request);
   if (!sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });

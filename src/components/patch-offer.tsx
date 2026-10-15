@@ -13,7 +13,7 @@ type Offer =
 
 const reasonKey = (reason: string) => `patch.reason.${reason}` as MessageKey;
 
-/** Patchjouren on the imports card: check for a verified automatic patch, see the price, pay. */
+/** The verified patch offer on the imports card: check for a verified automatic patch, see the price, pay. */
 export function PatchOffer({ reportId }: { reportId: string }) {
   const t = useT();
   const [offer, setOffer] = useState<Offer | null>(null);

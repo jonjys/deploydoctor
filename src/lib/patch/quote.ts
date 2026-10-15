@@ -24,7 +24,16 @@ const CHUNK = 450;
 const MAX_CHUNKS = 28;
 export const MAX_TOKEN_LENGTH = CHUNK * MAX_CHUNKS;
 
-/** Derived from SESSION_SECRET under its own label, so no new secret has to be configured. */
+/**
+ * Internal id of this product in Stripe metadata, the integration identifier and idempotency keys. It is the
+ * feature's working name (Patchjouren) and stays as is: open Checkout Sessions and paid orders are matched on it.
+ */
+export const PATCH_APP = "patchjouren";
+
+/**
+ * Derived from SESSION_SECRET under its own label, so no new secret has to be configured. The label keeps the
+ * working name too: changing it would make every sealed quote unreadable.
+ */
 function encryptionKey(secret: string) {
   if (secret.length < 32) throw new Error("Quote protection is not configured.");
   return createHmac("sha256", secret).update("patchjouren:quote:encryption:v1").digest();
@@ -66,7 +75,7 @@ export function openQuote(token: string, secret: string, requireFresh = true, no
 export function quoteMetadata(token: string, accessKey: string, reportId: string): Record<string, string> {
   const chunks = token.match(new RegExp(`.{1,${CHUNK}}`, "g")) ?? [];
   if (!chunks.length || chunks.length > MAX_CHUNKS) throw new PatchError("The patch is too large for automatic delivery.", 422, "too-large");
-  return { app: "patchjouren", report_id: reportId, quote_hash: tokenHash(token), access_hash: tokenHash(accessKey),
+  return { app: PATCH_APP, report_id: reportId, quote_hash: tokenHash(token), access_hash: tokenHash(accessKey),
     quote_parts: String(chunks.length), ...Object.fromEntries(chunks.map((chunk, index) => [`quote_${index}`, chunk])) };
 }
 

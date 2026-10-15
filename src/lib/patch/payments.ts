@@ -1,11 +1,13 @@
 import type Stripe from "stripe";
 import type { Lang } from "@/lib/i18n";
 import { PatchError } from "@/lib/patch/case-patch";
-import { openQuote, quoteMetadata, tokenFromMetadata, tokenHash, type PatchQuote } from "@/lib/patch/quote";
+import { openQuote, PATCH_APP, quoteMetadata, tokenFromMetadata, tokenHash, type PatchQuote } from "@/lib/patch/quote";
 
 /** One flat price per verified patch, however many imports it fixes. Same $5 as a 7-day pass. */
 export const PATCH_AMOUNT = 500;
 export const PATCH_CURRENCY = "usd";
+/** What the buyer saves and runs `git apply` on. */
+export const PATCH_FILENAME = "deploydoctor-fix.patch";
 
 /** Ported from ImportFix (src/lib/import-fix-payments.ts): one-time payment, the quote travels in metadata. */
 export function patchCheckoutParams(token: string, secret: string, origin: string, lang: Lang): Stripe.Checkout.SessionCreateParams {
@@ -18,16 +20,16 @@ export function patchCheckoutParams(token: string, secret: string, origin: strin
     locale: lang,
     expires_at: quote.expiresAt,
     line_items: [{ quantity: 1, price_data: { currency: PATCH_CURRENCY, unit_amount: PATCH_AMOUNT, product_data: {
-      name: sv ? "Patchjouren: verifierad importpatch" : "Patchjouren: verified import patch",
+      name: sv ? "DeployDoctor: verifierad importpatch" : "DeployDoctor: verified import patch",
       description: sv
         ? `En färdig git-patch som rättar ${quote.fixes} import${quote.fixes === 1 ? "" : "er"} med fel versaler. Du granskar och applicerar den själv.`
         : `A ready git patch that fixes ${quote.fixes} import${quote.fixes === 1 ? "" : "s"} with the wrong letter case. You review and apply it yourself.`,
     } } }],
     metadata: quoteMetadata(token, quote.accessKey, quote.reportId),
-    payment_intent_data: { metadata: { app: "patchjouren", quote_hash: tokenHash(token), report_id: quote.reportId } },
+    payment_intent_data: { metadata: { app: PATCH_APP, quote_hash: tokenHash(token), report_id: quote.reportId } },
     success_url: `${origin}/patch/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/r/${quote.reportId}#check-imports`,
-    integration_identifier: "patchjouren_checkout",
+    integration_identifier: `${PATCH_APP}_checkout`,
   };
 }
 
@@ -37,7 +39,7 @@ export function patchCheckoutParams(token: string, secret: string, origin: strin
  */
 export function validatePatchPayment(session: Stripe.Checkout.Session, secret: string, accessKey?: string): PatchQuote {
   const metadata = session.metadata ?? {};
-  if (metadata.app !== "patchjouren" || session.mode !== "payment" || session.currency !== PATCH_CURRENCY || session.amount_total !== PATCH_AMOUNT)
+  if (metadata.app !== PATCH_APP || session.mode !== "payment" || session.currency !== PATCH_CURRENCY || session.amount_total !== PATCH_AMOUNT)
     throw new PatchError("This payment does not match a patch order.", 403, "payment");
   if (accessKey !== undefined && (!/^[a-f0-9]{64}$/.test(accessKey) || tokenHash(accessKey) !== metadata.access_hash))
     throw new PatchError("Open this page in the browser you paid from to download the patch.", 403, "access");
@@ -51,6 +53,14 @@ export function validatePatchPayment(session: Stripe.Checkout.Session, secret: s
   if (!charge || typeof charge === "string" || !charge.paid || charge.refunded || charge.amount_refunded > 0 || charge.disputed)
     throw new PatchError("The payment is unconfirmed, refunded or disputed.", 402, "payment");
   return quote;
+}
+
+/** A session ID Stripe does not know is an unknown order, not an outage the buyer should wait out. */
+export function stripeLookupFailure(error: unknown): PatchError {
+  const failure = error as { statusCode?: number; code?: string } | null;
+  return failure?.statusCode === 404 || failure?.code === "resource_missing"
+    ? new PatchError("Unknown order.", 404, "payment")
+    : new PatchError("The order could not be loaded from Stripe right now. Reload in a minute.", 503, "payment");
 }
 
 /** The browser keeps the access keys of its last few patch orders in one httpOnly cookie. */
