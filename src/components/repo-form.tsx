@@ -11,7 +11,7 @@ import { useLang, useT } from "@/components/lang";
 import type { Category } from "@/types/report";
 
 const FALLBACK_CHECKS: Category[] = ["next", "vercel", "env"];
-type Detection = { status: "loading" } | { status: "ready"; stack: Stack } | { status: "error"; privateRepo: boolean };
+type Detection = { status: "loading" } | { status: "ready"; stack: Stack } | { status: "error"; privateRepo: boolean; tokenPrompt?: string };
 const STEP_KEYS = ["form.step.tree", "form.step.stack", "form.step.checks", "form.step.report"] as const;
 
 function GitHubIcon() {
@@ -46,6 +46,8 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
   const timer = useRef<number | undefined>(undefined);
   const controller = useRef<AbortController | null>(null);
   const tokenRef = useRef("");
+  const privateDetails = useRef<HTMLDetailsElement>(null);
+  const tokenInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => { window.clearTimeout(timer.current); controller.current?.abort(); }, []);
 
@@ -80,6 +82,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
     controller.current = current;
     setDetection({ status: "loading" });
     let maybePrivate = false;
+    let tokenPrompt: string | undefined;
     try {
       const response = await fetch("/api/detect", {
         method: "POST",
@@ -87,15 +90,36 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         body: JSON.stringify({ repoUrl: url, ...(tokenRef.current ? { privateToken: tokenRef.current } : {}) }),
         signal: current.signal,
       });
-      const payload = (await response.json()) as { stack?: Stack; checks?: Category[]; privateRepo?: boolean };
+      const payload = (await response.json()) as { stack?: Stack; checks?: Category[]; privateRepo?: boolean; needsToken?: boolean; error?: string };
       maybePrivate = Boolean(payload.privateRepo);
+      if (payload.needsToken) tokenPrompt = payload.error;
       if (!response.ok || !payload.stack || !payload.checks) throw new Error("detect failed");
       setSelected(new Set(payload.checks));
       setDetection({ status: "ready", stack: payload.stack });
     } catch {
       if (current.signal.aborted) return;
       setSelected(new Set(FALLBACK_CHECKS));
-      setDetection({ status: "error", privateRepo: maybePrivate });
+      setDetection({ status: "error", privateRepo: maybePrivate, tokenPrompt });
+      // Detection runs while the URL is typed, so the field opens without taking the cursor.
+      if (tokenPrompt) openTokenField(false);
+    }
+  }
+
+  /** A pass holder whose repo GitHub would not show without a token only has to paste one. */
+  function openTokenField(focus: boolean) {
+    if (privateDetails.current) privateDetails.current.open = true;
+    if (focus) tokenInput.current?.focus();
+  }
+
+  function handleTokenChange(value: string) {
+    setPrivateToken(value);
+    tokenRef.current = value.trim();
+    // Detect again with the token, so a repo GitHub hid gets its own checks instead of the fallback ones.
+    // A finished detection keeps the visitor's picks.
+    const url = repoUrlFromParam(repoUrl);
+    if (url && detection && detection.status !== "ready" && !isLoading) {
+      cancelDetection();
+      timer.current = window.setTimeout(() => void detectStack(url), 500);
     }
   }
 
@@ -152,11 +176,13 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         error?: string;
         paywall?: boolean;
         privateRepo?: boolean;
+        needsToken?: boolean;
       };
 
       if (!response.ok || !payload.id) {
         setPaywall(Boolean(payload.paywall));
         setPrivateRepo(Boolean(payload.privateRepo));
+        if (payload.needsToken) openTokenField(true);
         throw new Error(payload.error || t("form.scanFailed"));
       }
 
@@ -227,7 +253,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
           <p className="stack-summary" aria-live="polite">
             {detection.status === "loading" ? t("form.detecting")
               : detection.status === "ready" ? <>{t("form.detected")} <strong>{describeStack(detection.stack, lang)}</strong></>
-              : detection.privateRepo ? t("gh.maybePrivate") : t("form.detectFailed")}
+              : detection.tokenPrompt ?? (detection.privateRepo ? t("gh.maybePrivate") : t("form.detectFailed"))}
           </p>
           {detection.status !== "loading" && (
             <div className="check-options">
@@ -242,10 +268,10 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         </fieldset>
       )}
       {/* Shown to everyone: without a pass, a token scan answers with the $2 offer. */}
-      <details className="private-input" open={privateStart}><summary>{t("form.private.summary")}</summary>
+      <details className="private-input" open={privateStart} ref={privateDetails}><summary>{t("form.private.summary")}</summary>
         {!privateAccess && <p>{t("form.private.needsPass")}</p>}
         <label htmlFor="private-token">{t("form.private.label")}</label>
-        <input id="private-token" type="password" autoComplete="off" value={privateToken} onChange={(event) => { setPrivateToken(event.target.value); tokenRef.current = event.target.value.trim(); }} />
+        <input id="private-token" type="password" autoComplete="off" value={privateToken} ref={tokenInput} onChange={(event) => handleTokenChange(event.target.value)} />
         <p>{t("form.private.note")} <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">{t("form.private.tokenLink")}</a></p>
       </details>
       {error ? (

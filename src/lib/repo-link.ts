@@ -10,10 +10,14 @@ const NAME = /^[A-Za-z0-9_.-]{1,100}$/;
  */
 const RESERVED = new Set([
   "account", "ai-plugin", "api", "checkout", "ci", "diagnose", "guides", "patch", "pricing", "r", "restore", "social",
-  "about", "advisories", "apps", "codespaces", "collections", "contact", "enterprises", "explore", "features", "issues",
-  "login", "marketplace", "new", "notifications", "orgs", "organizations", "pulls", "search", "sessions", "settings",
-  "site", "sponsors", "topics", "trending", "users",
+  "about", "advisories", "apps", "codespaces", "collections", "contact", "customer-stories", "enterprise", "enterprises",
+  "explore", "features", "issues", "login", "marketplace", "new", "notifications", "orgs", "organizations", "pulls",
+  "readme", "search", "security", "sessions", "settings", "signup", "site", "solutions", "sponsors", "stars", "topics",
+  "trending", "users",
 ]);
+
+/** Where a path that names no repository is sent: one segment matches no route, so it renders the app's not-found page. */
+export const NOT_FOUND_PATH = "/404";
 
 /**
  * owner/name from the path segments after the host, or null when they do not name a repository.
@@ -24,7 +28,7 @@ export function repoFromPath(segments: readonly string[]): string | null {
   const match = /^(?:(?:https?:\/+)?(?:www\.)?github\.com\/)?([^/]+)\/([^/]+)/i.exec(path);
   if (!match) return null;
   const owner = match[1];
-  const name = match[2].replace(/\.git$/i, "");
+  const name = match[2].replace(/(?:\.git)+$/i, "");
   if (!OWNER.test(owner) || RESERVED.has(owner.toLowerCase())) return null;
   if (!NAME.test(name) || /^\.{1,2}$/.test(name)) return null;
   return `${owner}/${name}`;
