@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeSnapshot, extractEnvReads, type RepositorySnapshot } from "../src/lib/analyzer";
+import { analysisText } from "../src/lib/analysis-text";
 import { parseChecks } from "../src/lib/categories";
 import { freeFixInstructions } from "../src/lib/fix-instructions";
 import { defaultChecks, describeStack, detectStack } from "../src/lib/stack";
@@ -360,6 +361,143 @@ test("env names inside comments are not env reads", () => {
 test("an env read after a regex literal containing // on the same line is still found", () => {
   const source = 'const abs = /https?:\\/\\//.test(raw) ? raw : process.env.BASE_URL + raw;';
   assert.deepEqual(extractEnvReads(source).map((read) => read.name), ["BASE_URL"]);
+});
+
+test("env reads with a literal fallback, a literal destructuring default or a ternary on the variable are optional", () => {
+  const source = [
+    'const a = process.env.LOG_LEVEL ?? "info";',
+    "const b = process.env.PORT || 3000;",
+    "const c = process.env.SITE_URL ?? `http://localhost:${port}`;",
+    "const d = process.env[\"BRACKET_OR\"] || '';",
+    "const e = process.env?.TIMEOUT_MS || -1;",
+    'const f = process.env.FEATURE_FLAG ? "on" : "off";',
+    'const g = process.env.GUARDED ? process.env.GUARDED : "x";',
+    'const { REGION = "eu-north-1", RETRIES: retries = 5, NO_DEFAULT, EXPR_DEFAULT = fallback() } = process.env;',
+    "const h = process.env.PLAIN;",
+    'const i = process.env.PRIMARY ?? process.env.SECONDARY ?? "x";',
+    "const j = process.env.EXPR_OR || defaults.url;",
+    "const k = process.env.CHAINED?.trim();",
+    'process.env.ASSIGNED ??= "x";',
+    'const l = process.env.COMPARED === "1" ? a : b;',
+    'const m = process.env.TOGGLE ? process.env.OTHER : "x";',
+    'const n = process.env.MULTILINE // the default\n  ?? "x";',
+  ].join("\n");
+  assert.deepEqual(extractEnvReads(source).map((read) => [read.name, read.optional]), [
+    ["LOG_LEVEL", true], ["PORT", true], ["SITE_URL", true], ["BRACKET_OR", true], ["TIMEOUT_MS", true], ["FEATURE_FLAG", true],
+    ["GUARDED", true], ["GUARDED", true], ["REGION", true], ["RETRIES", true], ["NO_DEFAULT", false], ["EXPR_DEFAULT", false],
+    // No fallback, a fallback to another env variable or to an expression, and comparisons stay required.
+    ["PLAIN", false], ["PRIMARY", false], ["SECONDARY", true], ["EXPR_OR", false], ["CHAINED", false], ["ASSIGNED", false],
+    ["COMPARED", false], ["TOGGLE", true], ["OTHER", false], ["MULTILINE", true],
+  ]);
+});
+
+test("variables read only with a fallback are yellow, and the suggested .env.example keeps them commented", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }];
+  const files = {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "DATABASE_URL=\n",
+    "app/page.tsx": [
+      'const level = process.env.LOG_LEVEL ?? "info";',
+      "const port = process.env.PORT || 3000;",
+      'const { REGION = "eu-north-1" } = process.env;',
+      "const db = process.env.DATABASE_URL;",
+      "export default function Page() { return null }",
+    ].join("\n"),
+  };
+  const results = analyzeSnapshot(snapshot(entries, files), { checks: ["env"] });
+  const env = results.checks[0];
+  assert.equal(env.status, "yellow");
+  assert.equal(env.explanation, "3 optional env variables have a fallback in the code but are not in .env.example: LOG_LEVEL, PORT, REGION.");
+  assert.deepEqual(env.findings?.map((finding) => [finding.problem, finding.line]), [
+    ["LOG_LEVEL has a fallback in the code but is not documented in .env.example", 1],
+    ["PORT has a fallback in the code but is not documented in .env.example", 2],
+    ["REGION has a fallback in the code but is not documented in .env.example", 3],
+  ]);
+  // An empty LOG_LEVEL= line would turn ?? "info" into an empty string, so the suggested lines are commented out.
+  assert.equal(env.suggestedFile?.content, "DATABASE_URL=\n# LOG_LEVEL=\n# PORT=\n# REGION=\n");
+  assert.match(freeFixInstructions({ id: "r", repo_url: "https://github.com/example/repo", created_at: "", results }), /# LOG_LEVEL=\n# PORT=\n# REGION=\n```/);
+  // Committing the suggested file documents them, so the check turns green.
+  const fixed = analyzeSnapshot(snapshot(entries, { ...files, ".env.example": env.suggestedFile!.content }), { checks: ["env"] }).checks[0];
+  assert.equal(fixed.status, "green");
+
+  // With a misnamed template, the rename and the optional lines are one yellow check.
+  const renamed = analyzeSnapshot(snapshot([...nextEntries, { path: "env.example", type: "blob" }], {
+    "package.json": files["package.json"], "app/page.tsx": files["app/page.tsx"], "env.example": "DATABASE_URL=\n",
+  }), { checks: ["env"] }).checks[0];
+  assert.equal(renamed.status, "yellow");
+  assert.deepEqual(renamed.findings?.map((finding) => finding.file), ["env.example", "app/page.tsx", "app/page.tsx", "app/page.tsx"]);
+  assert.equal(renamed.suggestedFile?.content, "DATABASE_URL=\n# LOG_LEVEL=\n# PORT=\n# REGION=\n");
+});
+
+test("reads without a literal fallback stay red, even when the same variable has a fallback elsewhere", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" },
+    { path: "lib", type: "tree" }, { path: "lib/config.ts", type: "blob" }];
+  const env = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "\n",
+    "app/page.tsx": 'const url = process.env.API_URL ?? "http://localhost:4000";\nexport default function Page() { return null }',
+    "lib/config.ts": [
+      "export const api = process.env.API_URL;",
+      "export const db = process.env.DATABASE_URL || process.env.POSTGRES_URL;",
+      "export const key = process.env.SECRET_KEY ?? defaults.key;",
+    ].join("\n"),
+  }), { checks: ["env"] }).checks[0];
+  assert.equal(env.status, "red");
+  assert.equal(env.explanation, "4 env variables are missing from .env.example: API_URL, DATABASE_URL, POSTGRES_URL, SECRET_KEY.");
+  // API_URL points at its read without a fallback.
+  assert.deepEqual(env.findings?.map((finding) => `${finding.file}:${finding.line}`), ["lib/config.ts:1", "lib/config.ts:2", "lib/config.ts:2", "lib/config.ts:3"]);
+  assert.equal(env.suggestedFile?.content, "API_URL=\nDATABASE_URL=\nPOSTGRES_URL=\nSECRET_KEY=\n");
+});
+
+test("NEXT_PUBLIC_ variables follow the same fallback rule, and an exposed secret stays red with a fallback", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }];
+  const scan = (example: string, code: string) => analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), ".env.example": example,
+    "app/page.tsx": `${code}\nexport default function Page() { return null }`,
+  }), { checks: ["env"] }).checks[0];
+
+  const optional = scan("", 'const site = process.env.NEXT_PUBLIC_SITE_URL || "https://example.com";\n'
+    + 'const stage = process.env.NEXT_PUBLIC_STAGE ? process.env.NEXT_PUBLIC_STAGE : "dev";');
+  assert.equal(optional.status, "yellow");
+  assert.equal(optional.explanation, "2 optional env variables have a fallback in the code but are not in .env.example: NEXT_PUBLIC_SITE_URL, NEXT_PUBLIC_STAGE.");
+
+  const required = scan("", "const api = process.env.NEXT_PUBLIC_API_URL;");
+  assert.equal(required.status, "red");
+  assert.deepEqual(required.findings?.map((finding) => finding.problem), ["NEXT_PUBLIC_API_URL is missing from .env.example"]);
+
+  const exposed = scan("NEXT_PUBLIC_ADMIN_TOKEN=\n", 'const token = process.env.NEXT_PUBLIC_ADMIN_TOKEN ?? "";');
+  assert.equal(exposed.status, "red");
+  assert.equal(exposed.explanation, "1 possible secret is exposed in the browser: NEXT_PUBLIC_ADMIN_TOKEN.");
+});
+
+test("missing and optional variables share one suggested .env.example, and the new copy exists in English and Swedish", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }];
+  const files = {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "# Database\nDATABASE_URL=\n",
+    "app/page.tsx": 'const a = process.env.DATABASE_URL; const b = process.env.STRIPE_SECRET_KEY; const c = process.env.LOG_LEVEL ?? "info";\n'
+      + "export default function Page() { return null }",
+  };
+  const results = analyzeSnapshot(snapshot(entries, files), { checks: ["env"] });
+  const env = results.checks[0];
+  assert.equal(env.status, "red");
+  assert.equal(env.explanation, "1 env variable is missing from .env.example: STRIPE_SECRET_KEY; "
+    + "1 optional env variable has a fallback in the code but is not in .env.example: LOG_LEVEL.");
+  assert.deepEqual(env.evidence, ["STRIPE_SECRET_KEY → missing from committed env template", "LOG_LEVEL → optional, has a fallback in the code"]);
+  assert.equal(env.suggestedFile?.content, "# Database\nDATABASE_URL=\nSTRIPE_SECRET_KEY=\n# LOG_LEVEL=\n");
+  // Both findings are covered by the complete file, so the command is listed once.
+  const text = freeFixInstructions({ id: "r", repo_url: "https://github.com/example/repo", created_at: "", results });
+  assert.equal(text.match(/git add -- \.env\.example/g)?.length, 1);
+
+  const swedish = analyzeSnapshot(snapshot(entries, files), { checks: ["env"], lang: "sv" }).checks[0];
+  assert.match(swedish.explanation, /1 valfri env-variabel har ett reservvärde i koden men saknas i \.env\.example: LOG_LEVEL\.$/);
+  assert.equal(swedish.findings?.[1].problem, "LOG_LEVEL har ett reservvärde i koden men är inte dokumenterad i .env.example");
+  for (const lang of ["en", "sv"] as const) {
+    const x = analysisText(lang).env;
+    for (const copy of [x.optional(1, "A"), x.optional(2, "A, B"), x.fixOptional("# A= + # B="), x.optionalProblem("A"), x.optionalFix("A"), x.evidenceOptional("A")]) {
+      assert.doesNotMatch(copy, /[–—"“”„]/, `${lang}: ${copy}`);
+    }
+  }
 });
 
 test("the paid fix service is paused and fix plans are recognised", () => {
