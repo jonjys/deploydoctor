@@ -19,7 +19,15 @@ export function maybePrivateRepo(key: MessageKey | undefined, privateToken?: str
   return (key === "gh.notFound" && !privateToken) || key === "gh.privateOnly";
 }
 
-/** A pass holder who scans a private repo without a token only needs to paste one; the public-only text would contradict the pass. */
-export function needsTokenPrompt(key: MessageKey | undefined, plan: Plan | null | undefined): boolean {
-  return key === "gh.privateOnly" && allowsPrivate(plan);
+/**
+ * A pass holder who scans a private repo without a token only needs to paste one; the public-only or not-found
+ * text would contradict the pass. Without a token GitHub hides a private repo behind a 404, so that asks too.
+ */
+export function needsTokenPrompt(key: MessageKey | undefined, plan: Plan | null | undefined, privateToken?: string): boolean {
+  return allowsPrivate(plan) && (key === "gh.privateOnly" || (key === "gh.notFound" && !privateToken));
+}
+
+/** The prompt calls the repo private only when GitHub said so; a 404 can still be a typo in the URL. */
+export function tokenPromptKey(key: MessageKey | undefined): MessageKey {
+  return key === "gh.privateOnly" ? "gh.privateNeedsToken" : "gh.notFoundNeedsToken";
 }

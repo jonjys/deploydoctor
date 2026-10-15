@@ -2,7 +2,7 @@ import { activePlan, customerSession } from "@/lib/access";
 import { defaultChecks, describeStack } from "@/lib/stack";
 import { langFromRequest, t } from "@/lib/i18n";
 import { detectRepositoryStack, GitHubApiError } from "@/lib/github";
-import { maybePrivateRepo } from "@/lib/github-status";
+import { maybePrivateRepo, needsTokenPrompt, tokenPromptKey } from "@/lib/github-status";
 import { sameOrigin } from "@/lib/stripe";
 import { allowsPrivate } from "@/lib/plans";
 
@@ -30,9 +30,14 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof SyntaxError) return Response.json({ error: t(lang, "err.invalidJson") }, { status: 400 });
     if (error instanceof GitHubApiError) {
-      // The plan is read only on this path: without a pass the visitor gets the $2 offer, with one the plain error.
-      if (maybePrivateRepo(error.key, privateToken) && await customerSession().then(activePlan).then((plan) => !plan, () => false)) {
-        return Response.json({ error: t(lang, "gh.maybePrivate"), paywall: true, privateRepo: true }, { status: error.status });
+      // The plan is read only on this path: without a pass the visitor gets the $2 offer, with one a prompt to paste
+      // a token, and when the plan cannot be read the plain error.
+      if (maybePrivateRepo(error.key, privateToken)) {
+        const plan = await customerSession().then(activePlan).catch(() => undefined);
+        if (plan === null) return Response.json({ error: t(lang, "gh.maybePrivate"), paywall: true, privateRepo: true }, { status: error.status });
+        if (needsTokenPrompt(error.key, plan?.plan, privateToken)) {
+          return Response.json({ error: t(lang, tokenPromptKey(error.key)), needsToken: true }, { status: error.status });
+        }
       }
       return Response.json({ error: error.localized(lang) }, { status: error.status });
     }

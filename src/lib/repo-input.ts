@@ -1,5 +1,5 @@
 // A GitHub owner has no dots, so gitlab.com/team or bitbucket.org/team is never read as a GitHub repo.
-const REPO_INPUT = /^(?:(?:https?:\/\/)?(?:www\.)?github\.com\/)?([A-Za-z0-9_-]{1,39})\/([A-Za-z0-9_.-]{1,100}?)(?:\.git)?(?:\/(?:tree|blob)\/[^\s?#]*)?\/?(?:[?#]\S*)?$/i;
+const REPO_INPUT = /^(?:(?:https?:\/\/)?(?:www\.)?github\.com\/)?([A-Za-z0-9_-]{1,39})\/([A-Za-z0-9_.-]{1,100}?)(?:\.git)*(?:\/(?:tree|blob)\/[^\s?#]*)?\/?(?:[?#]\S*)?$/i;
 
 /**
  * What people paste or link with ?repo=, as https://github.com/owner/name: owner/name, github.com/owner/name,

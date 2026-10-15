@@ -83,7 +83,7 @@ export default function CiPage() {
         <section>
           <h2>What the check does</h2>
           <ul>
-            <li>Fails the job when a check is red: an import that only resolves on macOS, a package that is used but not declared, a <code>process.env</code> read that no <code>.env.example</code> documents, a Node-only module on the Edge runtime, Prisma without <code>prisma generate</code>, a live secret in source.</li>
+            <li>Fails the job when a check is red: an import that only resolves on macOS, a package that is used but not declared, a <code>process.env</code> read without a fallback that no <code>.env.example</code> documents, a Node-only module on the Edge runtime, Prisma without <code>prisma generate</code>, a live secret in source.</li>
             <li>Annotates each finding on the file and line in the pull request, with the fix.</li>
             <li>Writes a status table to the job summary and links the saved report.</li>
             <li>Sets outputs <code>overall</code>, <code>report-url</code>, <code>red</code> and <code>yellow</code> for later steps.</li>

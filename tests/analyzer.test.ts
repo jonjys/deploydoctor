@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeSnapshot, extractEnvReads, type RepositorySnapshot } from "../src/lib/analyzer";
+import { analysisText } from "../src/lib/analysis-text";
 import { parseChecks } from "../src/lib/categories";
 import { freeFixInstructions } from "../src/lib/fix-instructions";
 import { defaultChecks, describeStack, detectStack } from "../src/lib/stack";
@@ -362,6 +363,185 @@ test("an env read after a regex literal containing // on the same line is still 
   assert.deepEqual(extractEnvReads(source).map((read) => read.name), ["BASE_URL"]);
 });
 
+test("env reads with a literal fallback, a literal destructuring default or a ternary on the variable are optional", () => {
+  const source = [
+    'const a = process.env.LOG_LEVEL ?? "info";',
+    "const b = process.env.PORT || 3000;",
+    "const c = process.env.SITE_URL ?? `http://localhost:${port}`;",
+    "const d = process.env[\"BRACKET_OR\"] || 'x';",
+    "const e = process.env?.TIMEOUT_MS || -1;",
+    'const f = process.env.FEATURE_FLAG ? "on" : "off";',
+    'const g = process.env.GUARDED ? process.env.GUARDED : "x";',
+    'const { REGION = "eu-north-1", RETRIES: retries = 5, NO_DEFAULT, EXPR_DEFAULT = fallback() } = process.env;',
+    "const h = process.env.PLAIN;",
+    'const i = process.env.PRIMARY ?? process.env.SECONDARY ?? "x";',
+    "const j = process.env.EXPR_OR || defaults.url;",
+    "const k = process.env.CHAINED?.trim();",
+    'process.env.ASSIGNED ??= "x";',
+    'const l = process.env.COMPARED === "1" ? a : b;',
+    'const m = process.env.TOGGLE ? process.env.OTHER : "x";',
+    'const n = process.env.MULTILINE // the default\n  ?? "x";',
+  ].join("\n");
+  assert.deepEqual(extractEnvReads(source).map((read) => [read.name, read.optional]), [
+    ["LOG_LEVEL", true], ["PORT", true], ["SITE_URL", true], ["BRACKET_OR", true], ["TIMEOUT_MS", true], ["FEATURE_FLAG", true],
+    ["GUARDED", true], ["GUARDED", true], ["REGION", true], ["RETRIES", true], ["NO_DEFAULT", false], ["EXPR_DEFAULT", false],
+    // No fallback, a fallback to another env variable or to an expression, and comparisons stay required.
+    ["PLAIN", false], ["PRIMARY", false], ["SECONDARY", true], ["EXPR_OR", false], ["CHAINED", false], ["ASSIGNED", false],
+    ["COMPARED", false], ["TOGGLE", true], ["OTHER", false], ["MULTILINE", true],
+  ]);
+});
+
+test("an empty string fallback does not make an env read optional: the value is still missing", () => {
+  const source = [
+    'const a = process.env.STRIPE_SECRET_KEY || "";',
+    "const b = process.env.API_TOKEN ?? '';",
+    "const c = process.env.TEMPLATE_EMPTY || ``;",
+    'const { DEST_EMPTY = "", DEST_SET = "x" } = process.env;',
+    'const d = process.env.SPACE_DEFAULT ?? " ";',
+  ].join("\n");
+  assert.deepEqual(extractEnvReads(source).map((read) => [read.name, read.optional]), [
+    ["STRIPE_SECRET_KEY", false], ["API_TOKEN", false], ["TEMPLATE_EMPTY", false], ["DEST_EMPTY", false], ["DEST_SET", true],
+    ["SPACE_DEFAULT", true],
+  ]);
+});
+
+test("an env read on the right of a comparison or arithmetic stays required before a ternary or a fallback", () => {
+  const source = [
+    'if (req.headers.get("x") === process.env.CRON_SECRET ? ok() : deny()) {}',
+    "const a = token !== process.env.API_TOKEN ? 401 : 200;",
+    'const b = key === process.env.SAME ? process.env.SAME : "";',
+    "const c = count >=\n    process.env.LIMIT ? 1 : 2;",
+    'const d = flag && process.env.BOTH ? "a" : "b";',
+    'const e = "https://" + process.env.HOST || "http://localhost:3000";',
+    'const f = mode === /* exact */ process.env.MODE || "dev";',
+    // A ternary or fallback on the variable itself, after an arrow, a logical operator or an assignment, stays optional.
+    "const g = () => process.env.ARROW ? 1 : 2;",
+    'const h = flag && process.env.AND_OR || "d";',
+    "total += process.env.ADDED ? 1 : 0;",
+  ].join("\n");
+  assert.deepEqual(extractEnvReads(source).map((read) => [read.name, read.optional]), [
+    ["CRON_SECRET", false], ["API_TOKEN", false], ["SAME", false], ["SAME", false], ["LIMIT", false], ["BOTH", false],
+    ["HOST", false], ["MODE", false], ["ARROW", true], ["AND_OR", true], ["ADDED", true],
+  ]);
+
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }];
+  const env = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), ".env.example": "\n",
+    "app/page.tsx": 'const ok = auth === process.env.CRON_SECRET ? "ok" : "deny";\nexport default function Page() { return null }',
+  }), { checks: ["env"] }).checks[0];
+  assert.equal(env.status, "red");
+  assert.equal(env.suggestedFile?.content, "CRON_SECRET=\n");
+});
+
+test("variables read only with a fallback are yellow, and the suggested .env.example keeps them commented", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }];
+  const files = {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "DATABASE_URL=\n",
+    "app/page.tsx": [
+      'const level = process.env.LOG_LEVEL ?? "info";',
+      "const port = process.env.PORT || 3000;",
+      'const { REGION = "eu-north-1" } = process.env;',
+      "const db = process.env.DATABASE_URL;",
+      "export default function Page() { return null }",
+    ].join("\n"),
+  };
+  const results = analyzeSnapshot(snapshot(entries, files), { checks: ["env"] });
+  const env = results.checks[0];
+  assert.equal(env.status, "yellow");
+  assert.equal(env.explanation, "3 optional env variables have a fallback in the code but are not in .env.example: LOG_LEVEL, PORT, REGION.");
+  assert.deepEqual(env.findings?.map((finding) => [finding.problem, finding.line]), [
+    ["LOG_LEVEL has a fallback in the code but is not documented in .env.example", 1],
+    ["PORT has a fallback in the code but is not documented in .env.example", 2],
+    ["REGION has a fallback in the code but is not documented in .env.example", 3],
+  ]);
+  // An empty LOG_LEVEL= line would turn ?? "info" into an empty string, so the suggested lines are commented out.
+  assert.equal(env.suggestedFile?.content, "DATABASE_URL=\n# LOG_LEVEL=\n# PORT=\n# REGION=\n");
+  assert.match(freeFixInstructions({ id: "r", repo_url: "https://github.com/example/repo", created_at: "", results }), /# LOG_LEVEL=\n# PORT=\n# REGION=\n```/);
+  // Committing the suggested file documents them, so the check turns green.
+  const fixed = analyzeSnapshot(snapshot(entries, { ...files, ".env.example": env.suggestedFile!.content }), { checks: ["env"] }).checks[0];
+  assert.equal(fixed.status, "green");
+
+  // With a misnamed template, the rename and the optional lines are one yellow check.
+  const renamed = analyzeSnapshot(snapshot([...nextEntries, { path: "env.example", type: "blob" }], {
+    "package.json": files["package.json"], "app/page.tsx": files["app/page.tsx"], "env.example": "DATABASE_URL=\n",
+  }), { checks: ["env"] }).checks[0];
+  assert.equal(renamed.status, "yellow");
+  assert.deepEqual(renamed.findings?.map((finding) => finding.file), ["env.example", "app/page.tsx", "app/page.tsx", "app/page.tsx"]);
+  assert.equal(renamed.suggestedFile?.content, "DATABASE_URL=\n# LOG_LEVEL=\n# PORT=\n# REGION=\n");
+});
+
+test("reads without a literal fallback stay red, even when the same variable has a fallback elsewhere", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" },
+    { path: "lib", type: "tree" }, { path: "lib/config.ts", type: "blob" }];
+  const env = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "\n",
+    "app/page.tsx": 'const url = process.env.API_URL ?? "http://localhost:4000";\nexport default function Page() { return null }',
+    "lib/config.ts": [
+      "export const api = process.env.API_URL;",
+      "export const db = process.env.DATABASE_URL || process.env.POSTGRES_URL;",
+      "export const key = process.env.SECRET_KEY ?? defaults.key;",
+    ].join("\n"),
+  }), { checks: ["env"] }).checks[0];
+  assert.equal(env.status, "red");
+  assert.equal(env.explanation, "4 env variables are missing from .env.example: API_URL, DATABASE_URL, POSTGRES_URL, SECRET_KEY.");
+  // API_URL points at its read without a fallback.
+  assert.deepEqual(env.findings?.map((finding) => `${finding.file}:${finding.line}`), ["lib/config.ts:1", "lib/config.ts:2", "lib/config.ts:2", "lib/config.ts:3"]);
+  assert.equal(env.suggestedFile?.content, "API_URL=\nDATABASE_URL=\nPOSTGRES_URL=\nSECRET_KEY=\n");
+});
+
+test("NEXT_PUBLIC_ variables follow the same fallback rule, and an exposed secret stays red with a fallback", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }];
+  const scan = (example: string, code: string) => analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), ".env.example": example,
+    "app/page.tsx": `${code}\nexport default function Page() { return null }`,
+  }), { checks: ["env"] }).checks[0];
+
+  const optional = scan("", 'const site = process.env.NEXT_PUBLIC_SITE_URL || "https://example.com";\n'
+    + 'const stage = process.env.NEXT_PUBLIC_STAGE ? process.env.NEXT_PUBLIC_STAGE : "dev";');
+  assert.equal(optional.status, "yellow");
+  assert.equal(optional.explanation, "2 optional env variables have a fallback in the code but are not in .env.example: NEXT_PUBLIC_SITE_URL, NEXT_PUBLIC_STAGE.");
+
+  const required = scan("", "const api = process.env.NEXT_PUBLIC_API_URL;");
+  assert.equal(required.status, "red");
+  assert.deepEqual(required.findings?.map((finding) => finding.problem), ["NEXT_PUBLIC_API_URL is missing from .env.example"]);
+
+  const exposed = scan("NEXT_PUBLIC_ADMIN_TOKEN=\n", 'const token = process.env.NEXT_PUBLIC_ADMIN_TOKEN ?? "";');
+  assert.equal(exposed.status, "red");
+  assert.equal(exposed.explanation, "1 possible secret is exposed in the browser: NEXT_PUBLIC_ADMIN_TOKEN.");
+});
+
+test("missing and optional variables share one suggested .env.example, and the new copy exists in English and Swedish", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" }];
+  const files = {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    ".env.example": "# Database\nDATABASE_URL=\n",
+    "app/page.tsx": 'const a = process.env.DATABASE_URL; const b = process.env.STRIPE_SECRET_KEY; const c = process.env.LOG_LEVEL ?? "info";\n'
+      + "export default function Page() { return null }",
+  };
+  const results = analyzeSnapshot(snapshot(entries, files), { checks: ["env"] });
+  const env = results.checks[0];
+  assert.equal(env.status, "red");
+  assert.equal(env.explanation, "1 env variable is missing from .env.example: STRIPE_SECRET_KEY; "
+    + "1 optional env variable has a fallback in the code but is not in .env.example: LOG_LEVEL.");
+  assert.deepEqual(env.evidence, ["STRIPE_SECRET_KEY → missing from committed env template", "LOG_LEVEL → optional, has a fallback in the code"]);
+  assert.equal(env.suggestedFile?.content, "# Database\nDATABASE_URL=\nSTRIPE_SECRET_KEY=\n# LOG_LEVEL=\n");
+  // Both findings are covered by the complete file, so the command is listed once.
+  const text = freeFixInstructions({ id: "r", repo_url: "https://github.com/example/repo", created_at: "", results });
+  assert.equal(text.match(/git add -- \.env\.example/g)?.length, 1);
+
+  const swedish = analyzeSnapshot(snapshot(entries, files), { checks: ["env"], lang: "sv" }).checks[0];
+  assert.match(swedish.explanation, /1 valfri env-variabel har ett reservvärde i koden men saknas i \.env\.example: LOG_LEVEL\.$/);
+  assert.equal(swedish.findings?.[1].problem, "LOG_LEVEL har ett reservvärde i koden men är inte dokumenterad i .env.example");
+  for (const lang of ["en", "sv"] as const) {
+    const x = analysisText(lang).env;
+    for (const copy of [x.optional(1, "A"), x.optional(2, "A, B"), x.fixOptional("# A= + # B="), x.optionalProblem("A"), x.optionalFix("A"), x.evidenceOptional("A")]) {
+      assert.doesNotMatch(copy, /[–—"“”„]/, `${lang}: ${copy}`);
+    }
+  }
+});
+
 test("the paid fix service is paused and fix plans are recognised", () => {
   assert.equal(FIX_SERVICE_ENABLED, false);
   assert.equal(isFixPlan("fix-one"), true);
@@ -493,6 +673,75 @@ test("build configuration: a vercel.json framework other than nextjs is the 404 
   }
   assert.equal(run('{\n  "regions": ["iad1"],\n  "framework": null\n}')?.findings?.[0].line, 3);
   for (const vercel of ['{ "framework": "nextjs" }', '{ "buildCommand": "next build" }', "not json"]) assert.equal(run(vercel)?.status, "green", vercel);
+});
+
+test("build configuration: a cron job that runs more than once a day fails on Hobby", () => {
+  const nextPkg = JSON.stringify({ dependencies: { next: "16.3.6" }, scripts: { build: "next build" } });
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "vercel.json", type: "blob" }];
+  const run = (vercel: string, lang: "en" | "sv" = "en") => analyzeSnapshot(snapshot(entries, { ...page, "package.json": nextPkg, "vercel.json": vercel }),
+    { checks: ["vercel"], lang }).checks.find((check) => check.id === "build-config");
+  const vercel = JSON.stringify({ crons: [{ path: "/api/daily", schedule: "0 5 * * *" }, { path: "/api/sync", schedule: "*/30 9-17 * * 1-5" }] }, null, 2);
+  const build = run(vercel);
+  assert.equal(build?.status, "yellow");
+  assert.equal(build?.findings?.length, 1);
+  assert.equal(build?.findings?.[0].file, "vercel.json");
+  assert.equal(build?.findings?.[0].line, vercel.split("\n").findIndex((line) => line.includes("*/30")) + 1);
+  assert.match(build?.findings?.[0].problem ?? "", /^the cron job for \/api\/sync runs on \*\/30 9-17 \* \* 1-5, which is more than once a day; on the Hobby plan Vercel fails the deployment/);
+  assert.match(build?.findings?.[0].fix ?? "", /once a day instead, for example 0 9 \* \* 1-5\. .*move the project to Pro/);
+  assert.equal(build?.findings?.[0].command, "git add -- vercel.json");
+  assert.match(run(vercel, "sv")?.findings?.[0].problem ?? "", /på Hobby-planen misslyckas deployen/);
+  for (const schedule of ["0 * * * *", "* * * * *", "0 0,12 * * *"]) {
+    assert.equal(run(JSON.stringify({ crons: [{ path: "/api/cron", schedule }] }))?.findings?.length, 1, schedule);
+  }
+  // Daily, weekly and monthly jobs are fine on every plan.
+  for (const schedule of ["0 5 * * *", "0 0 * * *", "30 23 * * 1-5", "0 5 1 * *"]) {
+    assert.equal(run(JSON.stringify({ crons: [{ path: "/api/cron", schedule }] }))?.status, "green", schedule);
+  }
+  // Only the "schedule" key of a cron job counts for the line, not schedules elsewhere or a path that mentions it.
+  const minified = '{"schedules":[],"crons":[{"path":"/api/schedule","schedule":"0 5 * * *"},\n{"path":"/b","schedule":"0 * * * *"}]}';
+  assert.equal(run(minified)?.findings?.[0].line, 2);
+});
+
+test("build configuration: cron expressions outside Vercel's format are reported on any plan", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "vercel.json", type: "blob" }];
+  const nextPkg = JSON.stringify({ dependencies: { next: "16.3.6" }, scripts: { build: "next build" } });
+  const problem = (schedule: string, lang: "en" | "sv" = "en") => {
+    const build = analyzeSnapshot(snapshot(entries, { ...page, "package.json": nextPkg, "vercel.json": JSON.stringify({ crons: [{ path: "/api/cron", schedule }] }) }),
+      { checks: ["vercel"], lang }).checks.find((check) => check.id === "build-config");
+    assert.equal(build?.status, "yellow", schedule);
+    assert.equal(build?.findings?.length, 1, schedule);
+    assert.doesNotMatch(build?.findings?.[0].problem ?? "", /Hobby/, schedule);
+    return build?.findings?.[0].problem ?? "";
+  };
+  assert.match(problem("0 2 * * * *"), /^the cron job for \/api\/cron has the schedule 0 2 \* \* \* \*, which is not a valid Vercel cron expression: it has 6 fields, and Vercel expects five/);
+  assert.match(problem("0 24 * * *"), /24 is outside 0 to 23, the range for hour$/);
+  assert.match(problem("0 5 * * 7"), /7 is outside 0 to 6, the range for day of week$/);
+  assert.match(problem("0 5 * * MON"), /does not support names such as MON/);
+  assert.match(problem("0 5 1 * 1"), /both day of month and day of week/);
+  assert.match(problem("*/0 * * * *"), /\*\/0 in the minute field is not a number/);
+  assert.match(problem("0 24 * * *", "sv"), /inte är ett giltigt cron-uttryck för Vercel: 24 ligger utanför 0 till 23, intervallet för timme$/);
+});
+
+test("build configuration: more than 100 cron jobs, and functions settings Hobby or Fluid compute do not allow", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "vercel.json", type: "blob" }];
+  const nextPkg = JSON.stringify({ dependencies: { next: "16.3.6" }, scripts: { build: "next build" } });
+  const run = (vercel: object) => analyzeSnapshot(snapshot(entries, { ...page, "package.json": nextPkg, "vercel.json": JSON.stringify(vercel, null, 2) }),
+    { checks: ["vercel"] }).checks.find((check) => check.id === "build-config");
+  const jobs = (n: number) => Array.from({ length: n }, (_, index) => ({ path: `/api/job/${index}`, schedule: `${index % 60} ${index % 24} * * *` }));
+  const many = run({ regions: ["iad1"], crons: jobs(101) });
+  assert.equal(many?.findings?.length, 1);
+  assert.equal(many?.findings?.[0].line, 5);
+  assert.match(many?.findings?.[0].problem ?? "", /defines 101 cron jobs, and Vercel allows at most 100 per project on every plan/);
+  assert.equal(run({ crons: jobs(100) })?.status, "green");
+
+  const functions = run({ functions: { "api/report.ts": { maxDuration: 600 }, "api/fast.ts": { maxDuration: 300 }, "api/max.ts": { maxDuration: "max" }, "api/big.ts": { memory: 3009 } } });
+  assert.deepEqual(functions?.findings?.map((finding) => finding.line), [4, 13]);
+  assert.match(functions?.findings?.[0].problem ?? "", /api\/report\.ts sets maxDuration to 600 seconds, above the 300 seconds the Hobby plan allows/);
+  assert.match(functions?.findings?.[0].fix ?? "", /lower maxDuration to 300 or set it to max/);
+  assert.match(functions?.findings?.[1].problem ?? "", /api\/big\.ts sets memory, which Vercel does not read from vercel\.json with Fluid compute/);
+  // Without Fluid compute, memory in vercel.json still applies.
+  assert.equal(run({ fluid: false, functions: { "api/big.ts": { memory: 3009 } } })?.status, "green");
+  assert.equal(run({ functions: { "api/**/*.ts": { maxDuration: 60 } } })?.status, "green");
 });
 
 test("build configuration: a static site whose home page is not lower-case index.html", () => {
