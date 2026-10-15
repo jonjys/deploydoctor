@@ -368,7 +368,7 @@ test("env reads with a literal fallback, a literal destructuring default or a te
     'const a = process.env.LOG_LEVEL ?? "info";',
     "const b = process.env.PORT || 3000;",
     "const c = process.env.SITE_URL ?? `http://localhost:${port}`;",
-    "const d = process.env[\"BRACKET_OR\"] || '';",
+    "const d = process.env[\"BRACKET_OR\"] || 'x';",
     "const e = process.env?.TIMEOUT_MS || -1;",
     'const f = process.env.FEATURE_FLAG ? "on" : "off";',
     'const g = process.env.GUARDED ? process.env.GUARDED : "x";',
@@ -388,6 +388,20 @@ test("env reads with a literal fallback, a literal destructuring default or a te
     // No fallback, a fallback to another env variable or to an expression, and comparisons stay required.
     ["PLAIN", false], ["PRIMARY", false], ["SECONDARY", true], ["EXPR_OR", false], ["CHAINED", false], ["ASSIGNED", false],
     ["COMPARED", false], ["TOGGLE", true], ["OTHER", false], ["MULTILINE", true],
+  ]);
+});
+
+test("an empty string fallback does not make an env read optional: the value is still missing", () => {
+  const source = [
+    'const a = process.env.STRIPE_SECRET_KEY || "";',
+    "const b = process.env.API_TOKEN ?? '';",
+    "const c = process.env.TEMPLATE_EMPTY || ``;",
+    'const { DEST_EMPTY = "", DEST_SET = "x" } = process.env;',
+    'const d = process.env.SPACE_DEFAULT ?? " ";',
+  ].join("\n");
+  assert.deepEqual(extractEnvReads(source).map((read) => [read.name, read.optional]), [
+    ["STRIPE_SECRET_KEY", false], ["API_TOKEN", false], ["TEMPLATE_EMPTY", false], ["DEST_EMPTY", false], ["DEST_SET", true],
+    ["SPACE_DEFAULT", true],
   ]);
 });
 

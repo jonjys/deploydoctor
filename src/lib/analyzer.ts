@@ -360,8 +360,11 @@ function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): Ch
 
 const ENV_NAME = /^[A-Z][A-Z0-9_]*$/;
 const ENV_ACCESS = /process\.env(?:\??\.([A-Z][A-Z0-9_]*)\b|(?:\?\.)?\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\])/;
-/** Right after a read: `?? "x"`, `|| 3000` or `` || `x` `` (a string, number or template literal), or the `?` of a ternary (captured). */
-const ENV_FALLBACK = /\s*(?:\?\?|\|\|)\s*(?:["'`]|-?\.?\d)|\s*(\?)(?![?.])/y;
+/**
+ * Right after a read: `?? "x"`, `|| 3000` or `` || `x` `` (a non-empty string, number or template literal), or the `?` of a
+ * ternary (captured). An empty string, as in `process.env.KEY || ""`, only quiets the type checker: the value is still missing.
+ */
+const ENV_FALLBACK = /\s*(?:\?\?|\|\|)\s*(?:"(?!")|'(?!')|`(?!`)|-?\.?\d)|\s*(\?)(?![?.])/y;
 /** Right before a read: the test of a ternary on an env variable, as in `process.env.X ? process.env.X : "x"`. */
 const ENV_TERNARY_TEST = new RegExp(`${ENV_ACCESS.source}\\s*\\?\\s*$`);
 /**
@@ -372,8 +375,8 @@ const ENV_OPERATOR = /(?:[=!]==?|(?<!=)[<>]=?|[+\-*/%&|^]|\binstanceof|\bin|(&&|
 
 /**
  * process.env.X, process.env?.X, process.env["X"], process.env?.["X"] and `const { X, Y: y = "" } = process.env`.
- * A read is optional when the code already copes with the variable being unset: a literal fallback (`?? "x"`,
- * `|| 3000`), a literal destructuring default, or a ternary on the variable itself. A fallback to another
+ * A read is optional when the code already copes with the variable being unset: a non-empty literal fallback
+ * (`?? "x"`, `|| 3000`), a non-empty literal destructuring default, or a ternary on the variable itself. A fallback to another
  * env variable or any other expression, and a read inside a comparison or arithmetic, keeps the read required.
  */
 export function extractEnvReads(source: string): Array<{ name: string; index: number; optional: boolean }> {
@@ -399,7 +402,7 @@ export function extractEnvReads(source: string): Array<{ name: string; index: nu
     for (const part of match[1].split(",")) {
       const key = part.trim().replace(/^["']|["']?\s*(?::[\s\S]*|=[\s\S]*)?$/g, "").trim();
       if (!part.trim().startsWith("...") && ENV_NAME.test(key)) {
-        reads.push({ name: key, index: match.index, optional: /^[^=]*=\s*(?:["'`]|-?\.?\d)/.test(part) });
+        reads.push({ name: key, index: match.index, optional: /^[^=]*=\s*(?:"(?!")|'(?!')|`(?!`)|-?\.?\d)/.test(part) });
       }
     }
   }
