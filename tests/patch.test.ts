@@ -10,7 +10,7 @@ import { messages } from "../src/lib/i18n";
 import { buildCasePatch, PATCH_REASONS, PatchError } from "../src/lib/patch/case-patch";
 import { planCasePatch } from "../src/lib/patch/plan";
 import { MAX_TOKEN_LENGTH, openQuote, quoteMetadata, sealQuote, tokenFromMetadata } from "../src/lib/patch/quote";
-import { patchCheckoutParams, PATCH_AMOUNT, readAccessKeys, validatePatchPayment, withAccessKey } from "../src/lib/patch/payments";
+import { patchCheckoutParams, PATCH_AMOUNT, PATCH_FILENAME, readAccessKeys, stripeLookupFailure, validatePatchPayment, withAccessKey } from "../src/lib/patch/payments";
 
 const secret = "test-only-session-secret-not-for-production-123456";
 const reportId = "4e515536-d2b3-474f-884e-b4498baa878f";
@@ -142,7 +142,9 @@ test("checkout is one $5 payment that carries the quote and returns to the patch
   assert.deepEqual(params.adaptive_pricing, { enabled: false });
   assert.equal(params.expires_at, quote.expiresAt);
   assert.equal(params.locale, "sv");
+  // The internal id is frozen: open sessions and paid orders are matched on it. Buyers see the DeployDoctor name.
   assert.equal(params.metadata?.app, "patchjouren");
+  assert.equal(params.line_items?.[0].price_data?.product_data?.name, "DeployDoctor: verifierad importpatch");
   assert.equal(params.metadata?.report_id, reportId);
   assert.equal(params.success_url, "https://deploydoctor.example/patch/success?session_id={CHECKOUT_SESSION_ID}");
   assert.equal(params.cancel_url, `https://deploydoctor.example/r/${reportId}#check-imports`);
@@ -178,6 +180,14 @@ test("only a confirmed, matching, unrefunded payment and the buyer's access key 
   }
 });
 
+test("an order ID Stripe does not know is an unknown order, anything else is a retryable outage", () => {
+  const missing = stripeLookupFailure({ statusCode: 404, code: "resource_missing" });
+  assert.equal(missing.status, 404);
+  assert.equal(missing.code, "payment");
+  assert.equal(stripeLookupFailure({ statusCode: 500 }).status, 503);
+  assert.equal(stripeLookupFailure(new Error("socket hang up")).status, 503);
+});
+
 test("the access cookie keeps the latest five keys, newest first, and ignores junk", () => {
   const keys = Array.from({ length: 7 }, (_, i) => String(i).repeat(64));
   let cookie: string | undefined;
@@ -192,4 +202,9 @@ test("every refusal code has a message in both languages", () => {
     for (const lang of ["en", "sv"] as const) assert.ok((messages[lang] as Record<string, string>)[`patch.reason.${reason}`], `${lang} patch.reason.${reason}`);
   }
   for (const reason of ["no-imports", "private", "nothing", "truncated"]) assert.ok((messages.sv as Record<string, string>)[`patch.none.${reason}`]);
+  for (const lang of ["en", "sv"] as const) {
+    const text = messages[lang] as Record<string, string>;
+    assert.ok(text["patch.download"].endsWith(PATCH_FILENAME), `${lang} download button names the file`);
+    assert.ok(!Object.values(text).some((value) => /patchjouren/i.test(value)), `${lang} shows no working name`);
+  }
 });

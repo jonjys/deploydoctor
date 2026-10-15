@@ -9,9 +9,9 @@ import type { StoredReport } from "@/types/report";
 import { signingSecret } from "@/lib/session-token";
 import { stripeClient } from "@/lib/stripe";
 import { MAX_PATCH_SOURCE_BYTES, PatchError } from "@/lib/patch/case-patch";
-import { PATCH_AMOUNT, PATCH_CURRENCY, patchCheckoutParams, validatePatchPayment } from "@/lib/patch/payments";
+import { PATCH_AMOUNT, PATCH_CURRENCY, patchCheckoutParams, stripeLookupFailure, validatePatchPayment } from "@/lib/patch/payments";
 import { planCasePatch, type PlannedFix, type SkippedFix } from "@/lib/patch/plan";
-import { openQuote, sealQuote, tokenHash } from "@/lib/patch/quote";
+import { openQuote, PATCH_APP, sealQuote, tokenHash } from "@/lib/patch/quote";
 
 export type PatchOffer =
   | { eligible: true; fixes: PlannedFix[]; skipped: SkippedFix[]; files: string[]; commitSha: string; amountMinor: number;
@@ -91,7 +91,7 @@ export async function createPatchCheckout(quoteToken: string, origin: string, la
   const secret = signingSecret();
   const quote = openQuote(quoteToken, secret);
   const session = await stripeClient().checkout.sessions.create(patchCheckoutParams(quoteToken, secret, origin, lang),
-    { idempotencyKey: `patchjouren-${lang}-${tokenHash(quoteToken)}` });
+    { idempotencyKey: `${PATCH_APP}-${lang}-${tokenHash(quoteToken)}` });
   if (!session.url || session.status === "expired") throw new PatchError("Checkout could not be opened. Check the repository again.", 409, "expired");
   return { url: session.url, accessKey: quote.accessKey };
 }
@@ -107,8 +107,8 @@ export async function retrievePaidPatch(sessionId: string, accessKeys: string[])
   let session: Stripe.Checkout.Session;
   try {
     session = await stripeClient().checkout.sessions.retrieve(sessionId, { expand: ["payment_intent.latest_charge"] });
-  } catch {
-    throw new PatchError("The order could not be loaded from Stripe right now. Reload in a minute.", 503, "payment");
+  } catch (error) {
+    throw stripeLookupFailure(error);
   }
   const accessKey = accessKeys.find((key) => tokenHash(key) === session.metadata?.access_hash) ?? "";
   const quote = validatePatchPayment(session, signingSecret(), accessKey);

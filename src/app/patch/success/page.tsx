@@ -5,7 +5,7 @@ import { CopyTextButton } from "@/components/copy-text-button";
 import { getT } from "@/lib/lang";
 import type { MessageKey } from "@/lib/i18n";
 import { PatchError } from "@/lib/patch/case-patch";
-import { PATCH_ACCESS_COOKIE, readAccessKeys } from "@/lib/patch/payments";
+import { PATCH_ACCESS_COOKIE, PATCH_FILENAME, readAccessKeys } from "@/lib/patch/payments";
 import { retrievePaidPatch } from "@/lib/patch/service";
 
 export const metadata = { robots: { index: false, follow: false } };
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 const APPLY = [
   "git pull",
-  "git apply --check patchjouren.patch && git apply patchjouren.patch",
+  `git apply --check ${PATCH_FILENAME} && git apply ${PATCH_FILENAME}`,
   'git commit -am "Fix import letter case for Linux builds"',
   "git push",
 ].join("\n");
