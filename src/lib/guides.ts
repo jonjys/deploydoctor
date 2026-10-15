@@ -197,6 +197,34 @@ export const guides: Guide[] = [
       ] },
     ],
   },
+  {
+    slug: "vercel-hobby-cron-more-than-once-a-day",
+    title: "Hobby accounts are limited to daily cron jobs: fixing the Vercel deploy error",
+    description: "The deployment fails because a cron job in vercel.json would run more than once per day. What the Hobby plan allows, how to read a cron expression to see how often it runs, and the two ways to fix it.",
+    updated: "2026-10-15",
+    check: "Build configuration",
+    sections: [
+      { heading: "The error", body: [
+        "The deployment fails with this error: Hobby accounts are limited to daily cron jobs. This cron expression would run more than once per day. It comes from the crons list in vercel.json. On the Hobby plan, Vercel only accepts cron jobs that run once per day, and an expression that would run more often fails during deployment. Pro and Enterprise allow cron jobs as often as once per minute.",
+      ], code: "{\n  \"crons\": [\n    { \"path\": \"/api/sync\", \"schedule\": \"*/30 * * * *\" }\n  ]\n}" },
+      { heading: "How to tell how often an expression runs", body: [
+        "Vercel reads five fields, always in UTC: minute (0 to 59), hour (0 to 23), day of month (1 to 31), month (1 to 12) and day of week (0 to 6, Sunday to Saturday). Only the minute and hour fields decide how many times a day a job runs. If either of them matches more than one value, through *, a list such as 0,30, a range such as 9-17 or a step such as */15, the job runs more than once a day.",
+        "The day fields only choose which days it runs. 0 5 * * 1 runs on Mondays at 05:00 UTC and 0 5 1 * * on the first of every month, and both are fine on Hobby. 0 * * * * runs every hour and */30 * * * * every 30 minutes, and both fail on Hobby.",
+      ] },
+      { heading: "Fix 1: run it once a day", body: [
+        "Pick one minute and one hour. On Hobby, Vercel does not promise the exact minute either: a job set to 0 1 * * * can start any time between 01:00 and 01:59 UTC, so do not depend on the minute.",
+      ], code: "{\n  \"crons\": [\n    { \"path\": \"/api/sync\", \"schedule\": \"0 5 * * *\" }\n  ]\n}" },
+      { heading: "Fix 2: move the project to Pro", body: [
+        "If the job really has to run more often, or at a precise minute, the Pro plan runs cron jobs as often as once per minute and invokes them within the minute you set. Every plan allows up to 100 cron jobs per project.",
+      ] },
+      { heading: "Check the rest of the expression too", body: [
+        "Vercel's cron format does not support names such as MON, SUN, JAN or DEC, so use numbers. You also cannot set both day of month and day of week: when one has a value, the other must be *. The timezone is always UTC, so convert your local time before you write the hour.",
+      ] },
+      { heading: "How DeployDoctor catches it", body: [
+        "DeployDoctor reads vercel.json in the Build configuration check, works out from the minute and hour fields whether each cron job can run more than once a day, and points at the line of that schedule with a daily version of the same expression to use on Hobby. It cannot see which plan you are on, so it reports this as a warning that says the deployment fails on Hobby. The same check flags expressions outside Vercel's cron format, more than 100 cron jobs, a maxDuration above the 300 seconds Hobby allows, and memory set in vercel.json, which Vercel ignores with Fluid compute. Scan your repository for free on the home page, or run it on every pull request with the GitHub Action.",
+      ] },
+    ],
+  },
 ];
 
 export function guideBySlug(slug: string): Guide | undefined {

@@ -1,5 +1,9 @@
 import type { Lang } from "@/lib/i18n";
 import type { SecretKind } from "@/lib/secrets";
+import type { CronField, CronIssue } from "@/lib/vercel-cron";
+
+const EN_CRON_FIELDS: Record<CronField, string> = { minute: "minute", hour: "hour", dayOfMonth: "day of month", month: "month", dayOfWeek: "day of week" };
+const SV_CRON_FIELDS: Record<CronField, string> = { minute: "minut", hour: "timme", dayOfMonth: "dag i månaden", month: "månad", dayOfWeek: "veckodag" };
 
 export type AnalysisText = {
   titles: { nextEntry: string; imports: string; serverLibs: string; env: string; supabase: string; prisma: string; buildConfig: string; secrets: string; dependencies: string };
@@ -60,6 +64,11 @@ export type AnalysisText = {
     framework: (value: string) => string; frameworkFix: string;
     indexCase: (file: string) => string; indexCaseFix: (file: string) => string;
     spaRewrite: (router: string) => string; spaRewriteFix: string;
+    cronHobby: (schedule: string, path?: string) => string; cronHobbyFix: (daily: string) => string;
+    cronInvalid: (schedule: string, reason: string, path?: string) => string; cronInvalidFix: string; cronReason: (issue: CronIssue) => string;
+    cronCount: (n: number) => string; cronCountFix: string;
+    maxDuration: (pattern: string, seconds: number) => string; maxDurationFix: string;
+    memory: (pattern: string) => string; memoryFix: string;
     yellow: (n: number) => string; ok: string;
   };
   prisma: {
@@ -202,6 +211,21 @@ const en: AnalysisText = {
     indexCaseFix: (file) => `Rename ${file} to index.html. Git ignores a rename that only changes case on macOS and Windows, so rename it in two steps through a temporary name.`,
     spaRewrite: (router) => `this Vite app routes in the browser with ${router}, but vercel.json has no rewrite to index.html, so opening or reloading any page other than / returns 404 NOT_FOUND`,
     spaRewriteFix: 'Add a rewrite to vercel.json at the repository root: "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]. If vercel.json sets cleanUrls, use / as the destination. Redeploy and reload a deep link to confirm.',
+    cronHobby: (schedule, path) => `the cron job${path ? ` for ${path}` : ""} runs on ${schedule}, which is more than once a day; on the Hobby plan Vercel fails the deployment, because Hobby only allows cron jobs that run once a day`,
+    cronHobbyFix: (daily) => `On the Hobby plan, run it once a day instead, for example ${daily}. Times are UTC, and on Hobby the job can start any time within that hour. If it has to run more often, move the project to Pro, where cron jobs can run as often as once a minute.`,
+    cronInvalid: (schedule, reason, path) => `the cron job${path ? ` for ${path}` : ""} has the schedule ${schedule}, which is not a valid Vercel cron expression: ${reason}`,
+    cronInvalidFix: "Write the schedule as five numeric fields in UTC: minute 0 to 59, hour 0 to 23, day of month 1 to 31, month 1 to 12 and day of week 0 to 6 (Sunday is 0), with * in day of month or in day of week. For example, 0 5 * * * runs every day at 05:00 UTC.",
+    cronReason: (issue) => issue.kind === "fields" ? `it has ${issue.count} field${issue.count === 1 ? "" : "s"}, and Vercel expects five: minute, hour, day of month, month and day of week`
+      : issue.kind === "names" ? `Vercel does not support names such as ${issue.token}, so use numbers: 0 to 6 for Sunday to Saturday and 1 to 12 for January to December`
+      : issue.kind === "range" ? `${issue.value} is outside ${issue.min} to ${issue.max}, the range for ${EN_CRON_FIELDS[issue.field]}`
+      : issue.kind === "syntax" ? `${issue.text} in the ${EN_CRON_FIELDS[issue.field]} field is not a number, *, a range, a step or a list`
+      : "it sets both day of month and day of week, and Vercel needs one of them to be *",
+    cronCount: (n) => `vercel.json defines ${n} cron jobs, and Vercel allows at most 100 per project on every plan`,
+    cronCountFix: "Bring the list down to 100 cron jobs or fewer, for example by letting one route run several tasks that share a schedule.",
+    maxDuration: (pattern, seconds) => `the functions entry ${pattern} sets maxDuration to ${seconds} seconds, above the 300 seconds the Hobby plan allows; Vercel only accepts a value from 1 up to your plan's maximum`,
+    maxDurationFix: "On the Hobby plan, lower maxDuration to 300 or set it to max, which Vercel turns into your plan's maximum at deploy time. Pro allows up to 800 seconds, and up to 1800 seconds in beta for some Node.js, Bun and Python runtimes.",
+    memory: (pattern) => `the functions entry ${pattern} sets memory, which Vercel does not read from vercel.json with Fluid compute, the default for new projects; the build only prints a warning and the function keeps the project memory size`,
+    memoryFix: "Remove memory from vercel.json. On Pro and Enterprise, set the memory size in the project under Settings, Functions. On Hobby every function always gets the default 2 GB.",
     yellow: (n) => `${n} project setting${n === 1 ? "" : "s"} may make the Vercel build behave differently from your machine.`,
     ok: "One lockfile, a build script and a Node version Vercel supports.",
   },
@@ -352,6 +376,21 @@ const sv: AnalysisText = {
     indexCaseFix: (file) => `Döp om ${file} till index.html. Git ignorerar ett namnbyte som bara ändrar skiftläge på macOS och Windows, så byt namn i två steg via ett tillfälligt namn.`,
     spaRewrite: (router) => `Vite-appen routar i webbläsaren med ${router}, men vercel.json har ingen rewrite till index.html, så den som öppnar eller laddar om en annan sida än / får 404 NOT_FOUND`,
     spaRewriteFix: 'Lägg till en rewrite i vercel.json i repots rot: "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]. Sätter vercel.json cleanUrls, använd / som destination. Driftsätt igen och ladda om en djuplänk för att bekräfta.',
+    cronHobby: (schedule, path) => `cron-jobbet${path ? ` för ${path}` : ""} körs enligt ${schedule}, alltså mer än en gång per dag; på Hobby-planen misslyckas deployen, eftersom Hobby bara tillåter cron-jobb som körs en gång per dag`,
+    cronHobbyFix: (daily) => `På Hobby-planen, kör jobbet en gång per dag i stället, till exempel ${daily}. Tiderna är UTC, och på Hobby kan jobbet starta när som helst under den timmen. Måste det köras oftare, flytta projektet till Pro, där cron-jobb kan köras så ofta som en gång i minuten.`,
+    cronInvalid: (schedule, reason, path) => `cron-jobbet${path ? ` för ${path}` : ""} har schemat ${schedule}, som inte är ett giltigt cron-uttryck för Vercel: ${reason}`,
+    cronInvalidFix: "Skriv schemat som fem numeriska fält i UTC: minut 0 till 59, timme 0 till 23, dag i månaden 1 till 31, månad 1 till 12 och veckodag 0 till 6 (söndag är 0), med * i dag i månaden eller i veckodag. Till exempel kör 0 5 * * * varje dag klockan 05:00 UTC.",
+    cronReason: (issue) => issue.kind === "fields" ? `det har ${issue.count} fält, och Vercel förväntar sig fem: minut, timme, dag i månaden, månad och veckodag`
+      : issue.kind === "names" ? `Vercel stöder inte namn som ${issue.token}, så använd siffror: 0 till 6 för söndag till lördag och 1 till 12 för januari till december`
+      : issue.kind === "range" ? `${issue.value} ligger utanför ${issue.min} till ${issue.max}, intervallet för ${SV_CRON_FIELDS[issue.field]}`
+      : issue.kind === "syntax" ? `${issue.text} i fältet för ${SV_CRON_FIELDS[issue.field]} är varken ett tal, *, ett intervall, ett steg eller en lista`
+      : "det anger både dag i månaden och veckodag, och Vercel kräver att en av dem är *",
+    cronCount: (n) => `vercel.json definierar ${n} cron-jobb, och Vercel tillåter högst 100 per projekt på alla planer`,
+    cronCountFix: "Minska listan till högst 100 cron-jobb, till exempel genom att låta en route köra flera uppgifter som har samma schema.",
+    maxDuration: (pattern, seconds) => `functions-posten ${pattern} sätter maxDuration till ${seconds} sekunder, över de 300 sekunder som Hobby-planen tillåter; Vercel godtar bara ett värde från 1 upp till planens maximum`,
+    maxDurationFix: "På Hobby-planen, sänk maxDuration till 300 eller sätt den till max, som Vercel gör om till planens maximum vid deploy. Pro tillåter upp till 800 sekunder, och upp till 1800 sekunder i beta för vissa Node.js-, Bun- och Python-runtimes.",
+    memory: (pattern) => `functions-posten ${pattern} sätter memory, som Vercel inte läser från vercel.json med Fluid compute, standard för nya projekt; bygget skriver bara en varning och funktionen behåller projektets minnesstorlek`,
+    memoryFix: "Ta bort memory från vercel.json. På Pro och Enterprise ställer du in minnesstorleken i projektet under Settings, Functions. På Hobby får varje funktion alltid standardstorleken 2 GB.",
     yellow: (n) => `${n} projektinställning${n === 1 ? "" : "ar"} kan göra att Vercel-bygget beter sig annorlunda än på din dator.`,
     ok: "En lockfil, ett build-skript och en Node-version som Vercel stöder.",
   },

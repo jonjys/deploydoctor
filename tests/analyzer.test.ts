@@ -495,6 +495,75 @@ test("build configuration: a vercel.json framework other than nextjs is the 404 
   for (const vercel of ['{ "framework": "nextjs" }', '{ "buildCommand": "next build" }', "not json"]) assert.equal(run(vercel)?.status, "green", vercel);
 });
 
+test("build configuration: a cron job that runs more than once a day fails on Hobby", () => {
+  const nextPkg = JSON.stringify({ dependencies: { next: "16.3.6" }, scripts: { build: "next build" } });
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "vercel.json", type: "blob" }];
+  const run = (vercel: string, lang: "en" | "sv" = "en") => analyzeSnapshot(snapshot(entries, { ...page, "package.json": nextPkg, "vercel.json": vercel }),
+    { checks: ["vercel"], lang }).checks.find((check) => check.id === "build-config");
+  const vercel = JSON.stringify({ crons: [{ path: "/api/daily", schedule: "0 5 * * *" }, { path: "/api/sync", schedule: "*/30 9-17 * * 1-5" }] }, null, 2);
+  const build = run(vercel);
+  assert.equal(build?.status, "yellow");
+  assert.equal(build?.findings?.length, 1);
+  assert.equal(build?.findings?.[0].file, "vercel.json");
+  assert.equal(build?.findings?.[0].line, vercel.split("\n").findIndex((line) => line.includes("*/30")) + 1);
+  assert.match(build?.findings?.[0].problem ?? "", /^the cron job for \/api\/sync runs on \*\/30 9-17 \* \* 1-5, which is more than once a day; on the Hobby plan Vercel fails the deployment/);
+  assert.match(build?.findings?.[0].fix ?? "", /once a day instead, for example 0 9 \* \* 1-5\. .*move the project to Pro/);
+  assert.equal(build?.findings?.[0].command, "git add -- vercel.json");
+  assert.match(run(vercel, "sv")?.findings?.[0].problem ?? "", /på Hobby-planen misslyckas deployen/);
+  for (const schedule of ["0 * * * *", "* * * * *", "0 0,12 * * *"]) {
+    assert.equal(run(JSON.stringify({ crons: [{ path: "/api/cron", schedule }] }))?.findings?.length, 1, schedule);
+  }
+  // Daily, weekly and monthly jobs are fine on every plan.
+  for (const schedule of ["0 5 * * *", "0 0 * * *", "30 23 * * 1-5", "0 5 1 * *"]) {
+    assert.equal(run(JSON.stringify({ crons: [{ path: "/api/cron", schedule }] }))?.status, "green", schedule);
+  }
+  // Only the "schedule" key of a cron job counts for the line, not schedules elsewhere or a path that mentions it.
+  const minified = '{"schedules":[],"crons":[{"path":"/api/schedule","schedule":"0 5 * * *"},\n{"path":"/b","schedule":"0 * * * *"}]}';
+  assert.equal(run(minified)?.findings?.[0].line, 2);
+});
+
+test("build configuration: cron expressions outside Vercel's format are reported on any plan", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "vercel.json", type: "blob" }];
+  const nextPkg = JSON.stringify({ dependencies: { next: "16.3.6" }, scripts: { build: "next build" } });
+  const problem = (schedule: string, lang: "en" | "sv" = "en") => {
+    const build = analyzeSnapshot(snapshot(entries, { ...page, "package.json": nextPkg, "vercel.json": JSON.stringify({ crons: [{ path: "/api/cron", schedule }] }) }),
+      { checks: ["vercel"], lang }).checks.find((check) => check.id === "build-config");
+    assert.equal(build?.status, "yellow", schedule);
+    assert.equal(build?.findings?.length, 1, schedule);
+    assert.doesNotMatch(build?.findings?.[0].problem ?? "", /Hobby/, schedule);
+    return build?.findings?.[0].problem ?? "";
+  };
+  assert.match(problem("0 2 * * * *"), /^the cron job for \/api\/cron has the schedule 0 2 \* \* \* \*, which is not a valid Vercel cron expression: it has 6 fields, and Vercel expects five/);
+  assert.match(problem("0 24 * * *"), /24 is outside 0 to 23, the range for hour$/);
+  assert.match(problem("0 5 * * 7"), /7 is outside 0 to 6, the range for day of week$/);
+  assert.match(problem("0 5 * * MON"), /does not support names such as MON/);
+  assert.match(problem("0 5 1 * 1"), /both day of month and day of week/);
+  assert.match(problem("*/0 * * * *"), /\*\/0 in the minute field is not a number/);
+  assert.match(problem("0 24 * * *", "sv"), /inte är ett giltigt cron-uttryck för Vercel: 24 ligger utanför 0 till 23, intervallet för timme$/);
+});
+
+test("build configuration: more than 100 cron jobs, and functions settings Hobby or Fluid compute do not allow", () => {
+  const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: "vercel.json", type: "blob" }];
+  const nextPkg = JSON.stringify({ dependencies: { next: "16.3.6" }, scripts: { build: "next build" } });
+  const run = (vercel: object) => analyzeSnapshot(snapshot(entries, { ...page, "package.json": nextPkg, "vercel.json": JSON.stringify(vercel, null, 2) }),
+    { checks: ["vercel"] }).checks.find((check) => check.id === "build-config");
+  const jobs = (n: number) => Array.from({ length: n }, (_, index) => ({ path: `/api/job/${index}`, schedule: `${index % 60} ${index % 24} * * *` }));
+  const many = run({ regions: ["iad1"], crons: jobs(101) });
+  assert.equal(many?.findings?.length, 1);
+  assert.equal(many?.findings?.[0].line, 5);
+  assert.match(many?.findings?.[0].problem ?? "", /defines 101 cron jobs, and Vercel allows at most 100 per project on every plan/);
+  assert.equal(run({ crons: jobs(100) })?.status, "green");
+
+  const functions = run({ functions: { "api/report.ts": { maxDuration: 600 }, "api/fast.ts": { maxDuration: 300 }, "api/max.ts": { maxDuration: "max" }, "api/big.ts": { memory: 3009 } } });
+  assert.deepEqual(functions?.findings?.map((finding) => finding.line), [4, 13]);
+  assert.match(functions?.findings?.[0].problem ?? "", /api\/report\.ts sets maxDuration to 600 seconds, above the 300 seconds the Hobby plan allows/);
+  assert.match(functions?.findings?.[0].fix ?? "", /lower maxDuration to 300 or set it to max/);
+  assert.match(functions?.findings?.[1].problem ?? "", /api\/big\.ts sets memory, which Vercel does not read from vercel\.json with Fluid compute/);
+  // Without Fluid compute, memory in vercel.json still applies.
+  assert.equal(run({ fluid: false, functions: { "api/big.ts": { memory: 3009 } } })?.status, "green");
+  assert.equal(run({ functions: { "api/**/*.ts": { maxDuration: 60 } } })?.status, "green");
+});
+
 test("build configuration: a static site whose home page is not lower-case index.html", () => {
   const entries: RepositorySnapshot["entries"] = [{ path: "Index.html", type: "blob" }, { path: "style.css", type: "blob" }];
   const build = analyzeSnapshot(snapshot(entries, {}), { checks: ["vercel"] }).checks.find((check) => check.id === "build-config");
