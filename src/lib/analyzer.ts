@@ -8,6 +8,7 @@ import { ignoringRule } from "@/lib/gitignore";
 import { nodeRangeAllowsMajor } from "@/lib/node-range";
 import { findSecrets } from "@/lib/secrets";
 import { auditMigrations, grantSql, MIGRATION_FILE } from "@/lib/supabase-sql";
+import { dailyVersion, parseVercelCron, runsMoreThanOnceADay } from "@/lib/vercel-cron";
 import { lockfileMentions, manifestSpecifiers, moduleImports, npmMissingLinuxBinaries, npmRootSpecifiers, packageName, pnpmOverrides, pnpmRootSpecifiers, stripComments,
   specifierDrift, tsconfigAliases } from "@/lib/dependencies";
 
@@ -440,6 +441,61 @@ function historyRouter(snapshot: RepositorySnapshot) {
   return undefined;
 }
 
+// Vercel's documented limits. Hobby only allows daily cron jobs (more often fails the deployment) and functions up to 300 s.
+const MAX_CRON_JOBS = 100;
+const HOBBY_MAX_DURATION = 300;
+
+/**
+ * crons and functions settings in vercel.json that fail on the Hobby plan, break Vercel's cron format or are ignored.
+ * DeployDoctor cannot see the plan, so these stay warnings and say when only Hobby is affected.
+ */
+function vercelJsonFindings(raw: string, x: AnalysisText): Finding[] {
+  let config: { crons?: unknown; functions?: unknown; fluid?: unknown } | null;
+  try { config = JSON.parse(raw); } catch { return []; }
+  if (!config || typeof config !== "object") return [];
+  const findings: Finding[] = [];
+  const at = (index: number) => Math.max(1, lineAt(raw, Math.max(0, index)));
+  const finding = (index: number, problem: string, fix: string): Finding => ({ file: "vercel.json", line: at(index), problem, fix, command: "git add -- vercel.json" });
+
+  if (Array.isArray(config.crons)) {
+    const cronsAt = raw.indexOf('"crons"');
+    if (config.crons.length > MAX_CRON_JOBS) findings.push(finding(cronsAt, x.build.cronCount(config.crons.length), x.build.cronCountFix));
+    // The "schedule" keys after "crons", in order, give each job's line. Once one is missed, the rest use the crons line.
+    const scheduleKey = /"schedule"\s*:/g;
+    scheduleKey.lastIndex = Math.max(0, cronsAt);
+    let scheduleAt: number | undefined = cronsAt;
+    for (const job of config.crons) {
+      if (!job || typeof job !== "object" || !("schedule" in job)) continue;
+      scheduleAt = scheduleAt === undefined ? undefined : scheduleKey.exec(raw)?.index;
+      const { schedule, path } = job as { schedule: unknown; path?: unknown };
+      if (typeof schedule !== "string") continue;
+      const shownPath = typeof path === "string" ? path : undefined;
+      const parsed = parseVercelCron(schedule);
+      if (parsed && "issue" in parsed) {
+        findings.push(finding(scheduleAt ?? cronsAt, x.build.cronInvalid(schedule, x.build.cronReason(parsed.issue), shownPath), x.build.cronInvalidFix));
+      } else if (parsed && runsMoreThanOnceADay(parsed)) {
+        findings.push(finding(scheduleAt ?? cronsAt, x.build.cronHobby(schedule, shownPath), x.build.cronHobbyFix(dailyVersion(parsed))));
+      }
+    }
+  }
+
+  if (config.functions && typeof config.functions === "object" && !Array.isArray(config.functions)) {
+    const functionsAt = raw.indexOf('"functions"');
+    for (const [pattern, settings] of Object.entries(config.functions)) {
+      if (!settings || typeof settings !== "object") continue;
+      const patternAt = raw.indexOf(JSON.stringify(pattern), Math.max(0, functionsAt));
+      const keyAt = (key: string) => patternAt === -1 ? functionsAt : Math.max(patternAt, raw.indexOf(`"${key}"`, patternAt));
+      const { maxDuration, memory } = settings as { maxDuration?: unknown; memory?: unknown };
+      if (typeof maxDuration === "number" && maxDuration > HOBBY_MAX_DURATION) {
+        findings.push(finding(keyAt("maxDuration"), x.build.maxDuration(pattern, maxDuration), x.build.maxDurationFix));
+      }
+      // With Fluid compute (the default for new projects) memory in vercel.json is ignored with a build warning.
+      if (memory !== undefined && config.fluid !== false) findings.push(finding(keyAt("memory"), x.build.memory(pattern), x.build.memoryFix));
+    }
+  }
+  return findings;
+}
+
 function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const title = x.titles.buildConfig;
   const manifest = parsePackageJson(snapshot);
@@ -483,6 +539,7 @@ function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
         problem: x.build.framework(shown), fix: x.build.frameworkFix, command: "git add -- vercel.json" });
     }
   }
+  if (vercelRaw) findings.push(...vercelJsonFindings(vercelRaw, x));
 
   // A Vite single page app with a history router needs a catch-all rewrite, or every deep link is a 404 on Vercel.
   const router = !packages.next && packages.vite && !Object.keys(packages).some((name) => VITE_SERVER_FRAMEWORKS.has(name))
