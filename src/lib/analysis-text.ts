@@ -32,6 +32,8 @@ export type AnalysisText = {
     gitignoreFix: (line: string) => string; evidenceGitignore: (rule: string) => string;
     misnamed: (file: string) => string; misnamedProblem: (file: string) => string;
     misnamedFix: (file: string) => string; evidenceMisnamed: (file: string) => string;
+    optional: (n: number, names: string) => string; fixOptional: (names: string) => string;
+    optionalProblem: (name: string) => string; optionalFix: (name: string) => string; evidenceOptional: (name: string) => string;
     partial: string; okUsed: string; okNone: string;
   };
   supabase: {
@@ -130,6 +132,11 @@ const en: AnalysisText = {
     misnamedProblem: (file) => `${file} is the env template, but the convention is .env.example in the repository root`,
     misnamedFix: (file) => `Rename ${file} to .env.example (git mv ${file} .env.example) and keep only NAME= lines in it`,
     evidenceMisnamed: (file) => `${file} → env template under a name tools do not look for`,
+    optional: (n, names) => `${n} optional env variable${n === 1 ? " has" : "s have"} a fallback in the code but ${n === 1 ? "is" : "are"} not in .env.example: ${names}`,
+    fixOptional: (names) => `Add the optional variables to .env.example as commented lines, so their fallbacks still apply: ${names}`,
+    optionalProblem: (name) => `${name} has a fallback in the code but is not documented in .env.example`,
+    optionalFix: (name) => `Add # ${name}= to .env.example as a commented line. Keep it commented: an empty ${name}= line can replace the fallback with an empty string.`,
+    evidenceOptional: (name) => `${name} → optional, has a fallback in the code`,
     partial: "The env variables we read are documented, but the scan did not finish.",
     okUsed: "Every process.env variable found is documented and no secret-looking value uses NEXT_PUBLIC_.",
     okNone: "No process.env usage or browser-exposed secret was found.",
@@ -280,6 +287,11 @@ const sv: AnalysisText = {
     misnamedProblem: (file) => `${file} är env-mallen, men konventionen är .env.example i repots root`,
     misnamedFix: (file) => `Döp om ${file} till .env.example (git mv ${file} .env.example) och behåll bara NAMN=-rader i den`,
     evidenceMisnamed: (file) => `${file} → env-mall under ett namn som verktyg inte letar efter`,
+    optional: (n, names) => `${n} ${n === 1 ? "valfri env-variabel" : "valfria env-variabler"} har ett reservvärde i koden men saknas i .env.example: ${names}`,
+    fixOptional: (names) => `Lägg till de valfria variablerna i .env.example som utkommenterade rader, så att reservvärdena fortfarande gäller: ${names}`,
+    optionalProblem: (name) => `${name} har ett reservvärde i koden men är inte dokumenterad i .env.example`,
+    optionalFix: (name) => `Lägg till # ${name}= som en utkommenterad rad i .env.example. Låt den vara utkommenterad: en tom ${name}=-rad kan ersätta reservvärdet med en tom sträng.`,
+    evidenceOptional: (name) => `${name} → valfri, har ett reservvärde i koden`,
     partial: "De env-variabler vi läste är dokumenterade, men skanningen blev inte klar.",
     okUsed: "Alla process.env-variabler som hittades är dokumenterade och inget hemligt-liknande värde använder NEXT_PUBLIC_.",
     okNone: "Ingen process.env-användning eller webbläsarexponerad hemlighet hittades.",
