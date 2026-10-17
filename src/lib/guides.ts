@@ -252,7 +252,7 @@ export const guides: Guide[] = [
         "The upgrade guide notes that if the build fails because a webpack configuration was found and you do not define one yourself, a plugin is likely adding a webpack option, such as a wrapper around next.config. Check the plugin for a Next.js 16 or Turbopack release, or use one of the flags above until it has one.",
       ] },
       { heading: "How DeployDoctor catches it", body: [
-        "DeployDoctor reads next.config and package.json in the Build configuration check. When the app uses Next.js 16 or later, next.config sets a webpack function and has no turbopack option, and the build command is next build without --webpack or --turbopack, it reports a failing check that points at the webpack line. A webpack option that a wrapper plugin adds is not visible in next.config, so that case is not reported. Scan your repository for free on the home page, or run it on every pull request with the GitHub Action.",
+        "DeployDoctor reads next.config, package.json and vercel.json in the Build configuration check. When the app uses Next.js 16 or later, next.config sets a webpack function and has no turbopack option, and the build command, or the build script it runs, is next build without --webpack, --turbopack or a TURBOPACK or NEXT_RSPACK setting, it reports a failing check that points at the webpack line. Next.js looks for the turbopack option after plugins have run, and plugins such as @next/mdx and next-intl add one when the config loads, so when next.config passes its config through a plugin like withMDX or withNextIntl, a function or a spread, the check is a warning instead. A webpack option that a wrapper plugin adds is not visible in next.config, so that case is not reported. Scan your repository for free on the home page, or run it on every pull request with the GitHub Action.",
       ] },
     ],
   },
@@ -279,7 +279,7 @@ export const guides: Guide[] = [
         "If nothing renders on demand, you do not need an adapter to deploy to Vercel. Astro's Vercel adapter docs say you only need it for a static site if you use additional Vercel services, such as Web Analytics or Image Optimization through the adapter. Removing output: server and every prerender = false is also a valid fix.",
       ] },
       { heading: "How DeployDoctor catches it", body: [
-        "DeployDoctor reads astro.config and the JavaScript and TypeScript files under src/pages in the Build configuration check. When output is server or hybrid, or a route sets prerender to false, and astro.config has no adapter, it reports a failing check that points at the line. When the adapter is @astrojs/node, @astrojs/netlify or @astrojs/cloudflare, it reports a warning with the switch to @astrojs/vercel. The same check covers SvelteKit adapters built for another platform. Scan your repository for free on the home page, or run it on every pull request with the GitHub Action.",
+        "DeployDoctor reads astro.config and the JavaScript and TypeScript files under src/pages in the Build configuration check. When output is server, or hybrid on Astro 4, or a route sets prerender to false, and astro.config has no adapter, it reports a failing check that points at the line. When the adapter is @astrojs/node, @astrojs/netlify or @astrojs/cloudflare, it reports a warning with the switch to @astrojs/vercel. The same check covers SvelteKit adapters built for another platform. Scan your repository for free on the home page, or run it on every pull request with the GitHub Action.",
       ] },
     ],
   },

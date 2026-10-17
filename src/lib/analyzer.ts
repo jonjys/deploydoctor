@@ -512,72 +512,139 @@ function exportIndex(code: string, name: string): number {
 const exportsName = (code: string, name: string) => exportIndex(code, name) !== -1;
 const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** The literal right of `export const name =`, without quotes, or undefined. */
+/** The literal right of `export const name =`, without quotes or a trailing as const, or undefined. */
 function segmentConfig(code: string, name: string): { value: string; index: number } | undefined {
   const match = new RegExp(`\\bexport\\s+const\\s+${name}\\s*=\\s*([^;\\n]+)`).exec(code);
-  return match ? { value: match[1].trim().replace(/^(["'`])(.*)\1$/, "$2"), index: match.index } : undefined;
+  return match ? { value: match[1].trim().replace(/\s+(?:as|satisfies)\s+[\w$.]+$/, "").replace(/^(["'`])(.*)\1$/, "$2"), index: match.index } : undefined;
+}
+
+/** export * from hides which names the module exports. */
+const reexportsAll = (code: string) => /\bexport\s*\*\s*from\b/.test(code);
+
+/**
+ * Whether next.config exports a plain object literal, directly or through a variable it declares once, with no spread at
+ * its top level. A plugin call, a function or a spread can add options when Next.js loads the config.
+ */
+function plainConfigObject(code: string): boolean {
+  const exported = [...code.matchAll(/\bexport\s+default\s+|\bmodule\.exports\s*=(?!=)\s*/g)];
+  if (exported.length !== 1) return false;
+  let start = exported[0].index + exported[0][0].length;
+  const name = /^([A-Za-z_$][\w$]*)(?:\s+(?:as|satisfies)\s+[\w$.]+)?\s*(?:;|\n|$)/.exec(code.slice(start))?.[1];
+  if (name) {
+    // Declared once and never reassigned, as in nextConfig = withMDX(nextConfig).
+    const assignments = [...code.matchAll(new RegExp(`(?<![\\w$.])${escapeRegex(name)}\\s*(?::[^=;]+)?=(?![=>])\\s*`, "g"))];
+    if (assignments.length !== 1 || !/\b(?:const|let|var)\s+$/.test(code.slice(0, assignments[0].index))) return false;
+    start = assignments[0].index + assignments[0][0].length;
+  }
+  if (code[start] !== "{") return false;
+  let depth = 0;
+  for (let index = start; index < code.length; index += 1) {
+    const char = code[index];
+    if (char === '"' || char === "'" || char === "`") {
+      for (index += 1; index < code.length && code[index] !== char; index += code[index] === "\\" ? 2 : 1);
+    } else if ("{[(".includes(char)) depth += 1;
+    else if ("}])".includes(char) && --depth === 0) return true;
+    else if (depth === 1 && code.startsWith("...", index)) return false;
+  }
+  return true;
 }
 
 const NEXT_CONFIG = /^next\.config\.[cm]?[jt]s$/;
 const APP_FILE = /^((?:src\/)?app)\/(?:(.*)\/)?(page|layout|route)\.[cm]?[jt]sx?$/;
 const PAGES_FILE = /^(?:src\/)?pages\/(.+)\.[cm]?[jt]sx?$/;
 const NOT_GET_METHODS = ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+// Vercel runs the build script for these, so the script is the command that counts.
+const RUNS_BUILD_SCRIPT = /^\s*(?:(?:npm|bun)\s+run|pnpm(?:\s+run)?|yarn(?:\s+run)?)\s+build\s*$/;
+
+/** Folders below the root with their own package.json or next.config: another app, built with its own settings. */
+function nestedProjects(snapshot: RepositorySnapshot): (file: string) => boolean {
+  const dirs = [...new Set(snapshot.entries.map((entry) => /^(.+)\/(?:package\.json|next\.config\.[cm]?[jt]s)$/.exec(entry.path)?.[1]))]
+    .filter((dir): dir is string => dir !== undefined);
+  return (file) => dirs.some((dir) => file.startsWith(`${dir}/`));
+}
 
 /**
- * Next.js 16 builds with Turbopack by default and stops when next.config has a webpack function and no turbopack
- * option, unless the build command picks a bundler with --webpack or --turbopack.
+ * Next.js 16 builds with Turbopack by default and stops when the loaded config has a webpack function and no turbopack
+ * option, unless the build command picks a bundler with a flag or TURBOPACK or NEXT_RSPACK. Next.js checks the config
+ * after plugins run, and some, such as @next/mdx and next-intl, add a turbopack option then, so only a plain object is red.
  */
-function webpackFindings(config: ConfigFile | undefined, buildCommand: string, nextVersion: string | undefined, x: AnalysisText): Finding[] {
+function webpackFindings(config: ConfigFile | undefined, buildCommand: string, nextVersion: string | undefined, x: AnalysisText, red: Set<Finding>): Finding[] {
   const major = Number(/\d+/.exec(nextVersion ?? "")?.[0]);
-  if (!config?.code || !(major >= 16) || /\bturbopack\s*:|\bturbo\s*:/.test(config.code)) return [];
-  if (!/\bnext\s+build\b/.test(buildCommand) || /--(?:webpack|turbopack|turbo)\b/.test(buildCommand)) return [];
+  // A turbopack key, quoted or shorthand, an assignment, or the experimental.turbo keys Next.js also counts.
+  if (!config?.code || !(major >= 16) || /\bturbo\w*["'`]?\s*:|[{,]\s*turbopack\s*(?=[,}])|\.turbopack\s*=(?!=)/.test(config.code)) return [];
+  // TURBOPACK=auto is what Next.js sets when nothing picks a bundler, so only that value still fails.
+  if (!/\bnext\s+build\b/.test(buildCommand) || /--(?:webpack|turbopack|turbo)\b|\bTURBOPACK=(?!["']?auto\b)["']?\w|\bNEXT_RSPACK=["']?\w/.test(buildCommand)) return [];
   // Only a function counts: plugin options such as Sentry's webpack: { ... } are objects, not a webpack config.
   const match = /(?:^|[{,\s])webpack\s*(?:\(|:\s*(?:async\s+)?(?:function\b|\(|[A-Za-z_$][\w$]*\s*=>))|\.webpack\s*=(?!=)/m.exec(config.code);
   if (!match) return [];
-  return [{ file: config.file, line: lineAt(config.raw!, match.index + match[0].indexOf("webpack")), problem: x.build.webpack(major), fix: x.build.webpackFix }];
+  const line = lineAt(config.raw!, match.index + match[0].indexOf("webpack"));
+  if (!plainConfigObject(config.code)) return [{ file: config.file, line, problem: x.build.webpackPlugin(major), fix: x.build.webpackPluginFix }];
+  const item: Finding = { file: config.file, line, problem: x.build.webpack(major), fix: x.build.webpackFix };
+  red.add(item);
+  return [item];
 }
 
 /**
  * With output set to export, the features the Next.js static exports guide lists as unsupported. A dynamic route without
- * generateStaticParams stops next build; the rest are warnings, because the guide only calls them unsupported.
- * Rewrites, redirects, headers and the default image loader are left out: Next.js skips those warnings on Vercel.
+ * generateStaticParams and a GET route handler not marked static stop next build (Next.js errors E1452 and E301); the
+ * rest are warnings. Server Actions stay a warning: next build only fails for actions the app imports, which a scan of
+ * the text cannot tell. Rewrites, redirects, headers and the default image loader are left out: Next.js skips those
+ * warnings on Vercel.
  */
-function staticExportFindings(snapshot: RepositorySnapshot, config: ConfigFile | undefined, x: AnalysisText, red: Set<Finding>): Finding[] {
+function staticExportFindings(snapshot: RepositorySnapshot, config: ConfigFile | undefined, nextVersion: string | undefined, x: AnalysisText, red: Set<Finding>): Finding[] {
   if (!config?.code || !/\boutput\s*:\s*["'`]export["'`]/.test(config.code)) return [];
   const findings: Finding[] = [];
+  const nested = nestedProjects(snapshot);
   const files = snapshot.entries.filter((entry) => entry.type === "blob" && SOURCE_EXTENSION.test(entry.path) && !TEST_FILE.test(entry.path)
-    && !/(?:^|\/)node_modules\//.test(entry.path)).map((entry) => entry.path).sort();
+    && !/(?:^|\/)node_modules\//.test(entry.path) && !nested(entry.path)).map((entry) => entry.path).sort();
   const codeOf = (file: string) => { const raw = snapshot.contents.get(file); return raw === undefined ? undefined : stripComments(raw); };
   const finding = (file: string, index: number, problem: string, fix: string): Finding =>
     ({ file, line: Math.max(1, lineAt(snapshot.contents.get(file) ?? "", Math.max(0, index))), problem, fix });
+  // Next.js reads middleware, and from Next.js 16 proxy, next to the pages or app folder it builds: at the root or in src.
+  const hasDir = (dir: string) => snapshot.entries.some((entry) => entry.path.startsWith(`${dir}/`));
+  const base = (["pages", "src/pages"].find(hasDir) ?? ["app", "src/app"].find(hasDir) ?? "").startsWith("src/") ? "src/" : "";
+  const requestFile = new RegExp(`^${base}(?:middleware${Number(/\d+/.exec(nextVersion ?? "")?.[0]) >= 16 ? "|proxy" : ""})\\.[cm]?[jt]s$`);
 
   for (const file of files) {
-    if (/^(?:src\/)?(?:middleware|proxy)\.[cm]?[jt]s$/.test(file)) { findings.push(finding(file, 0, x.build.exportProxy, x.build.exportProxyFix)); continue; }
+    if (requestFile.test(file)) { findings.push(finding(file, 0, x.build.exportProxy, x.build.exportProxyFix)); continue; }
     const code = codeOf(file);
     if (code === undefined) continue;
-    const app = APP_FILE.exec(file);
+    const match = APP_FILE.exec(file);
+    const segments = (match?.[2] ?? "").split("/").filter(Boolean);
+    // Folders that start with an underscore are private: Next.js routes nothing inside them.
+    const app = match && !segments.some((segment) => segment.startsWith("_")) ? match : null;
     const pages = app ? null : PAGES_FILE.exec(file);
-    const segments = (app?.[2] ?? "").split("/").filter(Boolean);
-    if (app?.[3] === "page" && segments.some((segment) => /^\[.+\]$/.test(segment))) {
-      // generateStaticParams in the page or in any layout above it can cover the route; an unread layout might hold it.
+    let dynamicRoute = false;
+    if ((app?.[3] === "page" || app?.[3] === "route") && segments.some((segment) => /^\[.+\]$/.test(segment))) {
+      // A page takes generateStaticParams from itself or any layout above it, and an unread layout might hold it.
+      // A route handler only from its own file. export * hides what a file exports.
       const directory = path.posix.dirname(file);
-      const layouts = files.filter((other) => { const dir = /^(.*)\/layout\.[cm]?[jt]sx?$/.exec(other)?.[1]; return dir !== undefined && (directory === dir || directory.startsWith(`${dir}/`)); });
+      const layouts = app[3] === "route" ? [] : files.filter((other) => { const dir = /^(.*)\/layout\.[cm]?[jt]sx?$/.exec(other)?.[1]; return dir !== undefined && (directory === dir || directory.startsWith(`${dir}/`)); });
       const sources = [code, ...layouts.map(codeOf)];
-      if (sources.every((source) => source !== undefined && !exportsName(source, "generateStaticParams"))) {
+      if (sources.every((source) => source !== undefined && !reexportsAll(source) && !exportsName(source, "generateStaticParams"))) {
         const route = `/${segments.filter((segment) => !/^\(.*\)$/.test(segment) && !segment.startsWith("@")).join("/")}`;
-        const item = finding(file, Math.max(0, code.search(/\bexport\s+default\b/)), x.build.exportDynamic(route), x.build.exportDynamicFix);
+        const item = app[3] === "page"
+          ? finding(file, code.search(/\bexport\s+default\b/), x.build.exportDynamic(route), x.build.exportDynamicFix)
+          : finding(file, code.search(/\bexport\b/), x.build.exportDynamic(route), x.build.exportDynamicRouteFix);
         red.add(item);
         findings.push(item);
+        dynamicRoute = true;
       }
     }
     if (app?.[3] === "route") {
       const methods = NOT_GET_METHODS.filter((method) => exportsName(code, method));
       if (methods.length) findings.push(finding(file, exportIndex(code, methods[0]), x.build.exportRouteMethods(methods.join(", ")), x.build.exportRouteMethodsFix));
-      // The markers Next.js accepts as static: dynamic force-static or error, revalidate other than 0, or generateStaticParams.
+      // The markers Next.js accepts as static (isStaticGenEnabled): dynamic force-static or error, revalidate other than 0, or generateStaticParams.
       const dynamic = segmentConfig(code, "dynamic")?.value;
       const revalidate = segmentConfig(code, "revalidate")?.value;
       const isStatic = dynamic === "force-static" || dynamic === "error" || (revalidate !== undefined && revalidate !== "0") || exportsName(code, "generateStaticParams");
-      if (exportsName(code, "GET") && !isStatic) findings.push(finding(file, exportIndex(code, "GET"), x.build.exportRouteStatic, x.build.exportRouteStaticFix));
+      // A marker that comes from another file cannot be read. The dynamic route finding already covers its own GET.
+      const unread = reexportsAll(code) || (dynamic === undefined && exportsName(code, "dynamic")) || (revalidate === undefined && exportsName(code, "revalidate"));
+      if (exportsName(code, "GET") && !isStatic && !unread && !dynamicRoute) {
+        const item = finding(file, exportIndex(code, "GET"), x.build.exportRouteStatic, x.build.exportRouteStaticFix);
+        red.add(item);
+        findings.push(item);
+      }
     } else if (app) {
       const revalidate = segmentConfig(code, "revalidate");
       if (revalidate && /^\d+$/.test(revalidate.value) && Number(revalidate.value) > 0) {
@@ -666,8 +733,10 @@ function remoteImageFindings(snapshot: RepositorySnapshot, config: ConfigFile | 
   const allowed = remoteImageHosts(config?.code ?? "");
   if (!allowed) return [];
   const findings: Finding[] = [];
+  // An app in a subfolder with its own next.config or package.json is built with its own image settings.
+  const nested = nestedProjects(snapshot);
   for (const [file, raw] of snapshot.contents) {
-    if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file) || /(?:^|\/)node_modules\//.test(file) || !raw.includes("next/")) continue;
+    if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file) || /(?:^|\/)node_modules\//.test(file) || !raw.includes("next/") || nested(file)) continue;
     const code = stripComments(raw);
     for (const imported of code.matchAll(/\bimport\s+([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]*\}\s*)?from\s*["']next\/(?:legacy\/)?image["']/g)) {
       for (const tag of code.matchAll(new RegExp(`<${escapeRegex(imported[1])}(?=[\\s/>])`, "g"))) {
@@ -707,12 +776,14 @@ function svelteKitFindings(snapshot: RepositorySnapshot, x: AnalysisText): Findi
 }
 
 /** Astro renders on demand only through an adapter: none stops astro build, and another platform's adapter is not what Vercel deploys. */
-function astroFindings(snapshot: RepositorySnapshot, x: AnalysisText, red: Set<Finding>): Finding[] {
+function astroFindings(snapshot: RepositorySnapshot, astroVersion: string | undefined, x: AnalysisText, red: Set<Finding>): Finding[] {
   const config = rootConfig(snapshot, /^astro\.config\.[cm]?[jt]s$/);
   const code = config ? config.code : "";
   // An unread config, or one spread from elsewhere, could set the adapter where we cannot see it.
   if (code === undefined || code.includes("...")) return [];
-  const output = /\boutput\s*:\s*["'`](server|hybrid)["'`]/.exec(code);
+  // Astro 5 removed hybrid (static now covers it), so there hybrid fails config validation instead of needing an adapter.
+  const hybrid = Number(/\d+/.exec(astroVersion ?? "")?.[0]) <= 4;
+  const output = (hybrid ? /\boutput\s*:\s*["'`](server|hybrid)["'`]/ : /\boutput\s*:\s*["'`](server)["'`]/).exec(code);
   const prerender = output ? undefined : [...snapshot.contents].filter(([file]) => /^src\/pages\//.test(file) && SOURCE_EXTENSION.test(file))
     .map(([file, raw]) => ({ file, raw, match: /^\s*export\s+const\s+prerender\s*=\s*false\b/m.exec(stripComments(raw)) })).find((item) => item.match);
   if (!output && !prerender) return [];
@@ -797,13 +868,14 @@ function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
     const nextConfig = rootConfig(snapshot, NEXT_CONFIG);
     let vercelBuildCommand: unknown;
     try { vercelBuildCommand = vercelRaw ? (JSON.parse(vercelRaw) as { buildCommand?: unknown }).buildCommand : undefined; } catch { vercelBuildCommand = undefined; }
-    const buildCommand = typeof vercelBuildCommand === "string" ? vercelBuildCommand : manifest?.scripts?.build ?? "next build";
-    for (const item of webpackFindings(nextConfig, buildCommand, packages.next, x)) { red.add(item); findings.push(item); }
-    findings.push(...staticExportFindings(snapshot, nextConfig, x, red), ...remoteImageFindings(snapshot, nextConfig, x));
+    const configured = typeof vercelBuildCommand === "string" ? vercelBuildCommand : undefined;
+    const buildCommand = configured !== undefined && !RUNS_BUILD_SCRIPT.test(configured) ? configured : manifest?.scripts?.build ?? (configured === undefined ? "next build" : "");
+    findings.push(...webpackFindings(nextConfig, buildCommand, packages.next, x, red), ...staticExportFindings(snapshot, nextConfig, packages.next, x, red),
+      ...remoteImageFindings(snapshot, nextConfig, x));
   }
   const framework = packages.next ? undefined : packages["@sveltejs/kit"] ? "SvelteKit" : packages.astro ? "Astro" : undefined;
   if (framework === "SvelteKit") findings.push(...svelteKitFindings(snapshot, x));
-  if (framework === "Astro") findings.push(...astroFindings(snapshot, x, red));
+  if (framework === "Astro") findings.push(...astroFindings(snapshot, packages.astro, x, red));
 
   if (findings.length) {
     const ordered = [...findings.filter((item) => red.has(item)), ...findings.filter((item) => !red.has(item))];

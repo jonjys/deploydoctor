@@ -101,7 +101,10 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const badgeMarkdown = `[![DeployDoctor](${SITE_URL}/r/${id}/badge)](${SITE_URL}/r/${id})`;
   // Older reports have no nextApp field and keep their old look.
   const notNext = results.nextApp === "none" || results.nextApp === "nested";
-  const overall = overallLabel(results.summary, lang, { notNext });
+  // A root app on another framework the scan knows still gets real results, so it keeps the normal headline.
+  const otherStack = results.nextApp === "none" ? results.stack?.framework : undefined;
+  const neutral = notNext && !otherStack;
+  const overall = overallLabel(results.summary, lang, { notNext: neutral });
   return (
     <main className="site-shell report-page">
       <SiteNav note={<><span className="status-dot" /> {status}</>} />
@@ -114,9 +117,10 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         </Link>
         {notNext && (
           <div className="not-next-notice" role="note">
-            {/* A root app on another framework the scan knows: say what is still checked. */}
-            <strong>{results.nextApp === "none" && results.stack?.framework
-              ? t("report.otherStackNotice", { stack: frameworkName(results.stack.framework) }) : t("report.notNextNotice")}</strong>
+            {/* A root app on another framework the scan knows: say what is still checked, from the categories scanned. */}
+            <strong>{otherStack ? t("report.otherStackNotice", { stack: frameworkName(otherStack) }) : t("report.notNextNotice")}</strong>
+            {otherStack && scanned.includes("vercel") && <> {t("report.otherStackVercel")}</>}
+            {otherStack && scanned.includes("env") && <> {t("report.otherStackEnv")}</>}
             {results.nextApp === "nested" && <> {t("report.notNextNested")}</>}
           </div>
         )}
@@ -125,7 +129,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
             <p className="section-kicker">{t("report.kicker")}</p>
             <h1>{repoName}</h1>
           </div>
-          <ScoreCard checks={checkStates} notNext={notNext} />
+          <ScoreCard checks={checkStates} notNext={neutral} />
         </div>
         <div className="report-meta">
           <a className="report-repo" href={report.repo_url} target="_blank" rel="noreferrer">
@@ -136,7 +140,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <span>{new Date(report.created_at).toLocaleString(dateLocale(lang), { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC</span>
           <Link className="rescan-link" href={rescanHref}>{t("report.scanAgain")} ↻</Link>
         </div>
-        {redChecks.length > 0 && !notNext && (
+        {redChecks.length > 0 && !neutral && (
           <nav className="fix-first" aria-label={t("report.fixFirst")}>
             <strong>{t("report.fixFirst")}</strong>
             <ol>

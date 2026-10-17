@@ -59,6 +59,53 @@ test("build configuration: a webpack config is fine with a bundler flag, a turbo
   for (const [name, files] of fine) assert.equal(buildConfig({ ...files, ...page }).status, "green", name);
 });
 
+test("build configuration: a webpack config that a plugin, a function or a spread wraps is a warning, since Next.js reads turbopack after plugins run", () => {
+  // @next/mdx and next-intl add a turbopack option when TURBOPACK is set, which Next.js 16 does by default.
+  const intl = "import createNextIntlPlugin from \"next-intl/plugin\";\n\nconst withNextIntl = createNextIntlPlugin();\n\nexport default withNextIntl({\n  webpack: (config) => config,\n});\n";
+  const build = buildConfig({ "package.json": nextPkg("16.0.0"), "next.config.ts": intl, ...page });
+  assert.equal(build.status, "yellow");
+  assert.equal(build.findings?.length, 1);
+  assert.equal(build.findings?.[0].line, 6);
+  assert.match(build.findings?.[0].problem ?? "", /^sets a custom webpack config with no turbopack option, which makes Next\.js 16 stop next build, but next\.config passes its config through a plugin/);
+  assert.match(build.findings?.[0].problem ?? "", /@next\/mdx and next-intl/);
+  assert.match(build.findings?.[0].fix ?? "", /^Run next build on your machine\./);
+  assert.match(buildConfig({ "package.json": nextPkg(), "next.config.ts": intl, ...page }, { lang: "sv" }).findings?.[0].problem ?? "", /skickar konfigurationen genom ett plugin/);
+  const wrapped: Array<[string, string]> = [
+    ["withMDX", "import createMDX from \"@next/mdx\";\n\nconst withMDX = createMDX({});\nconst nextConfig = {\n  pageExtensions: [\"ts\", \"tsx\", \"mdx\"],\n  webpack(config) { return config },\n};\n\nexport default withMDX(nextConfig);\n"],
+    ["plugin called inline", "const nextConfig = { webpack: (config) => config };\nexport default require(\"next-intl/plugin\")()(nextConfig);"],
+    ["a config wrapped where it is declared", "const withMDX = require(\"@next/mdx\")();\nconst nextConfig = withMDX({ webpack: (config) => config });\nmodule.exports = nextConfig;"],
+    ["reassigned", "let nextConfig = { webpack: (config) => config };\nnextConfig = withPlugins(nextConfig);\nexport default nextConfig;"],
+    ["a function", "module.exports = (phase) => ({ webpack: (config) => config });"],
+    ["a spread", "import base from \"./base.mjs\";\nexport default { ...base, webpack: (config) => config };"],
+  ];
+  for (const [name, config] of wrapped) assert.equal(buildConfig({ "package.json": nextPkg(), "next.config.mjs": config, ...page }).status, "yellow", name);
+  // A spread inside the webpack function and a type annotation keep the plain object red.
+  const plain = "import type { NextConfig } from \"next\";\nconst nextConfig: NextConfig = {\n  webpack: (config) => {\n    config.resolve.alias = { ...config.resolve.alias, a: \"b\" };\n    return config;\n  },\n};\nexport default nextConfig satisfies NextConfig;\n";
+  assert.equal(buildConfig({ "package.json": nextPkg(), "next.config.ts": plain, ...page }).status, "red");
+});
+
+test("build configuration: the turbopack shorthand, quoted and assigned keys, and the build script behind npm run build", () => {
+  const config = "module.exports = { webpack: (config) => config };";
+  const fine: Array<[string, Record<string, string>]> = [
+    ["shorthand", { "package.json": nextPkg(), "next.config.mjs": "const turbopack = {};\nexport default { turbopack, webpack(config) { return config } };" }],
+    ["quoted key", { "package.json": nextPkg(), "next.config.js": "module.exports = { \"turbopack\": {}, webpack: (config) => config };" }],
+    ["assigned", { "package.json": nextPkg(), "next.config.js": "const c = { webpack: (config) => config };\nc.turbopack = {};\nmodule.exports = c;" }],
+    // Next.js also counts any experimental key that starts with turbo.
+    ["experimental turbo key", { "package.json": nextPkg(), "next.config.js": "module.exports = { experimental: { turbopackFileSystemCacheForBuild: true }, webpack: (config) => config };" }],
+    ["vercel.json runs a build script with --webpack", { "package.json": nextPkg("16.3.6", "next build --webpack"), "next.config.js": config, "vercel.json": "{ \"buildCommand\": \"npm run build\" }" }],
+    ["TURBOPACK=1", { "package.json": nextPkg("16.3.6", "TURBOPACK=1 next build"), "next.config.js": config }],
+    ["NEXT_RSPACK", { "package.json": nextPkg("16.3.6", "cross-env NEXT_RSPACK=true next build"), "next.config.js": config }],
+  ];
+  for (const [name, files] of fine) assert.equal(buildConfig({ ...files, ...page }).status, "green", name);
+  const red: Array<[string, Record<string, string>]> = [
+    ["vercel.json runs the build script", { "package.json": nextPkg(), "next.config.js": config, "vercel.json": "{ \"buildCommand\": \"pnpm run build\" }" }],
+    ["yarn build", { "package.json": nextPkg(), "next.config.js": config, "vercel.json": "{ \"buildCommand\": \"yarn build\" }" }],
+    // TURBOPACK=auto is the value Next.js sets itself when nothing picks a bundler.
+    ["TURBOPACK=auto", { "package.json": nextPkg("16.3.6", "TURBOPACK=auto next build"), "next.config.js": config }],
+  ];
+  for (const [name, files] of red) assert.equal(buildConfig({ ...files, ...page }).status, "red", name);
+});
+
 const exportConfig = "/** @type {import('next').NextConfig} */\nconst nextConfig = {\n  output: 'export',\n  async rewrites() { return [] },\n};\n\nexport default nextConfig;\n";
 
 test("build configuration: with output export, a dynamic route without generateStaticParams is red", () => {
@@ -85,7 +132,7 @@ test("build configuration: with output export, a dynamic route without generateS
 test("build configuration: with output export, the features the static exports guide lists as unsupported are yellow", () => {
   const files = {
     "package.json": nextPkg(), "next.config.js": exportConfig, ...page,
-    "app/api/hello/route.ts": "export async function GET() {\n  return Response.json({ ok: true });\n}\n\nexport async function POST(request: Request) {\n  return Response.json(await request.json());\n}\n",
+    "app/api/hello/route.ts": "export const dynamic = 'force-static' as const;\n\nexport async function GET() {\n  return Response.json({ ok: true });\n}\n\nexport async function POST(request: Request) {\n  return Response.json(await request.json());\n}\n",
     "app/feed.json/route.ts": "export const dynamic = 'force-static';\n\nexport async function GET() { return Response.json([]) }\n",
     "app/sitemap.xml/route.ts": "export const revalidate = 3600;\nexport function GET() { return new Response('') }\n",
     "app/news/page.tsx": "export const revalidate = 60;\n\nexport default function News() { return null }\n",
@@ -102,24 +149,74 @@ test("build configuration: with output export, the features the static exports g
   assert.equal(build.status, "yellow");
   const found = build.findings?.map((finding) => `${finding.file}:${finding.line}`);
   assert.deepEqual(found, [
-    "app/actions.ts:1", "app/api/hello/route.ts:5", "app/api/hello/route.ts:1", "app/form.tsx:3", "app/news/page.tsx:1",
+    "app/actions.ts:1", "app/api/hello/route.ts:7", "app/form.tsx:3", "app/news/page.tsx:1",
     "middleware.ts:1", "pages/api/legacy.ts:1", "pages/isr.tsx:2", "pages/ssr.tsx:1",
   ]);
   const problems = build.findings?.map((finding) => finding.problem) ?? [];
   assert.match(problems[1], /^exports POST, but with output set to export in next\.config Next\.js only supports GET route handlers/);
-  assert.match(problems[2], /^has a GET route handler that is not marked static/);
-  assert.match(build.findings?.[2].fix ?? "", /export const dynamic = "force-static"/);
-  assert.match(problems[4], /^sets revalidate to 60, but Incremental Static Regeneration is not supported in a static export/);
-  assert.match(problems[5], /does not support Proxy or middleware/);
+  assert.match(problems[3], /^sets revalidate to 60, but Incremental Static Regeneration is not supported in a static export/);
+  assert.match(problems[4], /does not support Proxy or middleware/);
   assert.match(problems[0], /^defines a Server Action with use server/);
-  assert.match(problems[6], /API Routes cannot be used with a static export/);
-  assert.match(problems[7], /^sets revalidate to 30/);
-  assert.match(problems[8], /^uses getServerSideProps/);
-  assert.match(build.explanation, /^9 project settings may make/);
+  assert.match(problems[5], /API Routes cannot be used with a static export/);
+  assert.match(problems[6], /^sets revalidate to 30/);
+  assert.match(problems[7], /^uses getServerSideProps/);
+  assert.match(build.explanation, /^8 project settings may make/);
   // Rewrites in next.config and next/image with the default loader are not reported: Next.js skips both warnings on Vercel.
   assert.ok(problems.every((problem) => !/rewrites|image/i.test(problem)));
   // The same files without output export are fine.
   assert.equal(buildConfig({ ...files, "next.config.js": "module.exports = {};" }).status, "green");
+});
+
+test("build configuration: with output export, a GET route handler not marked static and a dynamic route handler without generateStaticParams are red", () => {
+  const files = { "package.json": nextPkg(), "next.config.mjs": exportConfig, ...page };
+  const handler = "export async function GET() {\n  return Response.json({ ok: true });\n}\n";
+  const build = buildConfig({ ...files, "app/api/hello/route.ts": handler });
+  assert.equal(build.status, "red");
+  assert.equal(build.findings?.length, 1);
+  assert.equal(build.findings?.[0].line, 1);
+  assert.match(build.findings?.[0].problem ?? "", /^has a GET route handler that is not marked static, so with output set to export in next\.config, next build stops/);
+  assert.match(build.findings?.[0].fix ?? "", /export const dynamic = "force-static"/);
+  assert.match(build.explanation, /^1 project setting stops the Vercel build\.$/);
+  const marked = [
+    "export const dynamic = \"force-static\";\n" + handler,
+    "export const dynamic = 'error';\n" + handler,
+    "export const revalidate = false;\n" + handler,
+    // Markers that come from another file cannot be read, so nothing is reported.
+    "export * from \"./handler\";",
+    "export { dynamic, GET } from \"./shared\";",
+  ];
+  for (const source of marked) assert.equal(buildConfig({ ...files, "app/api/hello/route.ts": source }).status, "green", source);
+  assert.equal(buildConfig({ ...files, "app/api/hello/route.ts": "export const revalidate = 0;\n" + handler }).status, "red");
+
+  // A dynamic route handler takes generateStaticParams only from its own file, not from a layout.
+  const dynamic = "export const dynamic = \"force-static\";\n\nexport async function GET(request: Request, { params }) {\n  return Response.json(await params);\n}\n";
+  const route = buildConfig({ ...files, "app/api/[id]/route.ts": dynamic, "app/api/[id]/layout.tsx": "export function generateStaticParams() { return [] }\nexport default function L({ children }) { return children }" });
+  assert.equal(route.status, "red");
+  assert.equal(route.findings?.length, 1);
+  assert.equal(route.findings?.[0].file, "app/api/[id]/route.ts");
+  assert.match(route.findings?.[0].problem ?? "", /^\/api\/\[id\] is a dynamic route without generateStaticParams/);
+  assert.match(route.findings?.[0].fix ?? "", /^Export generateStaticParams from this route file/);
+  // Without force-static it is one finding: generateStaticParams fixes both errors.
+  assert.equal(buildConfig({ ...files, "app/api/[id]/route.ts": handler }).findings?.length, 1);
+  assert.equal(buildConfig({ ...files, "app/api/[id]/route.ts": "export function generateStaticParams() {\n  return [{ id: \"1\" }];\n}\n" + dynamic }).status, "green");
+});
+
+test("build configuration: with output export, private folders, export star, and middleware or proxy Next.js does not read are not reported", () => {
+  const files = { "package.json": nextPkg(), "next.config.mjs": exportConfig, ...page };
+  const draft = "export default function Draft({ params }) { return null }\n";
+  const fine: Array<[string, Record<string, string>]> = [
+    ["private folder", { "app/_drafts/[id]/page.tsx": draft, "app/_lib/api/route.ts": "export function GET() { return new Response('') }" }],
+    ["export star in the page", { "app/blog/[slug]/page.tsx": "export * from \"./params\";\nexport { default } from \"./post\";\n" }],
+    ["export star in a layout", { "app/blog/layout.tsx": "export * from \"./params\";\nexport default function L({ children }) { return children }", "app/blog/[slug]/page.tsx": draft }],
+    ["src middleware with a root app folder", { "src/middleware.ts": "export function middleware() {}" }],
+    ["a dev proxy script on Next.js 15", { "package.json": nextPkg("15.5.0"), "proxy.ts": "import http from \"node:http\";\nhttp.createServer().listen(3001);" }],
+  ];
+  for (const [name, extra] of fine) assert.equal(buildConfig({ ...files, ...extra }).status, "green", name);
+  assert.deepEqual(buildConfig({ ...files, "proxy.ts": "export function proxy() {}" }).findings?.map((finding) => finding.file), ["proxy.ts"]);
+  const srcApp = { "package.json": nextPkg(), "next.config.mjs": exportConfig, "src/app/page.tsx": page["app/page.tsx"], "src/middleware.ts": "export function middleware() {}" };
+  assert.deepEqual(buildConfig(srcApp).findings?.map((finding) => finding.file), ["src/middleware.ts"]);
+  // A Server Action in another app with its own package.json is that app's business.
+  assert.equal(buildConfig({ ...files, "apps/admin/package.json": "{}", "apps/admin/app/actions.ts": "\"use server\";\nexport async function save() {}" }).status, "green");
 });
 
 test("build configuration: next/image with a literal remote src on a host next.config does not allow", () => {
@@ -170,6 +267,9 @@ test("build configuration: next/image with a literal remote src on a host next.c
   for (const config of allowed) assert.equal(buildConfig({ ...files, "next.config.js": config }).status, "green", config);
   // An unread next.config could allow the host.
   assert.equal(buildConfig(files, { unread: ["next.config.js"] }).status, "green");
+  // An app in a subfolder with its own next.config or package.json is built with its own image settings.
+  const nested = { "apps/web/package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), "apps/web/next.config.js": "module.exports = { images: { domains: ['images.example.com'] } };", "apps/web/app/avatar.tsx": avatar };
+  assert.equal(buildConfig({ "package.json": nextPkg(), ...page, ...nested }).status, "green");
 
   const notFlagged = [
     "import Image from 'next/image';\nexport const A = () => <Image src=\"/local.png\" alt=\"\" width={1} height={1} />;",
@@ -223,7 +323,10 @@ test("build configuration: Astro rendering on demand needs an adapter, and on Ve
   assert.equal(build.findings?.[0].line, 4);
   assert.match(build.findings?.[0].problem ?? "", /^sets output to server, which renders pages on demand, but has no adapter, so astro build stops with NoAdapterInstalled/);
   assert.match(build.findings?.[0].fix ?? "", /^Run npx astro add vercel/);
-  assert.equal(buildConfig({ "package.json": astroPkg, "astro.config.mjs": noAdapter.replace("server", "hybrid") }).status, "red");
+  // hybrid needs an adapter on Astro 4. Astro 5 removed it, so there it is a config error, not a missing adapter.
+  const astro4 = JSON.stringify({ dependencies: { astro: "^4.16.0" }, scripts: { build: "astro build" } });
+  assert.equal(buildConfig({ "package.json": astro4, "astro.config.mjs": noAdapter.replace("server", "hybrid") }).status, "red");
+  assert.equal(buildConfig({ "package.json": astroPkg, "astro.config.mjs": noAdapter.replace("server", "hybrid") }).status, "green");
 
   // A route that opts out of prerendering needs an adapter too, with or without an astro.config.
   const endpoint = "import type { APIRoute } from 'astro';\n\nexport const prerender = false;\nexport const GET: APIRoute = () => new Response('ok');\n";
@@ -278,14 +381,15 @@ test("stack detection names SvelteKit, Astro, Remix, React Router and Vite, and 
 });
 
 test("the new copy exists in English and Swedish, and the new guides use no dashes or quotation marks in prose", () => {
-  for (const key of ["home.checkStacks", "report.otherStackNotice"] as const) {
+  for (const key of ["home.checkStacks", "report.otherStackNotice", "report.otherStackVercel", "report.otherStackEnv"] as const) {
     assert.ok(messages.en[key] && messages.sv[key], key);
     assert.doesNotMatch(messages.en[key] + messages.sv[key], /[\u2013\u2014"\u201c\u201d\u201e]/, key);
   }
   assert.match(messages.en["report.otherStackNotice"], /\{stack\}/);
   for (const lang of ["en", "sv"] as const) {
     const build = analysisText(lang).build;
-    const texts = [build.webpack(16), build.webpackFix, build.exportDynamic("/a/[b]"), build.exportDynamicFix, build.exportRouteMethods("POST"),
+    const texts = [build.webpack(16), build.webpackFix, build.webpackPlugin(16), build.webpackPluginFix, build.exportDynamic("/a/[b]"), build.exportDynamicFix,
+      build.exportDynamicRouteFix, build.exportRouteMethods("POST"),
       build.exportRouteStatic, build.exportProxy, build.exportAction, build.exportIsr(60), build.exportApiRoute, build.exportGssp,
       build.remoteImage("https://a.com/x.png", "a.com"), build.svelteAdapter("@sveltejs/adapter-node", build.svelteTargets.node),
       build.svelteAdapterFix("svelte.config.js"), build.astroOutputNoAdapter("server"), build.astroPrerenderNoAdapter, build.astroNoAdapterFix,
