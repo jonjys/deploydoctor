@@ -631,6 +631,21 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .guide-cta-links { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
 .guide-cta-links a:not(.cta-button) { font-size: 14px; text-underline-offset: 3px; }
 
+/* Watch this repo: email box under a public report, before the README badge. */
+.watch-section { margin-top: 18px; padding: 24px 31px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px 30px; }
+.watch-section h2 { margin: 0 0 4px; font-size: 18px; }
+.watch-section p { margin: 0; color: var(--muted); font-size: 13px; max-width: 460px; overflow-wrap: anywhere; }
+.watch-form { display: grid; gap: 8px; flex: 1 1 320px; max-width: 460px; min-width: 0; }
+.watch-form label { font-size: 13px; font-weight: 650; }
+.watch-row { display: flex; gap: 10px; min-width: 0; }
+.watch-row input { flex: 1 1 auto; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: white; color: var(--ink); }
+.watch-form .watch-note { font-size: 12px; }
+.watch-form .form-error { margin: 0; }
+.watch-section .watch-sent { color: var(--ink); font-weight: 650; }
+.watch-account { color: var(--muted); }
+.checkout-card h1 { overflow-wrap: anywhere; }
+@media (max-width: 560px) { .watch-section { padding: 22px; } .watch-row { flex-direction: column; } }
+@media (prefers-color-scheme: dark) { .watch-row input { background: #0f1a16; } }
 /* Report: fix-first items with file:line and command, the comparison with the previous scan, and why it works locally. */
 .fix-first.is-yellow { background: var(--yellow-soft); }
 .fix-first.is-yellow strong { color: var(--yellow); }

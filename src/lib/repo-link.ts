@@ -14,6 +14,8 @@ const RESERVED = new Set([
   "explore", "features", "issues", "login", "marketplace", "new", "notifications", "orgs", "organizations", "pulls",
   "readme", "search", "security", "sessions", "settings", "signup", "site", "solutions", "sponsors", "stars", "topics",
   "trending", "users",
+  // The page the Watch this repo email links land on.
+  "watch",
 ]);
 
 /** Where a path that names no repository is sent: one segment matches no route, so it renders the app's not-found page. */

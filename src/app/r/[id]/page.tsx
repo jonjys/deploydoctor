@@ -12,6 +12,7 @@ import { SiteNav } from "@/components/site-nav";
 import { CopyFixesButton } from "@/components/copy-fixes-button";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { SolvedPrompt } from "@/components/solved-prompt";
+import { WatchBox } from "@/components/watch-box";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { PatchOffer } from "@/components/patch-offer";
 import { SITE_URL } from "@/lib/site";
@@ -249,6 +250,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           </WhenOpenRed>}
         </div>
       </section>
+
+      <WatchBox reportId={id} repo={repoName} isPrivate={report.is_private} />
 
       {!report.is_private && (
         <section className="badge-section" aria-labelledby="badge-heading">

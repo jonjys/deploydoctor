@@ -7,6 +7,7 @@ import { db, query } from "@/lib/db";
 import { getT } from "@/lib/lang";
 import { dateLocale } from "@/lib/i18n";
 import { hasHistory } from "@/lib/plans";
+import { watchEnabled } from "@/lib/watch";
 
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -35,5 +36,6 @@ export default async function Account() {
     <h2>{t("account.orders")}</h2>{orders.length ? orders.map((order) => <div key={order.id}><Link href={`/r/${order.report_id}`}>{order.plan === "fix-one" ? t("account.orderOne") : t("account.orderAll")}</Link>
       <p>{order.status === "completed" ? t("account.orderDone") : t("account.orderPaid")}</p>
       {order.status === "completed" && <a href={`/api/repairs/${order.id}/diff`}>{t("account.download")}</a>}</div>) : <p>{t("account.noOrders")}</p>}
+    {watchEnabled() && <p className="watch-account">{t("watch.account")}</p>}
   </section></main>;
 }
