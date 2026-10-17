@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { activePlan, finishScan, hashRequestIp, requestCustomer, reserveScan } from "@/lib/access";
 import { DiagnoseUnavailable, diagnoseConfigured, diagnoseWithClaude, MAX_LOG_CHARS } from "@/lib/ai-diagnose";
+import { diagnoseAllowance } from "@/lib/limits";
 import { sameOrigin } from "@/lib/stripe";
 import { langFromRequest, t } from "@/lib/i18n";
 
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     if (!diagnoseConfigured()) throw new DiagnoseUnavailable();
     const plan = await activePlan(customer);
     if (!plan) {
-      const quota = await reserveScan(request, `diagnose:${hashRequestIp(request)}`);
+      const quota = await reserveScan(request, diagnoseAllowance(hashRequestIp(request)));
       if (!quota.allowed) {
         console.log("dd-funnel", JSON.stringify({ step: "paywall", plan: null, reason: "diagnose_limit" }));
         return Response.json({ error: t(lang, "diag.limit"), paywall: true, resetsAt: quota.resetsAt }, { status: 429 });

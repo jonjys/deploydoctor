@@ -51,7 +51,7 @@ export default async function GuidePage({ params }: GuideProps) {
         <aside className="guide-cta">
           <div>
             <h2>Check your repository for this before you push</h2>
-            <p>DeployDoctor reads a GitHub repository through the API, runs the check this guide covers plus eight more, and names the file. Free for public repositories, nothing is cloned or executed.</p>
+            <p>DeployDoctor reads a GitHub repository through the API, runs the check this guide covers plus eight more, and names the file. One free scan a day on public repositories, nothing is cloned or executed.</p>
           </div>
           <div className="guide-cta-links">
             <Link href="/diagnose">Build already failed? Paste the log →</Link>

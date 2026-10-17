@@ -16,7 +16,7 @@ export default function GuidesIndex() {
       <header className="pricing-header">
         <p className="section-kicker">GUIDES</p>
         <h1>Why it works locally<br />and fails on Vercel.</h1>
-        <p>One page per failure class, with the fix. Every guide ends with a scan, which is free for public repositories.</p>
+        <p>One page per failure class, with the fix. Every guide ends with a scan, and your first one each day is free for public repositories.</p>
       </header>
       <ul className="guide-list">
         {guides.map((guide) => (

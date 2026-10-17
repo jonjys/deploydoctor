@@ -4,8 +4,8 @@
 
 Connect a custom remote MCP server at `https://deploydoctor.nyttolabs.com/api/mcp`.
 Public repository scans, saved reports and website pricing are available to AI
-clients. No private tokens, code execution or automatic payment. The existing
-three-free-scans/day source-IP allowance applies; website paid sessions do not
+clients. No private tokens, code execution or automatic payment. The free
+allowance of one scan/day per source IP applies; website paid sessions do not
 transfer to MCP. See [plugin documentation](plugins/deploydoctor/README.md) and
 the public `/ai-plugin` setup page.
 
