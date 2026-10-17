@@ -229,8 +229,8 @@ test("English is the default language and Swedish is opt-in", () => {
   assert.equal(langFromCookieHeader(null), "en");
   assert.equal(langFromCookieHeader("a=1; dd_lang=sv; b=2"), "sv");
   assert.equal(langFromCookieHeader("dd_lang=xx"), "en");
-  assert.equal(t("en", "err.dailyLimit"), "You have used today's 3 free scans. Your saved reports are still free to read.");
-  assert.match(t("sv", "err.dailyLimit"), /dagens 3 gratis/);
+  assert.equal(t("en", "err.dailyLimit"), "You have used today's free scan. Get 24 hours for $2 and scan again right away, as many repos as you need. Your saved reports stay free to read.");
+  assert.match(t("sv", "err.dailyLimit"), /dagens gratis skanning/);
   assert.equal(t("en", "report.issues", { n: 3 }), "3 issues to fix");
 });
 

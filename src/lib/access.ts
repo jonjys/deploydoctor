@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { db, query, rpc } from "@/lib/db";
+import type { Allowance } from "@/lib/limits";
 import { digest, verifyApiToken, verifySession, type CustomerSession } from "@/lib/session-token";
 
 export const SESSION_COOKIE = "dd_customer";
@@ -43,10 +44,10 @@ export function hashRequestIp(request: Request) {
   return digest(`ip:${ip}`);
 }
 /** Reserves one of today's free scans: per visitor IP, or per repository for free GitHub Action scans. */
-export async function reserveScan(request: Request, key?: string) {
+export async function reserveScan(request: Request, { key, limit }: Allowance) {
   const id = crypto.randomUUID();
   const result = await rpc<{ allowed: boolean; remaining: number; resetsAt: string }>("reserve_scan", {
-    p_ip_hash: key ? digest(key) : hashRequestIp(request), p_id: id,
+    p_ip_hash: key ? digest(key) : hashRequestIp(request), p_id: id, p_limit: limit,
   });
   return { ...result, id };
 }
