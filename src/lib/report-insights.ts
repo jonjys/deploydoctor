@@ -48,6 +48,11 @@ export function fixFirstItems(checks: CheckResult[]): FixFirstItem[] {
   });
 }
 
+/** Failing cards explain why they work locally; a card that is yellow only because the scan was partial found nothing to explain. */
+export function showsLocalWhy(check: CheckResult): boolean {
+  return check.id in severityOf && (check.status === "red" || (check.status === "yellow" && !!check.findings?.length));
+}
+
 export type ChangedFinding = { checkId: CheckId; title: string; file: string; line: number; problem: string };
 export type StatusChange = { checkId: CheckId; title: string; from: CheckStatus; to: CheckStatus };
 export type ReportDiff = {
@@ -58,6 +63,10 @@ export type ReportDiff = {
   statusOnly: CheckId[];
   /** One of the scans did not read every file, so a finding can come or go with what was read. */
   partial: boolean;
+  /** How many checks ran in both scans. With none there is nothing to compare, so the section is hidden. */
+  compared: number;
+  /** Checks only one of the scans ran (the chosen categories, a CI scan or the detected stack differed), so they are not compared. */
+  notCompared: { checkId: CheckId; title: string }[];
 };
 
 /** Findings of a passing check are not open, whatever the check carries. */
@@ -77,13 +86,19 @@ function missingFrom(from: Finding[], to: Finding[]): Finding[] {
   });
 }
 
-/** What changed between two scans of the same repository. Checks only one of them ran are left out. */
+/** What changed between two scans of the same repository. Checks only one of them ran are listed in notCompared. */
 export function diffReports(previous: ReportResults, current: ReportResults): ReportDiff {
   const before = new Map(previous.checks.map((check) => [check.id, check]));
-  const diff: ReportDiff = { fixed: [], added: [], statusChanges: [], statusOnly: [], partial: previous.scan.partial || current.scan.partial };
+  const now = new Set(current.checks.map((check) => check.id));
+  const diff: ReportDiff = { fixed: [], added: [], statusChanges: [], statusOnly: [], partial: previous.scan.partial || current.scan.partial,
+    compared: 0, notCompared: previous.checks.filter((check) => !now.has(check.id)).map(({ id, title }) => ({ checkId: id, title })) };
   for (const check of current.checks) {
     const old = before.get(check.id);
-    if (!old) continue;
+    if (!old) {
+      diff.notCompared.push({ checkId: check.id, title: check.title });
+      continue;
+    }
+    diff.compared++;
     if (old.status !== check.status) diff.statusChanges.push({ checkId: check.id, title: check.title, from: old.status, to: check.status });
     // Problem texts are written in the language of the scan; a different title means they cannot be matched.
     if (old.title !== check.title || !old.findings || !check.findings) {

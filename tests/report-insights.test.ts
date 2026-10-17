@@ -6,7 +6,7 @@ import { FixFirst, IgnoreProvider } from "../src/components/report-ignore";
 import { LangProvider } from "../src/components/lang";
 import { SinceLastScan } from "../src/components/report-since";
 import { messages, t } from "../src/lib/i18n";
-import { diffReports, fixFirstItems, hasChanges, improved, previousReportFilter, severityOf, type FixFirstItem } from "../src/lib/report-insights";
+import { diffReports, fixFirstItems, hasChanges, improved, previousReportFilter, severityOf, showsLocalWhy, type FixFirstItem } from "../src/lib/report-insights";
 import type { CheckId, CheckResult, CheckStatus, Finding, ReportResults, StoredReport } from "../src/types/report";
 
 const CHECK_IDS = Object.keys(severityOf) as CheckId[];
@@ -144,12 +144,54 @@ test("identical scans have no changes, and a status change alone is a change", (
   assert.equal(improved(moved.statusChanges[0]), false);
 });
 
-test("checks only one of the scans ran are left out of the comparison", () => {
+test("checks only one of the scans ran are not compared, and are listed as such", () => {
   const diff = diffReports(
-    results([check("imports", "red", [finding("app/a.tsx", 1, "imports ./B")])]),
-    results([check("prisma", "red", [finding("package.json", 1, "no generate")])]),
+    results([check("imports", "red", [finding("app/a.tsx", 1, "imports ./B")]), check("env", "red", [])]),
+    results([check("env", "red", []), check("prisma", "red", [finding("package.json", 1, "no generate")])]),
   );
   assert.equal(hasChanges(diff), false);
+  assert.equal(diff.compared, 1);
+  assert.deepEqual(diff.notCompared, [{ checkId: "imports", title: "Title imports" }, { checkId: "prisma", title: "Title prisma" }]);
+});
+
+test("the since section is hidden when the two scans share no check", () => {
+  const previous = { id: "22222222-2222-4222-8222-222222222222", created_at: "2026-10-10T08:30:00.000Z" };
+  const diff = diffReports(
+    results([check("supabase", "green", [])]),
+    results([check("imports", "red", [finding("app/a.tsx", 1, "imports ./B")]), check("env", "red", [finding("app/b.ts", 2, "X is missing")])]),
+  );
+  assert.equal(diff.compared, 0);
+  for (const lang of ["en", "sv"] as const) {
+    assert.equal(renderToStaticMarkup(createElement(SinceLastScan, { diff, previous, lang })), "");
+  }
+  assert.equal(renderToStaticMarkup(createElement(SinceLastScan, { diff: diffReports(results([]), results([])), previous, lang: "en" })), "");
+});
+
+test("with some checks in common, the since section says which checks were not compared", () => {
+  const previous = { id: "22222222-2222-4222-8222-222222222222", created_at: "2026-10-10T08:30:00.000Z" };
+  const same = diffReports(
+    results([check("env", "green", []), check("supabase", "green", [])]),
+    results([check("env", "green", []), check("imports", "red", [finding("app/a.tsx", 1, "imports ./B")])]),
+  );
+  const html = renderToStaticMarkup(createElement(SinceLastScan, { diff: same, previous, lang: "en" }));
+  assert.match(html, /Nothing changed in the checks both scans ran\./);
+  assert.doesNotMatch(html, /Nothing changed since then\./);
+  assert.match(html, /Ran in only one of the two scans, so not compared: Title supabase, Title imports\./);
+  const sv = renderToStaticMarkup(createElement(SinceLastScan, { diff: same, previous, lang: "sv" }));
+  assert.match(sv, /Inget har ändrats i kontrollerna som båda skanningarna körde\./);
+  assert.match(sv, /Kördes bara i en av skanningarna och jämförs därför inte: Title supabase, Title imports\./);
+  const changed = diffReports(
+    results([check("env", "red", [finding("app/b.ts", 2, "X is missing")]), check("supabase", "green", [])]),
+    results([check("env", "green", [])]),
+  );
+  const changedHtml = renderToStaticMarkup(createElement(SinceLastScan, { diff: changed, previous, lang: "en" }));
+  assert.match(changedHtml, /Fixed \(1\)/);
+  assert.doesNotMatch(changedHtml, /Nothing changed/);
+  assert.match(changedHtml, /so not compared: Title supabase\./);
+  // When every check ran in both scans there is no such note.
+  const full = renderToStaticMarkup(createElement(SinceLastScan, { diff: diffReports(results([check("env", "green", [])]), results([check("env", "green", [])])), previous, lang: "en" }));
+  assert.match(full, /Nothing changed since then\./);
+  assert.doesNotMatch(full, /not compared/);
 });
 
 test("findings of another language or of an older report are not matched; only the status is compared", () => {
@@ -197,7 +239,7 @@ test("the since section links the previous report and lists what was fixed and w
   assert.match(html, /New \(1\)/);
   assert.match(html, /href="#check-imports"><code>app\/new\.tsx:2<\/code>/);
   assert.match(html, /did not read every file/);
-  const same = renderToStaticMarkup(createElement(SinceLastScan, { diff: diffReports(results([]), results([])), previous, lang: "sv" }));
+  const same = renderToStaticMarkup(createElement(SinceLastScan, { diff: diffReports(results([check("env", "green", [])]), results([check("env", "green", [])])), previous, lang: "sv" }));
   assert.match(same, /Sedan förra skanningen/);
   assert.match(same, /Inget har ändrats sedan dess\./);
   assert.doesNotMatch(same, /since-last-lists/);
@@ -226,10 +268,20 @@ test("private reports are never compared", () => {
   assert.equal(previousReportFilter(stored({ is_private: true })), null);
 });
 
+test("the why it works locally line shows on failing cards and on review cards with findings, not on a partial scan", () => {
+  assert.equal(showsLocalWhy(check("env", "red", [finding("app/a.ts", 1, "X is missing")])), true);
+  // Older reports have no findings; a red card still explains itself.
+  assert.equal(showsLocalWhy(check("env", "red", undefined)), true);
+  assert.equal(showsLocalWhy(check("supabase", "yellow", [finding("supabase/migrations/1.sql", 5, "no grants")])), true);
+  assert.equal(showsLocalWhy(check("env", "yellow", [])), false);
+  assert.equal(showsLocalWhy(check("dependencies", "yellow", undefined)), false);
+  assert.equal(showsLocalWhy(check("env", "green", [finding("app/a.ts", 1, "X is optional")])), false);
+});
+
 test("new report copy exists in both languages, explains every check and has no dashes or quotation marks", () => {
   const keys = ["report.fixFirstAll", "report.fixFirstFile", "report.copyCommand", "report.sinceTitle", "report.sinceLink", "report.sinceFixed",
     "report.sinceNew", "report.sinceMore", "report.sinceSame", "report.sinceStatusAria", "report.sincePartial", "report.sinceStatusOnly",
-    "report.localWhy", ...CHECK_IDS.map((id) => `report.localWhy.${id}` as const)] as const;
+    "report.sinceSameShared", "report.sinceNotCompared", "report.localWhy", ...CHECK_IDS.map((id) => `report.localWhy.${id}` as const)] as const;
   for (const key of keys) {
     for (const lang of ["en", "sv"] as const) {
       assert.ok(messages[lang][key], `${lang} ${key}`);

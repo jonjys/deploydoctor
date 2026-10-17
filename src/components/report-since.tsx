@@ -22,6 +22,8 @@ function ChangedList({ items, base, lang }: { items: ChangedFinding[]; base: str
 
 /** What was fixed and what is new since the previous public scan of the same repository. */
 export function SinceLastScan({ diff, previous, lang }: { diff: ReportDiff; previous: { id: string; created_at: string }; lang: Lang }) {
+  // Two scans with no check in common, say of different categories, have nothing to compare.
+  if (!diff.compared) return null;
   const date = new Date(previous.created_at).toLocaleString(dateLocale(lang), { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
   const changed = hasChanges(diff);
   return (
@@ -30,7 +32,7 @@ export function SinceLastScan({ diff, previous, lang }: { diff: ReportDiff; prev
         <h2 id="since-heading">{t(lang, "report.sinceTitle")}</h2>
         <Link href={`/r/${previous.id}`}>{t(lang, "report.sinceLink", { date: `${date} UTC` })}</Link>
       </div>
-      {!changed && <p className="since-last-same">{t(lang, "report.sinceSame")}</p>}
+      {!changed && <p className="since-last-same">{t(lang, diff.notCompared.length ? "report.sinceSameShared" : "report.sinceSame")}</p>}
       {diff.statusChanges.length > 0 && (
         <ul className="since-last-status" aria-label={t(lang, "report.sinceStatusAria")}>
           {diff.statusChanges.map((change) => (
@@ -58,6 +60,9 @@ export function SinceLastScan({ diff, previous, lang }: { diff: ReportDiff; prev
       )}
       {diff.partial && changed && <p className="since-last-note">{t(lang, "report.sincePartial")}</p>}
       {diff.statusOnly.length > 0 && <p className="since-last-note">{t(lang, "report.sinceStatusOnly")}</p>}
+      {diff.notCompared.length > 0 && (
+        <p className="since-last-note">{t(lang, "report.sinceNotCompared", { checks: diff.notCompared.map((item) => item.title).join(", ") })}</p>
+      )}
     </section>
   );
 }

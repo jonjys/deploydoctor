@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { CopyFixes, FixFirst, IgnoreProvider, IssueCard, ScoreCard, WhenOpenRed } from "@/components/report-ignore";
 import { getPreviousReport, getReport } from "@/lib/reports";
 import type { Category, CheckId, CheckStatus, ReportResults, StoredReport } from "@/types/report";
-import { diffReports, fixFirstItems, severityOf, type ReportDiff } from "@/lib/report-insights";
+import { diffReports, fixFirstItems, severityOf, showsLocalWhy, type ReportDiff } from "@/lib/report-insights";
 import { SinceLastScan } from "@/components/report-since";
 import { freeFixParts } from "@/lib/fix-instructions";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
@@ -179,7 +179,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                   {check.status === "yellow" && <span className="severity is-review">{t("report.severity.review")}</span>}
                   <h2>{check.title}</h2>
                   <p>{check.explanation}</p>
-                  {check.status !== "green" && check.id in severityOf && (
+                  {showsLocalWhy(check) && (
                     <div className="local-why"><strong>{t("report.localWhy")}</strong> {t(`report.localWhy.${check.id}`)}</div>
                   )}
                   {check.evidence.length ? (
