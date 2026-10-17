@@ -31,7 +31,7 @@ const en = {
 
   "home.eyebrow": "VERCEL READINESS SCANNER",
   "home.h1": "Works locally, breaks on Vercel? Find out why before you deploy.",
-  "home.copy": "Paste a GitHub repository. DeployDoctor detects your stack and checks the code paths most likely to fail after your push, without cloning or building it. Your first scan each day is free. After that, $2 gives you 24 hours of unlimited scans, private repos included.",
+  "home.copy": "Paste a GitHub repository. DeployDoctor detects your stack and checks the code paths most likely to fail after your push, without cloning or building it. Your first public repo scan each day is free. After that, $2 gives you 24 hours of unlimited scans, private repos included.",
   "home.trust.aria": "Scanner characteristics",
   "home.trust.unlimited": "Unlimited scans",
   "home.trust.free": "1 free scan / day",
@@ -445,7 +445,7 @@ const sv: Record<MessageKey, string> = {
 
   "home.eyebrow": "SKANNER FÖR VERCEL-BEREDSKAP",
   "home.h1": "Funkar lokalt, kraschar på Vercel? Ta reda på varför innan du deployar.",
-  "home.copy": "Klistra in ett GitHub-repo. DeployDoctor identifierar din stack och kontrollerar de kodvägar som oftast går sönder efter din push, utan att klona eller bygga. Din första skanning varje dag är gratis. Sedan ger 19 kr dig 24 timmar med obegränsade skanningar, privata repon ingår.",
+  "home.copy": "Klistra in ett GitHub-repo. DeployDoctor identifierar din stack och kontrollerar de kodvägar som oftast går sönder efter din push, utan att klona eller bygga. Din första skanning av ett publikt repo varje dag är gratis. Sedan ger 19 kr dig 24 timmar med obegränsade skanningar, privata repon ingår.",
   "home.trust.aria": "Skannerns egenskaper",
   "home.trust.unlimited": "Obegränsat med skanningar",
   "home.trust.free": "1 gratis skanning / dag",
