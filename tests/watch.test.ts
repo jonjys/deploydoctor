@@ -349,6 +349,18 @@ test("every watch route answers 503 before it touches the database or sends anyt
   }
 });
 
+test("opening a confirm or unsubscribe link changes nothing: mail scanners open links, so only the page button acts", () => {
+  for (const file of ["src/app/api/watch/confirm/route.ts", "src/app/api/watch/unsubscribe/route.ts"]) {
+    const source = readFileSync(file, "utf8");
+    const get = source.split(/^export async function /m).find((handler) => handler.startsWith("GET")) ?? "";
+    assert.ok(get, file);
+    for (const call of ["db(", "unsubscribe(", "PATCH"]) assert.equal(get.includes(call), false, `${file} GET must not call ${call}`);
+    assert.match(get, /Response\.redirect/, file);
+  }
+  const confirm = readFileSync("src/app/api/watch/confirm/route.ts", "utf8").split(/^export async function /m).find((h) => h.startsWith("POST")) ?? "";
+  assert.match(confirm, /sameOrigin\(request\)/, "the confirm button only works from our own page");
+});
+
 test("vercel.json runs the watch job once a day, which the Hobby plan allows, within the Hobby duration limit", () => {
   const config = JSON.parse(readFileSync("vercel.json", "utf8")) as { crons: Array<{ path: string; schedule: string }> };
   const job = config.crons.find((item) => item.path === "/api/cron/watch");

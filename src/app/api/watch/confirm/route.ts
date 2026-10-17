@@ -1,5 +1,6 @@
 import { db, query } from "@/lib/db";
 import { langFromRequest, t } from "@/lib/i18n";
+import { sameOrigin } from "@/lib/stripe";
 import { hashWatchToken, isWatchToken, watchConfig } from "@/lib/watch";
 
 const LINK_DAYS = 7;
@@ -16,12 +17,28 @@ function result(request: Request, state: "confirmed" | "invalid", watch?: Confir
   return Response.redirect(target, 303);
 }
 
-/** Watch this repo, step two: the link in the confirmation email. Only a confirmed watch is ever rescanned or emailed. */
+/**
+ * Watch this repo, step two: the link in the confirmation email. Opening it changes nothing, because mail security
+ * scanners open every link; it shows a page whose button posts the token back here.
+ */
 export async function GET(request: Request) {
   const lang = langFromRequest(request);
   if (!watchConfig()) return Response.json({ error: t(lang, "watch.unavailable") }, { status: 503 });
   const token = new URL(request.url).searchParams.get("token");
   if (!isWatchToken(token)) return result(request, "invalid");
+  const target = new URL("/watch", request.url);
+  target.searchParams.set("state", "confirm");
+  target.searchParams.set("token", token);
+  return Response.redirect(target, 303);
+}
+
+/** The confirm button on that page. Only a confirmed watch is ever rescanned or emailed. */
+export async function POST(request: Request) {
+  const lang = langFromRequest(request);
+  if (!watchConfig()) return Response.json({ error: t(lang, "watch.unavailable") }, { status: 503 });
+  if (!sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });
+  const token = await request.formData().then((form) => form.get("token"), () => null);
+  if (typeof token !== "string" || !isWatchToken(token)) return result(request, "invalid");
   const tokenHash = hashWatchToken(token);
   try {
     const since = new Date(Date.now() - LINK_DAYS * 86_400_000).toISOString();

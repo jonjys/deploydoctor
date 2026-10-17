@@ -9,30 +9,41 @@ async function unsubscribe(watchId: string) {
   console.log("dd-funnel", JSON.stringify({ step: "watch_unsubscribed" }));
 }
 
-/** The one-click link at the bottom of every watch email. Unsubscribing twice is fine. */
+/**
+ * The link at the bottom of every watch email. Opening it changes nothing, because mail security scanners open every
+ * link; it shows a page whose button posts back here. Unsubscribing twice is fine.
+ */
 export async function GET(request: Request) {
   const lang = langFromRequest(request);
   if (!watchConfig()) return Response.json({ error: t(lang, "watch.unavailable") }, { status: 503 });
-  const watchId = verifyUnsubscribeToken(new URL(request.url).searchParams.get("token"));
+  const token = new URL(request.url).searchParams.get("token");
   const target = new URL("/watch", request.url);
-  target.searchParams.set("state", watchId ? "unsubscribed" : "invalid");
-  if (!watchId) return Response.redirect(target, 303);
-  try {
-    await unsubscribe(watchId);
-    return Response.redirect(target, 303);
-  } catch (error) {
-    console.error("Watch unsubscribe failed:", error instanceof Error ? error.name : "unknown");
-    return Response.json({ error: t(lang, "watch.linkFailed") }, { status: 502 });
+  if (!token || !verifyUnsubscribeToken(token)) {
+    target.searchParams.set("state", "invalid");
+  } else {
+    target.searchParams.set("state", "unsubscribe");
+    target.searchParams.set("token", token);
   }
+  return Response.redirect(target, 303);
 }
 
-/** One-click unsubscribe from the mail app (RFC 8058): the List-Unsubscribe-Post header points here, without a browser. */
+/**
+ * Two callers: the button on the page (a form with from=page, answered with a redirect) and one-click unsubscribe from
+ * the mail app (RFC 8058, the List-Unsubscribe-Post header, no browser, answered with JSON).
+ */
 export async function POST(request: Request) {
   if (!watchConfig()) return Response.json({ error: "Not configured." }, { status: 503 });
+  const form = await request.formData().catch(() => null);
+  const fromPage = form?.get("from") === "page";
   const watchId = verifyUnsubscribeToken(new URL(request.url).searchParams.get("token"));
-  if (!watchId) return Response.json({ error: "Invalid token." }, { status: 400 });
+  const target = new URL("/watch", request.url);
+  if (!watchId) {
+    if (fromPage) { target.searchParams.set("state", "invalid"); return Response.redirect(target, 303); }
+    return Response.json({ error: "Invalid token." }, { status: 400 });
+  }
   try {
     await unsubscribe(watchId);
+    if (fromPage) { target.searchParams.set("state", "unsubscribed"); return Response.redirect(target, 303); }
     return Response.json({ ok: true });
   } catch (error) {
     console.error("Watch unsubscribe failed:", error instanceof Error ? error.name : "unknown");
