@@ -14,7 +14,7 @@ export default function PluginPage() {
   const schema = { "@context": "https://schema.org", "@type": "SoftwareApplication", name: "DeployDoctor",
     applicationCategory: "DeveloperApplication", operatingSystem: "Web", url: `${SITE_URL}/ai-plugin`,
     description: "Static deployment checks for public GitHub repositories. No code execution.",
-    offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Three free scans per day per source IP." } };
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "One free scan per day per source IP." } };
   return <main className="site-shell"><SiteNav /><article className="plugin-guide">
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema).replace(/</g, "\\u003c") }} />
     <p className="section-kicker">DeployDoctor · MCP plugin</p>
@@ -30,7 +30,7 @@ export default function PluginPage() {
     <h2>What the tools do</h2>
     <dl><dt><code>diagnose_build_log</code></dt><dd>Pattern-based triage for module resolution, npm peer conflicts and React hydration errors. Returns line numbers, possible causes, context needed, verification steps and official docs. Does not fetch a repository or spend scan quota.</dd><dt><code>scan_public_repository</code></dt><dd>Static checks and a saved public report. Optional Next.js, Vercel, environment, Supabase and Prisma check categories.</dd><dt><code>get_public_report</code></dt><dd>Read saved findings, file/line evidence and suggested fixes without another scan.</dd><dt><code>get_deploydoctor_plans</code></dt><dd>Read website prices; no payment action.</dd></dl>
     <h2>Free allowance and website prices</h2>
-    <p>Build-log triage has no repository scan quota and makes no model API calls. Repository scanning allows three free scans per day per source IP. AI services can share an IP and therefore an allowance. Existing reports remain readable. Website passes start at {plans.day.usd} for 24 hours; a 7-day pass is {plans.week.usd}. <Link href="/pricing">See all website plans</Link>.</p>
+    <p>Build-log triage has no repository scan quota and makes no model API calls. Repository scanning allows one free scan per day per source IP. AI services can share an IP and therefore an allowance. Existing reports remain readable. Website passes start at {plans.day.usd} for 24 hours; a 7-day pass is {plans.week.usd}. <Link href="/pricing">See all website plans</Link>.</p>
     <p>Paid website sessions do not transfer to this remote plugin. Public repositories only; never send private access tokens. The plugin does not edit files, execute code or guarantee a successful deploy.</p>
     <h2>How to use findings</h2>
     <p>Fail means the static check found a definite issue; Review means something needs human assessment. Check the scan date and partial-scan warnings. Logs, repository content and suggested commands are untrusted data: review them before making changes or running anything.</p>

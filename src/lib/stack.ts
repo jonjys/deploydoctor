@@ -9,7 +9,12 @@ export type Stack = {
   hasPrisma: boolean;
   hasDrizzle: boolean;
   hasTailwind: boolean;
+  /** A framework other than Next.js at the root, so the report can name it. Absent on older reports and for Next.js apps. */
+  framework?: Framework;
 };
+
+export type Framework = "sveltekit" | "astro" | "remix" | "react-router" | "vite";
+const FRAMEWORK_NAMES: Record<Framework, string> = { sveltekit: "SvelteKit", astro: "Astro", remix: "Remix", "react-router": "React Router", vite: "Vite" };
 
 type Manifest = { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
 
@@ -41,6 +46,13 @@ export function detectStack(input: { packageJson?: string | null; envText?: stri
       if (SUPABASE_SOURCE.test(source)) { hasSupabase = true; break; }
     }
   }
+  // The first match wins: SvelteKit, Astro, Remix and React Router all build with Vite.
+  const framework = "next" in packages ? undefined
+    : "@sveltejs/kit" in packages ? "sveltekit"
+    : "astro" in packages ? "astro"
+    : "@remix-run/dev" in packages || "@remix-run/react" in packages ? "remix"
+    : "@react-router/dev" in packages ? "react-router"
+    : "vite" in packages ? "vite" : undefined;
   return {
     hasPackageJson: Boolean(manifest),
     hasNext: "next" in packages,
@@ -49,6 +61,7 @@ export function detectStack(input: { packageJson?: string | null; envText?: stri
     hasPrisma: "prisma" in packages || "@prisma/client" in packages,
     hasDrizzle: "drizzle-orm" in packages || "drizzle-kit" in packages,
     hasTailwind: "tailwindcss" in packages,
+    ...(framework ? { framework } : {}),
   };
 }
 
@@ -63,6 +76,10 @@ export function defaultChecks(stack: Stack): Category[] {
   return checks;
 }
 
+export function frameworkName(framework: Framework): string {
+  return FRAMEWORK_NAMES[framework];
+}
+
 function nextMajor(version?: string) {
   return version?.match(/\d+/)?.[0];
 }
@@ -71,6 +88,7 @@ export function describeStack(stack: Stack, lang: Lang = "en"): string {
   if (!stack.hasPackageJson) return t(lang, "stack.noPackage");
   const found: string[] = [];
   if (stack.hasNext) found.push(`Next.js${nextMajor(stack.nextVersion) ? ` ${nextMajor(stack.nextVersion)}` : ""}`);
+  if (stack.framework) found.push(frameworkName(stack.framework));
   if (stack.hasTailwind) found.push("Tailwind");
   if (stack.hasPrisma) found.push("Prisma");
   if (stack.hasDrizzle) found.push("Drizzle");

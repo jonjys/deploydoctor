@@ -17,8 +17,8 @@ export default async function Home() {
   const { lang, t } = await getT();
   const { titles } = analysisText(lang);
   // The same titles the analyzer prints, in report order. Supabase and Prisma only run when the stack uses them.
-  const checks: Array<{ title: string; whenUsed?: boolean }> = [
-    { title: titles.nextEntry }, { title: titles.imports }, { title: titles.serverLibs }, { title: titles.buildConfig },
+  const checks: Array<{ title: string; whenUsed?: boolean; note?: string }> = [
+    { title: titles.nextEntry }, { title: titles.imports }, { title: titles.serverLibs }, { title: titles.buildConfig, note: t("home.checkStacks") },
     { title: titles.dependencies }, { title: titles.env }, { title: titles.secrets },
     { title: titles.supabase, whenUsed: true }, { title: titles.prisma, whenUsed: true },
   ];
@@ -92,6 +92,7 @@ export default async function Home() {
               <div>
                 {check.title}
                 {check.whenUsed && <small className="check-when-used">{t("home.checkWhenUsed")}</small>}
+                {check.note && <small className="check-when-used">{check.note}</small>}
               </div>
             </li>
           ))}

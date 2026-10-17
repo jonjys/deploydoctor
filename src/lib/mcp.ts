@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { StoredReport } from "../types/report";
 import { plans } from "./plans";
 import { diagnoseBuildLog } from "./build-log";
+import { FREE_SCANS_PER_DAY } from "./limits";
 
 export interface DeployBackend {
   scan: (request: Request) => Promise<Response>;
@@ -55,7 +56,7 @@ export function createDeployServer(backend: DeployBackend, request: Request, bas
   }, async ({ log }) => output(diagnoseBuildLog(log)));
   server.registerTool("scan_public_repository", {
     title: "Diagnose a public GitHub repository's deployment",
-    description: "Use when asked to investigate a failed Next.js/Vercel deploy, case-sensitive missing imports, undeclared packages, missing environment declarations, server/client boundaries or Prisma build configuration in a public GitHub repository. Static analysis saves a public report; uses the existing 3-free-scans/day quota per source IP. No code execution or edits. No private repository tokens.",
+    description: `Use when asked to investigate a failed Next.js/Vercel deploy, case-sensitive missing imports, undeclared packages, missing environment declarations, server/client boundaries or Prisma build configuration in a public GitHub repository. Static analysis saves a public report; uses the free quota of ${FREE_SCANS_PER_DAY} scan/day per source IP. No code execution or edits. No private repository tokens.`,
     inputSchema: { repoUrl: z.string().max(300), checks: z.array(z.enum(["next", "vercel", "env", "supabase", "prisma"])).min(1).max(5).optional() },
     outputSchema: reportSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -71,7 +72,7 @@ export function createDeployServer(backend: DeployBackend, request: Request, bas
         method: "POST", headers, body: JSON.stringify({ repoUrl: canonical, ...(checks ? { checks } : {}) }),
       }));
       const data = await response.json() as Record<string, unknown>;
-      if (!response.ok) return output({ ...data, httpStatus: response.status, ...(response.status === 429 ? { pricingUrl: `${base}/pricing`, note: "Paid passes apply to the website's browser session, not this remote connection." } : {}) }, true);
+      if (!response.ok) return output({ ...data, httpStatus: response.status, ...(response.status === 429 ? { error: "Today's free scan from this connection is used. A $2 pass gives unlimited scans on the website for 24 hours; it does not apply to this remote connection.", pricingUrl: `${base}/pricing`, note: "Paid passes apply to the website's browser session, not this remote connection." } : {}) }, true);
       const id = typeof data.id === "string" ? data.id : "";
       // Once saved, a temporary read failure must not invite another quota-consuming scan.
       const report = await backend.report(id).catch(() => null);
@@ -98,7 +99,7 @@ export function createDeployServer(backend: DeployBackend, request: Request, bas
       websitePlans: z.array(z.object({ name: z.string(), price: z.string(), localPrice: z.string(), cadence: z.string() })),
       pricingUrl: z.string().url(), remotePaidSessionSupported: z.literal(false) },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async () => output({ freeScansPerDay: 3, currency: "USD", websitePlans: ["day", "week", "public", "private"].map(key => {
+  }, async () => output({ freeScansPerDay: FREE_SCANS_PER_DAY, currency: "USD", websitePlans: ["day", "week", "public", "private"].map(key => {
     const p = plans[key as "day" | "week" | "public" | "private"];
     // Stripe charges in US dollars; the website also shows a rounded kronor figure.
     return { name: p.name, price: `$${p.amount / 100}`, localPrice: p.price, cadence: p.cadence.replace(/ · \$\d+$/, "") };

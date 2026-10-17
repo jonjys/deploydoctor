@@ -14,7 +14,7 @@ This package is ready for direct installation; it is not a directory approval.
 - `get_public_report`: saved report UUID; no scan quota consumed. No private reports.
 - `get_deploydoctor_plans`: current website prices; never buys or charges.
 
-The free allowance is three scans/day per trusted source IP. AI platforms may
+The free allowance is one scan/day per trusted source IP. AI platforms may
 share an IP, so users may share that allowance. Paid passes apply to the website
 browser session, not this remote connection. No OAuth or paid-MCP access exists.
 
