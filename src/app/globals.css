@@ -630,3 +630,42 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .diag-offer { border-color: var(--ink); background: var(--yellow-soft); }
 .guide-cta-links { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
 .guide-cta-links a:not(.cta-button) { font-size: 14px; text-underline-offset: 3px; }
+
+/* Report: fix-first items with file:line and command, the comparison with the previous scan, and why it works locally. */
+.fix-first.is-yellow { background: var(--yellow-soft); }
+.fix-first.is-yellow strong { color: var(--yellow); }
+.fix-first ol { gap: 12px; list-style: decimal; }
+.fix-first li { min-width: 0; line-height: 1.45; overflow-wrap: anywhere; }
+.fix-first li::marker { font-family: var(--font-geist-mono), monospace; font-size: 12px; font-weight: 700; }
+.fix-first li.is-red::marker { color: var(--red); }
+.fix-first li.is-yellow::marker { color: var(--yellow); }
+.fix-first-where { font-family: var(--font-geist-mono), monospace; font-size: 12.5px; font-weight: 650; }
+.fix-first-check { margin-left: 8px; color: var(--muted); font-size: 12px; }
+.fix-first-fix { display: block; margin-top: 2px; }
+.fix-first-command { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 6px; }
+.fix-first-command code { min-width: 0; max-width: 100%; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-family: var(--font-geist-mono), monospace; font-size: 12px; overflow-wrap: anywhere; }
+.fix-first-command .copy-button.file-copy-button { min-height: 28px; }
+.fix-first-all { display: inline-block; margin-top: 12px; font-size: 13px; font-weight: 650; }
+.since-last { margin: 22px 0 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); font-size: 14px; overflow-wrap: anywhere; }
+.since-last-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 18px; }
+.since-last h2 { margin: 0; font-size: 18px; letter-spacing: -0.02em; }
+.since-last-head a { color: var(--muted); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.since-last-head a:hover { color: var(--ink); }
+.since-last-same { margin: 10px 0 0; color: var(--muted); }
+.since-last-status { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.since-last-status li { padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; }
+.since-last-status li.is-better { border-color: var(--green); color: var(--green); background: var(--green-soft); }
+.since-last-status li.is-worse { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+.since-last-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px 28px; margin-top: 14px; }
+.since-last h3 { margin: 0 0 6px; font-family: var(--font-geist-mono), monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.since-last .is-fixed h3 { color: var(--green); }
+.since-last .is-new h3 { color: var(--red); }
+.since-last-items { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.since-last-items li { min-width: 0; line-height: 1.45; }
+.since-last-items a { color: var(--ink); text-underline-offset: 3px; }
+.since-last-items code { font-family: var(--font-geist-mono), monospace; font-size: 12px; }
+.since-last-more { color: var(--muted); font-size: 13px; }
+.since-last-note { margin: 12px 0 0; color: var(--muted); font-size: 12.5px; }
+.local-why { margin-top: 12px; padding-left: 12px; border-left: 2px solid var(--line); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.local-why strong { margin-right: 5px; }
+@media (max-width: 760px) { .fix-first, .since-last { padding: 14px 16px; } }

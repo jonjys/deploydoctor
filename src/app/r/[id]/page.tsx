@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CopyFixes, IgnoreProvider, IssueCard, ScoreCard, WhenOpenRed } from "@/components/report-ignore";
-import { getReport } from "@/lib/reports";
-import type { Category, CheckId, CheckStatus } from "@/types/report";
+import { CopyFixes, FixFirst, IgnoreProvider, IssueCard, ScoreCard, WhenOpenRed } from "@/components/report-ignore";
+import { getPreviousReport, getReport } from "@/lib/reports";
+import type { Category, CheckId, CheckStatus, ReportResults, StoredReport } from "@/types/report";
+import { diffReports, fixFirstItems, severityOf, type ReportDiff } from "@/lib/report-insights";
+import { SinceLastScan } from "@/components/report-since";
 import { freeFixParts } from "@/lib/fix-instructions";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { SiteNav } from "@/components/site-nav";
@@ -25,12 +27,6 @@ const statusLabelKeys: Record<CheckStatus, MessageKey> = {
   green: "report.pass",
 };
 
-/** What a failed check means for the deploy, so a report can be read in three seconds. */
-const severityOf: Record<CheckId, "build" | "runtime" | "security"> = {
-  "next-entry": "build", imports: "build", dependencies: "build", "build-config": "build",
-  env: "runtime", "server-libs": "runtime", supabase: "runtime", prisma: "runtime",
-  secrets: "security",
-};
 /** Official docs for each failure class, so a report never asks you to take its word for it. */
 const docsFor: Record<CheckId, string> = {
   "next-entry": "https://nextjs.org/docs/app/getting-started/project-structure",
@@ -51,6 +47,17 @@ function issueMarkdown(title: string, explanation: string, evidence: string[], f
   if (evidence.length) lines.push("**Evidence**", "", ...evidence.map((item) => `- ${item}`), "");
   lines.push("**Suggested fix**", "", fix, "", `Found by DeployDoctor: ${link}`);
   return lines.join("\n");
+}
+
+/** The comparison with the previous scan, or null when there is none or its saved results cannot be read. */
+function sinceDiff(previous: StoredReport | null, current: ReportResults): ReportDiff | null {
+  // A scan that found no Next.js app at the root has nothing to compare with.
+  if (!previous || previous.results.nextApp === "none" || previous.results.nextApp === "nested") return null;
+  try {
+    return diffReports(previous.results, current);
+  } catch {
+    return null;
+  }
 }
 
 const statusSymbols: Record<CheckStatus, string> = {
@@ -82,8 +89,14 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const { lang, t } = await getT();
   const report = await getReport(id);
   if (!report) notFound();
-  // Someone with an active pass is never asked to buy another one.
-  const plan = await activePlan(await customerSession()).catch(() => null);
+  // Older reports have no nextApp field and keep their old look.
+  const notNext = report.results.nextApp === "none" || report.results.nextApp === "nested";
+  const [plan, previous] = await Promise.all([
+    // Someone with an active pass is never asked to buy another one.
+    customerSession().then((session) => activePlan(session).catch(() => null)),
+    // The one extra query of a view; when it fails the page only loses the since-the-previous-scan section.
+    notNext ? null : getPreviousReport(report).catch(() => null),
+  ]);
 
   const { results } = report;
   const repoName = `${results.repository.owner}/${results.repository.name}`;
@@ -95,12 +108,11 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const ignoredCategories = results.scope?.ignored ?? [];
 
   const status = report.is_private ? t("report.private") : t("report.savedFree");
-  const redChecks = results.checks.filter((check) => check.status === "red");
   const rescanHref = `/?repo=${encodeURIComponent(`${results.repository.owner}/${results.repository.name}`)}`;
   const badgeMarkdown = `[![DeployDoctor](${SITE_URL}/r/${id}/badge)](${SITE_URL}/r/${id})`;
-  // Older reports have no nextApp field and keep their old look.
-  const notNext = results.nextApp === "none" || results.nextApp === "nested";
   const overall = overallLabel(results.summary, lang, { notNext });
+  const fixFirst = notNext ? [] : fixFirstItems(results.checks);
+  const since = sinceDiff(previous, results);
   return (
     <main className="site-shell report-page">
       <SiteNav note={<><span className="status-dot" /> {status}</>} />
@@ -124,6 +136,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           </div>
           <ScoreCard checks={checkStates} notNext={notNext} />
         </div>
+        <FixFirst items={fixFirst} />
         <div className="report-meta">
           <a className="report-repo" href={report.repo_url} target="_blank" rel="noreferrer">
             {report.repo_url} ↗
@@ -133,16 +146,6 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <span>{new Date(report.created_at).toLocaleString(dateLocale(lang), { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC</span>
           <Link className="rescan-link" href={rescanHref}>{t("report.scanAgain")} ↻</Link>
         </div>
-        {redChecks.length > 0 && !notNext && (
-          <nav className="fix-first" aria-label={t("report.fixFirst")}>
-            <strong>{t("report.fixFirst")}</strong>
-            <ol>
-              {redChecks.map((check) => (
-                <li key={check.id}><a href={`#check-${check.id}`}>{check.title}</a></li>
-              ))}
-            </ol>
-          </nav>
-        )}
         <p className="scope-line">
           <strong>{t("report.scanned")}</strong> {scanned.map((category) => t(`cat.${category}`)).join(", ") || "—"}
           {ignoredCategories.length > 0 && <> | <strong>{t("report.ignored")}</strong> {ignoredCategories.map((category) => t(`cat.${category}`)).join(", ")}</>}
@@ -158,9 +161,10 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
             <p>{t("report.partialNote")}</p>
           </aside>
         )}
+        {previous && since && <SinceLastScan diff={since} previous={previous} lang={lang} />}
       </header>
 
-      <section className="results-list" aria-label="Deployment checks">
+      <section className="results-list" id="checks" aria-label="Deployment checks">
         {scanned.map((category) => {
           const group = results.checks.filter((check) => categoryOf(check) === category);
           if (!group.length) return null;
@@ -175,6 +179,9 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                   {check.status === "yellow" && <span className="severity is-review">{t("report.severity.review")}</span>}
                   <h2>{check.title}</h2>
                   <p>{check.explanation}</p>
+                  {check.status !== "green" && check.id in severityOf && (
+                    <div className="local-why"><strong>{t("report.localWhy")}</strong> {t(`report.localWhy.${check.id}`)}</div>
+                  )}
                   {check.evidence.length ? (
                     <ul className="evidence-list" aria-label={t("report.evidence")}>
                       {check.evidence.map((item) => (

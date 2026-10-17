@@ -3,6 +3,7 @@ import { cache } from "react";
 import type { ReportResults, StoredReport } from "@/types/report";
 import { customerSession } from "@/lib/access";
 import { db, query, rpc } from "@/lib/db";
+import { previousReportFilter } from "@/lib/report-insights";
 
 export async function saveReport(repoUrl: string, results: ReportResults, customerId?: string, isPrivate = false): Promise<StoredReport> {
   if (isPrivate && !customerId) throw new Error("Private reports need an owner.");
@@ -23,3 +24,11 @@ export const getReport = cache(async (id: string): Promise<StoredReport | null> 
   }));
   return privateRows[0] ? { ...privateRows[0], is_private: true } : null;
 });
+
+/** The scan before this one of the same public repository, for the since-the-previous-scan section; null for private reports. */
+export async function getPreviousReport(report: StoredReport): Promise<StoredReport | null> {
+  const filter = previousReportFilter(report);
+  if (!filter) return null;
+  const rows = await db<StoredReport[]>(query("reports", filter));
+  return rows[0] ?? null;
+}
