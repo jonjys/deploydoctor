@@ -496,6 +496,239 @@ function vercelJsonFindings(raw: string, x: AnalysisText): Finding[] {
   return findings;
 }
 
+type ConfigFile = { file: string; raw?: string; code?: string };
+
+/** The root config file matching `pattern` with its comment-free code; only `file` when it exists but was not read. */
+function rootConfig(snapshot: RepositorySnapshot, pattern: RegExp): ConfigFile | undefined {
+  const file = snapshot.entries.filter((entry) => entry.type === "blob" && pattern.test(entry.path)).map((entry) => entry.path).sort()[0];
+  const raw = file === undefined ? undefined : snapshot.contents.get(file);
+  return file === undefined ? undefined : raw === undefined ? { file } : { file, raw, code: stripComments(raw) };
+}
+
+/** Where the module exports `name` (a function, a variable or an export list entry), or -1. */
+function exportIndex(code: string, name: string): number {
+  return code.search(new RegExp(`\\bexport\\s+(?:async\\s+)?function\\s*\\*?\\s*${name}\\b|\\bexport\\s+(?:const|let|var)\\s+${name}\\b|\\bexport\\s*\\{[^}]*\\b${name}\\b[^}]*\\}`));
+}
+const exportsName = (code: string, name: string) => exportIndex(code, name) !== -1;
+const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The literal right of `export const name =`, without quotes, or undefined. */
+function segmentConfig(code: string, name: string): { value: string; index: number } | undefined {
+  const match = new RegExp(`\\bexport\\s+const\\s+${name}\\s*=\\s*([^;\\n]+)`).exec(code);
+  return match ? { value: match[1].trim().replace(/^(["'`])(.*)\1$/, "$2"), index: match.index } : undefined;
+}
+
+const NEXT_CONFIG = /^next\.config\.[cm]?[jt]s$/;
+const APP_FILE = /^((?:src\/)?app)\/(?:(.*)\/)?(page|layout|route)\.[cm]?[jt]sx?$/;
+const PAGES_FILE = /^(?:src\/)?pages\/(.+)\.[cm]?[jt]sx?$/;
+const NOT_GET_METHODS = ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+
+/**
+ * Next.js 16 builds with Turbopack by default and stops when next.config has a webpack function and no turbopack
+ * option, unless the build command picks a bundler with --webpack or --turbopack.
+ */
+function webpackFindings(config: ConfigFile | undefined, buildCommand: string, nextVersion: string | undefined, x: AnalysisText): Finding[] {
+  const major = Number(/\d+/.exec(nextVersion ?? "")?.[0]);
+  if (!config?.code || !(major >= 16) || /\bturbopack\s*:|\bturbo\s*:/.test(config.code)) return [];
+  if (!/\bnext\s+build\b/.test(buildCommand) || /--(?:webpack|turbopack|turbo)\b/.test(buildCommand)) return [];
+  // Only a function counts: plugin options such as Sentry's webpack: { ... } are objects, not a webpack config.
+  const match = /(?:^|[{,\s])webpack\s*(?:\(|:\s*(?:async\s+)?(?:function\b|\(|[A-Za-z_$][\w$]*\s*=>))|\.webpack\s*=(?!=)/m.exec(config.code);
+  if (!match) return [];
+  return [{ file: config.file, line: lineAt(config.raw!, match.index + match[0].indexOf("webpack")), problem: x.build.webpack(major), fix: x.build.webpackFix }];
+}
+
+/**
+ * With output set to export, the features the Next.js static exports guide lists as unsupported. A dynamic route without
+ * generateStaticParams stops next build; the rest are warnings, because the guide only calls them unsupported.
+ * Rewrites, redirects, headers and the default image loader are left out: Next.js skips those warnings on Vercel.
+ */
+function staticExportFindings(snapshot: RepositorySnapshot, config: ConfigFile | undefined, x: AnalysisText, red: Set<Finding>): Finding[] {
+  if (!config?.code || !/\boutput\s*:\s*["'`]export["'`]/.test(config.code)) return [];
+  const findings: Finding[] = [];
+  const files = snapshot.entries.filter((entry) => entry.type === "blob" && SOURCE_EXTENSION.test(entry.path) && !TEST_FILE.test(entry.path)
+    && !/(?:^|\/)node_modules\//.test(entry.path)).map((entry) => entry.path).sort();
+  const codeOf = (file: string) => { const raw = snapshot.contents.get(file); return raw === undefined ? undefined : stripComments(raw); };
+  const finding = (file: string, index: number, problem: string, fix: string): Finding =>
+    ({ file, line: Math.max(1, lineAt(snapshot.contents.get(file) ?? "", Math.max(0, index))), problem, fix });
+
+  for (const file of files) {
+    if (/^(?:src\/)?(?:middleware|proxy)\.[cm]?[jt]s$/.test(file)) { findings.push(finding(file, 0, x.build.exportProxy, x.build.exportProxyFix)); continue; }
+    const code = codeOf(file);
+    if (code === undefined) continue;
+    const app = APP_FILE.exec(file);
+    const pages = app ? null : PAGES_FILE.exec(file);
+    const segments = (app?.[2] ?? "").split("/").filter(Boolean);
+    if (app?.[3] === "page" && segments.some((segment) => /^\[.+\]$/.test(segment))) {
+      // generateStaticParams in the page or in any layout above it can cover the route; an unread layout might hold it.
+      const directory = path.posix.dirname(file);
+      const layouts = files.filter((other) => { const dir = /^(.*)\/layout\.[cm]?[jt]sx?$/.exec(other)?.[1]; return dir !== undefined && (directory === dir || directory.startsWith(`${dir}/`)); });
+      const sources = [code, ...layouts.map(codeOf)];
+      if (sources.every((source) => source !== undefined && !exportsName(source, "generateStaticParams"))) {
+        const route = `/${segments.filter((segment) => !/^\(.*\)$/.test(segment) && !segment.startsWith("@")).join("/")}`;
+        const item = finding(file, Math.max(0, code.search(/\bexport\s+default\b/)), x.build.exportDynamic(route), x.build.exportDynamicFix);
+        red.add(item);
+        findings.push(item);
+      }
+    }
+    if (app?.[3] === "route") {
+      const methods = NOT_GET_METHODS.filter((method) => exportsName(code, method));
+      if (methods.length) findings.push(finding(file, exportIndex(code, methods[0]), x.build.exportRouteMethods(methods.join(", ")), x.build.exportRouteMethodsFix));
+      // The markers Next.js accepts as static: dynamic force-static or error, revalidate other than 0, or generateStaticParams.
+      const dynamic = segmentConfig(code, "dynamic")?.value;
+      const revalidate = segmentConfig(code, "revalidate")?.value;
+      const isStatic = dynamic === "force-static" || dynamic === "error" || (revalidate !== undefined && revalidate !== "0") || exportsName(code, "generateStaticParams");
+      if (exportsName(code, "GET") && !isStatic) findings.push(finding(file, exportIndex(code, "GET"), x.build.exportRouteStatic, x.build.exportRouteStaticFix));
+    } else if (app) {
+      const revalidate = segmentConfig(code, "revalidate");
+      if (revalidate && /^\d+$/.test(revalidate.value) && Number(revalidate.value) > 0) {
+        findings.push(finding(file, revalidate.index, x.build.exportIsr(Number(revalidate.value)), x.build.exportIsrFix));
+      }
+    } else if (pages && pages[1].startsWith("api/")) {
+      findings.push(finding(file, 0, x.build.exportApiRoute, x.build.exportApiRouteFix));
+    } else if (pages && exportsName(code, "getServerSideProps")) {
+      findings.push(finding(file, exportIndex(code, "getServerSideProps"), x.build.exportGssp, x.build.exportGsspFix));
+    } else if (pages && exportsName(code, "getStaticProps")) {
+      const revalidate = /\brevalidate\s*:\s*(\d+)/.exec(code);
+      if (revalidate && Number(revalidate[1]) > 0) findings.push(finding(file, revalidate.index, x.build.exportIsr(Number(revalidate[1])), x.build.exportIsrFix));
+    }
+    const action = /^\s*(["'])use server\1\s*;?\s*$/m.exec(code);
+    if (action) findings.push(finding(file, action.index + action[0].indexOf("use server") - 1, x.build.exportAction, x.build.exportActionFix));
+  }
+  return findings;
+}
+
+/** The hosts next.config allows for remote images, or null when it uses a custom loader, unoptimized or patterns it computes. */
+function remoteImageHosts(code: string): { hosts: string[]; svg: boolean } | null {
+  if (/\bunoptimized\s*:\s*true\b|\bloaderFile\s*:/.test(code)) return null;
+  // images set from a variable, spread or changed after the object literal cannot be read. Strings are blanked first,
+  // so a host such as images.example.com is not mistaken for code.
+  const structure = code.replace(/(["'`])(?:\\.|(?!\1)[^\\\n])*\1/g, '""');
+  if (/\bimages\s*:(?!\s*\{)|[{,]\s*images\s*[,}]|\bimages\s*\.\s*\w|\bimages\s*:\s*\{\s*\.\.\.|\bremotePatterns\b(?!\s*:)/.test(structure)) return null;
+  const loader = /\bloader\s*:\s*([^,}\n]+)/.exec(code)?.[1].trim();
+  if (loader !== undefined && !/^(["'`])default\1$/.test(loader)) return null;
+  const hosts: string[] = [];
+  for (const key of ["remotePatterns", "domains"]) {
+    for (const match of code.matchAll(new RegExp(`\\b${key}\\s*:\\s*`, "g"))) {
+      const start = match.index + match[0].length;
+      if (code[start] !== "[") return null;
+      let depth = 0;
+      let end = start;
+      for (; end < code.length; end += 1) {
+        if (code[end] === "[") depth += 1;
+        else if (code[end] === "]" && --depth === 0) break;
+      }
+      const list = code.slice(start + 1, end);
+      if (/\.\.\.|\$\{|process\.env/.test(list)) return null;
+      if (key === "domains") {
+        if (list.replace(/(["'`])[^"'`]*\1/g, "").replace(/[\s,]/g, "")) return null;
+        hosts.push(...[...list.matchAll(/(["'`])([^"'`]*)\1/g)].map((item) => item[2]));
+        continue;
+      }
+      const named = [...list.matchAll(/\bhostname\s*:\s*(["'`])([^"'`]+)\1/g)].map((item) => item[2]);
+      const urls = [...list.matchAll(/\bnew\s+URL\(\s*(["'`])([^"'`]+)\1/g)].map((item) => /^[a-z][\w+.-]*:\/\/([^/:?#]+)/i.exec(item[2])?.[1]);
+      // Every hostname and URL must be a literal, or the list cannot be read.
+      if (named.length !== (list.match(/\bhostname\s*:/g) ?? []).length || urls.length !== (list.match(/\bnew\s+URL\(/g) ?? []).length || urls.some((host) => !host)) return null;
+      hosts.push(...named, ...(urls as string[]));
+    }
+  }
+  return { hosts, svg: /\bdangerouslyAllowSVG\s*:\s*true\b/.test(code) };
+}
+
+/** Wildcards are read generously: * and ** match any characters, and **.example.com also covers example.com. */
+function hostAllowed(host: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => {
+    const lower = pattern.toLowerCase();
+    const regex = new RegExp(`^${lower.split(/\*+/).map(escapeRegex).join(".*")}$`);
+    return regex.test(host) || (lower.startsWith("**.") && host === lower.slice(3));
+  });
+}
+
+/** The tag text from `<` to its closing `>`, skipping `>` inside strings and `{}` expressions such as arrow functions. */
+function jsxTag(code: string, start: number): string {
+  let depth = 0;
+  let quote: string | null = null;
+  const limit = Math.min(code.length, start + 4000);
+  for (let index = start + 1; index < limit; index += 1) {
+    const char = code[index];
+    if (quote) { if (char === quote) quote = null; }
+    else if (char === '"' || char === "'" || char === "`") quote = char;
+    else if (char === "{") depth += 1;
+    else if (char === "}") depth -= 1;
+    else if (char === ">" && depth === 0) return code.slice(start, index + 1);
+  }
+  return code.slice(start, limit);
+}
+
+/** A next/image whose src is a literal remote URL on a host next.config does not allow. */
+function remoteImageFindings(snapshot: RepositorySnapshot, config: ConfigFile | undefined, x: AnalysisText): Finding[] {
+  // Without a next.config no remote host is allowed; a next.config that was not read could allow any.
+  if (config && config.code === undefined) return [];
+  const allowed = remoteImageHosts(config?.code ?? "");
+  if (!allowed) return [];
+  const findings: Finding[] = [];
+  for (const [file, raw] of snapshot.contents) {
+    if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file) || /(?:^|\/)node_modules\//.test(file) || !raw.includes("next/")) continue;
+    const code = stripComments(raw);
+    for (const imported of code.matchAll(/\bimport\s+([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]*\}\s*)?from\s*["']next\/(?:legacy\/)?image["']/g)) {
+      for (const tag of code.matchAll(new RegExp(`<${escapeRegex(imported[1])}(?=[\\s/>])`, "g"))) {
+        const text = jsxTag(code, tag.index);
+        // A spread, a custom loader or unoptimized (other than ={false}) can change what the optimizer gets.
+        if (/\{\s*\.\.\./.test(text) || /(?<![\w.-])loader\s*=/.test(text) || /(?<![\w.-])unoptimized\b(?!\s*=\s*\{\s*false\s*\})/.test(text)) continue;
+        const src = /(?<![\w.-])src\s*=\s*(?:"([^"]*)"|'([^']*)'|\{\s*(?:"([^"]*)"|'([^']*)'|`([^`$]*)`)\s*\})/.exec(text);
+        const value = src?.slice(1).find((group) => group !== undefined);
+        if (!src || !value || !/^https?:\/\//i.test(value)) continue;
+        let url: URL;
+        try { url = new URL(value); } catch { continue; }
+        // next/image serves .svg files as they are unless dangerouslyAllowSVG is set.
+        if ((url.pathname.toLowerCase().endsWith(".svg") && !allowed.svg) || hostAllowed(url.hostname, allowed.hosts)) continue;
+        findings.push({ file, line: lineAt(raw, tag.index + src.index), problem: x.build.remoteImage(value, url.hostname), fix: x.build.remoteImageFix(url.hostname) });
+      }
+    }
+  }
+  return findings;
+}
+
+const SVELTE_ADAPTER = /["']@sveltejs\/adapter-(node|netlify|cloudflare-workers|cloudflare|bun|vercel|auto|static)["']/g;
+
+/** A SvelteKit adapter built for another platform. adapter-auto picks adapter-vercel on Vercel, and adapter-static has zero-config support there. */
+function svelteKitFindings(snapshot: RepositorySnapshot, x: AnalysisText): Finding[] {
+  // SvelteKit 3 reads the adapter from vite.config; earlier versions from svelte.config.
+  for (const pattern of [/^svelte\.config\.[cm]?[jt]s$/, /^vite\.config\.[cm]?[jt]s$/]) {
+    const config = rootConfig(snapshot, pattern);
+    const adapters = config?.code ? [...config.code.matchAll(SVELTE_ADAPTER)] : [];
+    if (!adapters.length) continue;
+    // A config that also imports a Vercel-ready adapter probably picks one per platform.
+    if (adapters.some((match) => ["vercel", "auto", "static"].includes(match[1]))) return [];
+    const name = adapters[0][1];
+    return [{ file: config!.file, line: lineAt(config!.raw!, adapters[0].index), problem: x.build.svelteAdapter(`@sveltejs/adapter-${name}`, x.build.svelteTargets[name]),
+      fix: x.build.svelteAdapterFix(config!.file) }];
+  }
+  return [];
+}
+
+/** Astro renders on demand only through an adapter: none stops astro build, and another platform's adapter is not what Vercel deploys. */
+function astroFindings(snapshot: RepositorySnapshot, x: AnalysisText, red: Set<Finding>): Finding[] {
+  const config = rootConfig(snapshot, /^astro\.config\.[cm]?[jt]s$/);
+  const code = config ? config.code : "";
+  // An unread config, or one spread from elsewhere, could set the adapter where we cannot see it.
+  if (code === undefined || code.includes("...")) return [];
+  const output = /\boutput\s*:\s*["'`](server|hybrid)["'`]/.exec(code);
+  const prerender = output ? undefined : [...snapshot.contents].filter(([file]) => /^src\/pages\//.test(file) && SOURCE_EXTENSION.test(file))
+    .map(([file, raw]) => ({ file, raw, match: /^\s*export\s+const\s+prerender\s*=\s*false\b/m.exec(stripComments(raw)) })).find((item) => item.match);
+  if (!output && !prerender) return [];
+  const adapter = /\badapter\s*:/.exec(code);
+  if (!adapter) {
+    const item: Finding = output
+      ? { file: config!.file, line: lineAt(config!.raw!, output.index), problem: x.build.astroOutputNoAdapter(output[1]), fix: x.build.astroNoAdapterFix }
+      : { file: prerender!.file, line: lineAt(prerender!.raw, prerender!.match!.index + prerender!.match![0].indexOf("export")), problem: x.build.astroPrerenderNoAdapter, fix: x.build.astroNoAdapterFix };
+    red.add(item);
+    return [item];
+  }
+  const other = /["'](@astrojs\/(?:node|netlify|cloudflare))["']/.exec(code)?.[1];
+  if (!other || /["']@astrojs\/vercel(?:\/[\w-]+)?["']/.test(code)) return [];
+  return [{ file: config!.file, line: lineAt(config!.raw!, adapter.index), problem: x.build.astroOtherAdapter(other), fix: x.build.astroOtherAdapterFix(other) }];
+}
+
 function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const title = x.titles.buildConfig;
   const manifest = parsePackageJson(snapshot);
@@ -558,11 +791,28 @@ function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
       command: `git mv ${shellQuote(wrongCase)} tmp-index.html && git mv tmp-index.html index.html` });
   }
 
-  if (findings.length) {
-    return makeCheck("build-config", title, "yellow", x.build.yellow(findings.length), findings[0].fix,
-      findings.map((item) => `${item.file}:${item.line} → ${item.problem}`), findings);
+  // Findings the docs say stop the build; everything else here stays a warning.
+  const red = new Set<Finding>();
+  if (packages.next) {
+    const nextConfig = rootConfig(snapshot, NEXT_CONFIG);
+    let vercelBuildCommand: unknown;
+    try { vercelBuildCommand = vercelRaw ? (JSON.parse(vercelRaw) as { buildCommand?: unknown }).buildCommand : undefined; } catch { vercelBuildCommand = undefined; }
+    const buildCommand = typeof vercelBuildCommand === "string" ? vercelBuildCommand : manifest?.scripts?.build ?? "next build";
+    for (const item of webpackFindings(nextConfig, buildCommand, packages.next, x)) { red.add(item); findings.push(item); }
+    findings.push(...staticExportFindings(snapshot, nextConfig, x, red), ...remoteImageFindings(snapshot, nextConfig, x));
   }
-  return makeCheck("build-config", title, "green", x.build.ok, x.noChange);
+  const framework = packages.next ? undefined : packages["@sveltejs/kit"] ? "SvelteKit" : packages.astro ? "Astro" : undefined;
+  if (framework === "SvelteKit") findings.push(...svelteKitFindings(snapshot, x));
+  if (framework === "Astro") findings.push(...astroFindings(snapshot, x, red));
+
+  if (findings.length) {
+    const ordered = [...findings.filter((item) => red.has(item)), ...findings.filter((item) => !red.has(item))];
+    const yellow = findings.length - red.size;
+    return makeCheck("build-config", title, red.size ? "red" : "yellow",
+      [red.size ? x.build.red(red.size) : "", yellow ? x.build.yellow(yellow) : ""].filter(Boolean).join(" "), ordered[0].fix,
+      ordered.map((item) => `${item.file}:${item.line} → ${item.problem}`), ordered);
+  }
+  return makeCheck("build-config", title, "green", framework ? x.build.okAdapter(framework) : x.build.ok, x.noChange);
 }
 
 // Files Next.js builds from; everything they import (transitively, through local files) is part of the build.

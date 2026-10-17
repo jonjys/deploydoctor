@@ -18,6 +18,7 @@ import { FIX_SERVICE_ENABLED } from "@/lib/fix-service";
 import { dateLocale, type MessageKey } from "@/lib/i18n";
 import { overallLabel } from "@/lib/report-summary";
 import { activePlan, customerSession } from "@/lib/access";
+import { frameworkName } from "@/lib/stack";
 
 const statusLabelKeys: Record<CheckStatus, MessageKey> = {
   red: "report.fail",
@@ -113,7 +114,9 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         </Link>
         {notNext && (
           <div className="not-next-notice" role="note">
-            <strong>{t("report.notNextNotice")}</strong>
+            {/* A root app on another framework the scan knows: say what is still checked. */}
+            <strong>{results.nextApp === "none" && results.stack?.framework
+              ? t("report.otherStackNotice", { stack: frameworkName(results.stack.framework) }) : t("report.notNextNotice")}</strong>
             {results.nextApp === "nested" && <> {t("report.notNextNested")}</>}
           </div>
         )}

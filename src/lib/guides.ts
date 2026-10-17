@@ -225,6 +225,64 @@ export const guides: Guide[] = [
       ] },
     ],
   },
+  {
+    slug: "nextjs-16-webpack-config-turbopack-build-fails",
+    title: "Next.js 16 build fails with a webpack config: Turbopack is now the default",
+    description: "After the upgrade to Next.js 16, next build stops because next.config has a webpack function. Why Next.js fails on purpose, the three ways out, and what to do when a plugin added the webpack config.",
+    updated: "2026-10-17",
+    check: "Build configuration",
+    sections: [
+      { heading: "The error", body: [
+        "The build stops with ERROR: This build is using Turbopack, with a webpack config and no turbopack config. The Next.js 16 upgrade guide explains why: next build now uses Turbopack by default, and if your project has a custom webpack configuration, the build will fail to prevent misconfiguration issues.",
+        "Nothing is wrong with your code. Before Next.js 16 you had to opt in to Turbopack with --turbopack, so the same next.config built with webpack before the upgrade. On Vercel the deployment fails at the build step.",
+      ], code: "// next.config.ts\nconst nextConfig = {\n  webpack: (config) => {\n    config.resolve.fallback = { fs: false };\n    return config;\n  },\n};\n\nexport default nextConfig;" },
+      { heading: "Why Next.js stops instead of ignoring it", body: [
+        "Turbopack does not run webpack plugins. It supports webpack loaders, but anything your webpack function adds, such as a plugin, an alias or a fallback, would silently stop applying under Turbopack. Next.js refuses to guess and stops the build so you choose.",
+      ] },
+      { heading: "Fix 1: keep building with webpack", body: [
+        "Add the --webpack flag to the build script. The dev server can keep using Turbopack. This is the safest choice when the webpack function does real work, for example a plugin you depend on.",
+      ], code: "{\n  \"scripts\": {\n    \"dev\": \"next dev\",\n    \"build\": \"next build --webpack\",\n    \"start\": \"next start\"\n  }\n}" },
+      { heading: "Fix 2: build with Turbopack and ignore the webpack config", body: [
+        "Run next build --turbopack. The upgrade guide describes this as building with Turbopack and ignoring your webpack config. Many apps work under Turbopack with no configuration, but test the app, because whatever the webpack function changed no longer applies.",
+      ] },
+      { heading: "Fix 3: move the config to Turbopack", body: [
+        "The third way the upgrade guide gives is to migrate the webpack config to Turbopack-compatible options under turbopack in next.config. A resolve.fallback that silenced Module not found: Can't resolve fs, for example, becomes a turbopack.resolveAlias that loads an empty module in the browser. The Next.js docs recommend fixing the imports first, so client code no longer pulls in Node.js modules.",
+      ], code: "// next.config.ts\nconst nextConfig = {\n  turbopack: {\n    resolveAlias: {\n      fs: { browser: \"./empty.ts\" },\n    },\n  },\n};\n\nexport default nextConfig;" },
+      { heading: "When you never wrote a webpack config", body: [
+        "The upgrade guide notes that if the build fails because a webpack configuration was found and you do not define one yourself, a plugin is likely adding a webpack option, such as a wrapper around next.config. Check the plugin for a Next.js 16 or Turbopack release, or use one of the flags above until it has one.",
+      ] },
+      { heading: "How DeployDoctor catches it", body: [
+        "DeployDoctor reads next.config and package.json in the Build configuration check. When the app uses Next.js 16 or later, next.config sets a webpack function and has no turbopack option, and the build command is next build without --webpack or --turbopack, it reports a failing check that points at the webpack line. A webpack option that a wrapper plugin adds is not visible in next.config, so that case is not reported. Scan your repository for free on the home page, or run it on every pull request with the GitHub Action.",
+      ] },
+    ],
+  },
+  {
+    slug: "astro-cannot-use-server-rendered-pages-without-an-adapter",
+    title: "Astro on Vercel: Cannot use server-rendered pages without an adapter",
+    description: "astro build stops with NoAdapterInstalled when a page renders on demand and no adapter is set. When an Astro site needs an adapter on Vercel, how to add @astrojs/vercel, and when a static site needs none.",
+    updated: "2026-10-17",
+    check: "Build configuration",
+    sections: [
+      { heading: "The error", body: [
+        "The build stops with NoAdapterInstalled: Cannot use server-rendered pages without an adapter. Please install and configure the appropriate server adapter for your final deployment. Astro's docs put the rule plainly: to render any page on demand, you need to add an adapter.",
+      ] },
+      { heading: "When an Astro site renders on demand", body: [
+        "By default, your entire Astro site is prerendered at build time, and a static Astro site deploys to Vercel with zero configuration. Two settings change that. output: server in astro.config renders every page on demand by default. export const prerender = false in a page or an endpoint renders that one route on demand. Either one needs an adapter.",
+      ], code: "// astro.config.mjs\nimport { defineConfig } from \"astro/config\";\n\nexport default defineConfig({\n  output: \"server\",\n  // no adapter: astro build stops with NoAdapterInstalled\n});" },
+      { heading: "The fix: add Astro's Vercel adapter", body: [
+        "Run npx astro add vercel. It installs @astrojs/vercel and adds the adapter to astro.config. To do it by hand, install @astrojs/vercel and set adapter: vercel() yourself.",
+      ], code: "// astro.config.mjs\nimport { defineConfig } from \"astro/config\";\nimport vercel from \"@astrojs/vercel\";\n\nexport default defineConfig({\n  output: \"server\",\n  adapter: vercel(),\n});" },
+      { heading: "Another platform's adapter on Vercel", body: [
+        "A project that started on another host can still have @astrojs/node, @astrojs/netlify or @astrojs/cloudflare in astro.config. The build then passes, but the output is shaped for that platform. Vercel's docs for Astro say that to deploy a server-rendered Astro app, you must add Astro's Vercel adapter. Replace the old adapter with @astrojs/vercel and remove it from package.json.",
+      ] },
+      { heading: "A static site needs no adapter", body: [
+        "If nothing renders on demand, you do not need an adapter to deploy to Vercel. Astro's Vercel adapter docs say you only need it for a static site if you use additional Vercel services, such as Web Analytics or Image Optimization through the adapter. Removing output: server and every prerender = false is also a valid fix.",
+      ] },
+      { heading: "How DeployDoctor catches it", body: [
+        "DeployDoctor reads astro.config and the JavaScript and TypeScript files under src/pages in the Build configuration check. When output is server or hybrid, or a route sets prerender to false, and astro.config has no adapter, it reports a failing check that points at the line. When the adapter is @astrojs/node, @astrojs/netlify or @astrojs/cloudflare, it reports a warning with the switch to @astrojs/vercel. The same check covers SvelteKit adapters built for another platform. Scan your repository for free on the home page, or run it on every pull request with the GitHub Action.",
+      ] },
+    ],
+  },
 ];
 
 export function guideBySlug(slug: string): Guide | undefined {
