@@ -20,6 +20,7 @@ import { FIX_SERVICE_ENABLED } from "@/lib/fix-service";
 import { dateLocale, type MessageKey } from "@/lib/i18n";
 import { overallLabel } from "@/lib/report-summary";
 import { activePlan, customerSession } from "@/lib/access";
+import { frameworkName } from "@/lib/stack";
 
 const statusLabelKeys: Record<CheckStatus, MessageKey> = {
   red: "report.fail",
@@ -110,8 +111,11 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const status = report.is_private ? t("report.private") : t("report.savedFree");
   const rescanHref = `/?repo=${encodeURIComponent(`${results.repository.owner}/${results.repository.name}`)}`;
   const badgeMarkdown = `[![DeployDoctor](${SITE_URL}/r/${id}/badge)](${SITE_URL}/r/${id})`;
-  const overall = overallLabel(results.summary, lang, { notNext });
-  const fixFirst = notNext ? [] : fixFirstItems(results.checks);
+  // A root app on another framework the scan knows still gets real results, so it keeps the normal headline.
+  const otherStack = results.nextApp === "none" ? results.stack?.framework : undefined;
+  const neutral = notNext && !otherStack;
+  const overall = overallLabel(results.summary, lang, { notNext: neutral });
+  const fixFirst = neutral ? [] : fixFirstItems(results.checks);
   const since = sinceDiff(previous, results);
   return (
     <main className="site-shell report-page">
@@ -125,7 +129,10 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         </Link>
         {notNext && (
           <div className="not-next-notice" role="note">
-            <strong>{t("report.notNextNotice")}</strong>
+            {/* A root app on another framework the scan knows: say what is still checked, from the categories scanned. */}
+            <strong>{otherStack ? t("report.otherStackNotice", { stack: frameworkName(otherStack) }) : t("report.notNextNotice")}</strong>
+            {otherStack && scanned.includes("vercel") && <> {t("report.otherStackVercel")}</>}
+            {otherStack && scanned.includes("env") && <> {t("report.otherStackEnv")}</>}
             {results.nextApp === "nested" && <> {t("report.notNextNested")}</>}
           </div>
         )}
@@ -134,7 +141,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
             <p className="section-kicker">{t("report.kicker")}</p>
             <h1>{repoName}</h1>
           </div>
-          <ScoreCard checks={checkStates} notNext={notNext} />
+          <ScoreCard checks={checkStates} notNext={neutral} />
         </div>
         <FixFirst items={fixFirst} />
         <div className="report-meta">

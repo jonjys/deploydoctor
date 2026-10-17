@@ -109,7 +109,7 @@ function priorityFor(pathname: string): number {
   if (pathname === "package.json") return 0;
   if (/(?:^|\/)\.env(?:\..+)?$/.test(pathname) || MISNAMED_ENV_TEMPLATE.test(pathname) || pathname === ".gitignore") return 1;
   if (/^(?:tsconfig|jsconfig|vercel)\.json$/.test(pathname) || /\.prisma$/.test(pathname) || ROOT_LOCKFILE.test(pathname)
-    || /^next\.config\.[cm]?[jt]s$/.test(pathname)) return 2;
+    || /^(?:next|svelte|astro|vite)\.config\.[cm]?[jt]s$/.test(pathname)) return 2;
   if (API_ROUTE.test(pathname)) return 3;
   if (MIGRATION_FILE.test(pathname)) return 4;
   if (/(?:^|\/)(?:src\/)?app\/.*\/(?:page|layout|loading|default|not-found)\.[jt]sx$/i.test(pathname)) return 4;

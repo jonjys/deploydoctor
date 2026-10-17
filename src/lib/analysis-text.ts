@@ -71,7 +71,19 @@ export type AnalysisText = {
     cronCount: (n: number) => string; cronCountFix: string;
     maxDuration: (pattern: string, seconds: number) => string; maxDurationFix: string;
     memory: (pattern: string) => string; memoryFix: string;
-    yellow: (n: number) => string; ok: string;
+    webpack: (major: number) => string; webpackFix: string; webpackPlugin: (major: number) => string; webpackPluginFix: string;
+    exportDynamic: (route: string) => string; exportDynamicFix: string; exportDynamicRouteFix: string;
+    exportRouteMethods: (methods: string) => string; exportRouteMethodsFix: string;
+    exportRouteStatic: string; exportRouteStaticFix: string;
+    exportProxy: string; exportProxyFix: string; exportAction: string; exportActionFix: string;
+    exportIsr: (seconds: number) => string; exportIsrFix: string;
+    exportApiRoute: string; exportApiRouteFix: string; exportGssp: string; exportGsspFix: string;
+    remoteImage: (src: string, host: string) => string; remoteImageFix: (host: string) => string;
+    svelteAdapter: (adapter: string, target: string) => string; svelteAdapterFix: (file: string) => string;
+    svelteTargets: Record<string, string>;
+    astroOutputNoAdapter: (output: string) => string; astroPrerenderNoAdapter: string; astroNoAdapterFix: string;
+    astroOtherAdapter: (adapter: string) => string; astroOtherAdapterFix: (adapter: string) => string;
+    red: (n: number) => string; yellow: (n: number) => string; ok: string; okAdapter: (framework: string) => string;
   };
   prisma: {
     okDrizzle: string; okNone: string; noGenerate: string; noGenerateFix: string;
@@ -233,8 +245,41 @@ const en: AnalysisText = {
     maxDurationFix: "On the Hobby plan, lower maxDuration to 300 or set it to max, which Vercel turns into your plan's maximum at deploy time. Pro allows up to 800 seconds, and up to 1800 seconds in beta for some Node.js, Bun and Python runtimes.",
     memory: (pattern) => `the functions entry ${pattern} sets memory, which Vercel does not read from vercel.json with Fluid compute, the default for new projects; the build only prints a warning and the function keeps the project memory size`,
     memoryFix: "Remove memory from vercel.json. On Pro and Enterprise, set the memory size in the project under Settings, Functions. On Hobby every function always gets the default 2 GB.",
+    webpack: (major) => `sets a custom webpack config, but Next.js ${major} runs next build with Turbopack by default, and the Next.js 16 upgrade guide says the build will then fail to prevent misconfiguration issues`,
+    webpackFix: "Pick one of the ways the Next.js 16 upgrade guide gives: keep Webpack with next build --webpack in the build script, build with Turbopack and ignore the webpack config with next build --turbopack, or move the settings to the turbopack option in next.config. With --turbopack, what the webpack function changed no longer applies, so test the app after the build.",
+    exportDynamic: (route) => `${route} is a dynamic route without generateStaticParams, and next.config sets output to export, where every dynamic route must be rendered at build time; next build stops with an error that the page is missing generateStaticParams()`,
+    webpackPlugin: (major) => `sets a custom webpack config with no turbopack option, which makes Next.js ${major} stop next build, but next.config passes its config through a plugin, a function or a spread that may add a turbopack option when the config loads, as @next/mdx and next-intl do, and then the build passes`,
+    webpackPluginFix: "Run next build on your machine. If it stops with This build is using Turbopack, with a webpack config and no turbopack config, use one of the ways the Next.js 16 upgrade guide gives: next build --webpack in the build script, next build --turbopack, or a turbopack option in next.config. If it passes, the plugin adds the option and nothing needs to change.",
+    exportDynamicFix: "Export generateStaticParams from the page or a parent layout and return one params object for each page to build, with a value for every dynamic segment. If the paths cannot be known at build time, remove output: export from next.config so Vercel renders the route on request.",
+    exportDynamicRouteFix: "Export generateStaticParams from this route file and return one params object for each path to build, with a value for every dynamic segment; a route handler does not take it from a layout. If the paths cannot be known at build time, remove output: export from next.config so Vercel runs the route handler as a function.",
+    exportRouteMethods: (methods) => `exports ${methods}, but with output set to export in next.config Next.js only supports GET route handlers, and the exported site is plain files with no server to answer other methods`,
+    exportRouteMethodsFix: "Remove output: export from next.config so Vercel runs the route handler as a function, or send these requests to an API that runs somewhere else.",
+    exportRouteStatic: "has a GET route handler that is not marked static, so with output set to export in next.config, next build stops with an error that export const dynamic = force-static or export const revalidate is not configured on this route",
+    exportRouteStaticFix: 'Add export const dynamic = "force-static" to the file if the response can be built once at build time. If the handler reads the request, such as headers, cookies or search params, it cannot be part of a static export: remove output: export from next.config instead.',
+    exportProxy: "runs on incoming requests, but a static export (output set to export in next.config) does not support Proxy or middleware, because they need the incoming request, so this file does not run on the exported site",
+    exportProxyFix: "Move redirects, rewrites and headers to vercel.json and other logic into the pages, or remove output: export from next.config so Vercel runs the app with a server.",
+    exportAction: "defines a Server Action with use server, and Server Actions are not supported in a static export (output set to export in next.config): the exported site has no server to run them",
+    exportActionFix: "Call an API from the client instead of the Server Action, or remove output: export from next.config so Vercel can run Server Actions.",
+    exportIsr: (seconds) => `sets revalidate to ${seconds}, but Incremental Static Regeneration is not supported in a static export (output set to export in next.config), so the page is only built once`,
+    exportIsrFix: "Remove revalidate and redeploy when the content changes, or remove output: export from next.config to use ISR on Vercel.",
+    exportApiRoute: "is a Pages Router API route, and API Routes cannot be used with a static export (output set to export in next.config)",
+    exportApiRouteFix: "Remove output: export from next.config so Vercel runs the API route as a function, or move the endpoint to an API that runs somewhere else.",
+    exportGssp: "uses getServerSideProps, which is not supported in a static export (output set to export in next.config)",
+    exportGsspFix: "Use getStaticProps or fetch the data on the client, or remove output: export from next.config so Vercel renders the page on request.",
+    remoteImage: (src, host) => `next/image loads ${src}, but ${host} is not in images.remotePatterns or images.domains in next.config; the Next.js image optimizer answers 400 Bad Request for a host that does not match, so the image does not show, and next dev throws Invalid src prop with hostname ${host} is not configured under images`,
+    remoteImageFix: (host) => `Allow the host in next.config with images: { remotePatterns: [new URL("https://${host}/**")] }, narrowed to the path you use if you can, and redeploy. If the image does not need optimizing, add the unoptimized prop to this Image instead.`,
+    svelteAdapter: (adapter, target) => `configures ${adapter}, which builds the app for ${target}, not for Vercel; the SvelteKit docs say that to deploy to Vercel you use adapter-vercel`,
+    svelteAdapterFix: (file) => `Install @sveltejs/adapter-vercel as a dev dependency, import the adapter from it in ${file} instead and redeploy. @sveltejs/adapter-auto also works on Vercel: it detects Vercel and installs adapter-vercel at build time, but Vercel recommends installing adapter-vercel yourself for version stability.`,
+    svelteTargets: { node: "a standalone Node server started with node build", netlify: "Netlify", cloudflare: "Cloudflare", "cloudflare-workers": "Cloudflare Workers", bun: "a Bun server" },
+    astroOutputNoAdapter: (output) => `sets output to ${output}, which renders pages on demand, but has no adapter, so astro build stops with NoAdapterInstalled: Cannot use server-rendered pages without an adapter`,
+    astroPrerenderNoAdapter: "sets prerender to false, which renders this route on demand, but the project has no Astro adapter, so astro build stops with NoAdapterInstalled: Cannot use server-rendered pages without an adapter",
+    astroNoAdapterFix: "Run npx astro add vercel, which installs @astrojs/vercel and adds adapter: vercel() to astro.config, then redeploy. A fully static Astro site needs no adapter on Vercel, so removing the on-demand rendering also works.",
+    astroOtherAdapter: (adapter) => `renders pages on demand with ${adapter}, but the Vercel docs for Astro say a server-rendered Astro app must use Astro's Vercel adapter, @astrojs/vercel`,
+    astroOtherAdapterFix: (adapter) => `Run npx astro add vercel, remove ${adapter} from astro.config and package.json, and redeploy.`,
+    red: (n) => `${n} project setting${n === 1 ? " stops" : "s stop"} the Vercel build.`,
     yellow: (n) => `${n} project setting${n === 1 ? "" : "s"} may make the Vercel build behave differently from your machine.`,
     ok: "One lockfile, a build script and a Node version Vercel supports.",
+    okAdapter: (framework) => `One lockfile, a build script, a Node version Vercel supports and no ${framework} adapter problem.`,
   },
   prisma: {
     okDrizzle: "Drizzle found. SQLite drivers are caught by the Vercel-incompatible server code check.",
@@ -403,8 +448,41 @@ const sv: AnalysisText = {
     maxDurationFix: "På Hobby-planen, sänk maxDuration till 300 eller sätt den till max, som Vercel gör om till planens maximum vid deploy. Pro tillåter upp till 800 sekunder, och upp till 1800 sekunder i beta för vissa Node.js-, Bun- och Python-runtimes.",
     memory: (pattern) => `functions-posten ${pattern} sätter memory, som Vercel inte läser från vercel.json med Fluid compute, standard för nya projekt; bygget skriver bara en varning och funktionen behåller projektets minnesstorlek`,
     memoryFix: "Ta bort memory från vercel.json. På Pro och Enterprise ställer du in minnesstorleken i projektet under Settings, Functions. På Hobby får varje funktion alltid standardstorleken 2 GB.",
+    webpack: (major) => `sätter en egen webpack-konfiguration, men Next.js ${major} kör next build med Turbopack som standard, och uppgraderingsguiden för Next.js 16 säger att bygget då misslyckas för att förhindra felkonfiguration`,
+    webpackFix: "Välj ett av sätten som uppgraderingsguiden för Next.js 16 anger: behåll Webpack med next build --webpack i build-skriptet, bygg med Turbopack och bortse från webpack-konfigurationen med next build --turbopack, eller flytta inställningarna till turbopack-alternativet i next.config. Med --turbopack gäller inte längre det som webpack-funktionen ändrade, så testa appen efter bygget.",
+    exportDynamic: (route) => `${route} är en dynamisk route utan generateStaticParams, och next.config sätter output till export, där varje dynamisk route måste renderas vid bygget; next build stoppar med ett fel om att sidan saknar generateStaticParams()`,
+    webpackPlugin: (major) => `sätter en egen webpack-konfiguration utan turbopack-alternativ, vilket får Next.js ${major} att stoppa next build, men next.config skickar konfigurationen genom ett plugin, en funktion eller en spread som kan lägga till ett turbopack-alternativ när konfigurationen laddas, som @next/mdx och next-intl gör, och då går bygget igenom`,
+    webpackPluginFix: "Kör next build på din dator. Stoppar det med This build is using Turbopack, with a webpack config and no turbopack config, använd ett av sätten som uppgraderingsguiden för Next.js 16 anger: next build --webpack i build-skriptet, next build --turbopack eller ett turbopack-alternativ i next.config. Går det igenom lägger pluginet till alternativet och inget behöver ändras.",
+    exportDynamicFix: "Exportera generateStaticParams från sidan eller en överordnad layout och returnera ett params-objekt för varje sida som ska byggas, med ett värde för varje dynamiskt segment. Om sökvägarna inte går att veta vid bygget, ta bort output: export från next.config så att Vercel renderar routen vid varje anrop.",
+    exportDynamicRouteFix: "Exportera generateStaticParams från den här route-filen och returnera ett params-objekt för varje sökväg som ska byggas, med ett värde för varje dynamiskt segment; en route handler tar det inte från en layout. Om sökvägarna inte går att veta vid bygget, ta bort output: export från next.config så att Vercel kör route handlern som en funktion.",
+    exportRouteMethods: (methods) => `exporterar ${methods}, men med output satt till export i next.config stöder Next.js bara GET i route handlers, och den exporterade sajten är vanliga filer utan någon server som svarar på andra metoder`,
+    exportRouteMethodsFix: "Ta bort output: export från next.config så att Vercel kör route handlern som en funktion, eller skicka anropen till ett API som körs någon annanstans.",
+    exportRouteStatic: "har en GET-route handler som inte är markerad som statisk, så med output satt till export i next.config stoppar next build med ett fel om att export const dynamic = force-static eller export const revalidate inte är konfigurerat för routen",
+    exportRouteStaticFix: 'Lägg till export const dynamic = "force-static" i filen om svaret kan byggas en gång vid bygget. Läser handlern anropet, till exempel headers, cookies eller sökparametrar, kan den inte ingå i en statisk export: ta bort output: export från next.config i stället.',
+    exportProxy: "körs på inkommande anrop, men en statisk export (output satt till export i next.config) stöder inte Proxy eller middleware, eftersom de behöver det inkommande anropet, så filen körs inte på den exporterade sajten",
+    exportProxyFix: "Flytta redirects, rewrites och headers till vercel.json och annan logik in i sidorna, eller ta bort output: export från next.config så att Vercel kör appen med en server.",
+    exportAction: "definierar en Server Action med use server, och Server Actions stöds inte i en statisk export (output satt till export i next.config): den exporterade sajten har ingen server som kan köra dem",
+    exportActionFix: "Anropa ett API från klienten i stället för Server Action, eller ta bort output: export från next.config så att Vercel kan köra Server Actions.",
+    exportIsr: (seconds) => `sätter revalidate till ${seconds}, men Incremental Static Regeneration stöds inte i en statisk export (output satt till export i next.config), så sidan byggs bara en gång`,
+    exportIsrFix: "Ta bort revalidate och driftsätt igen när innehållet ändras, eller ta bort output: export från next.config för att använda ISR på Vercel.",
+    exportApiRoute: "är en API-route i Pages Router, och API-routes kan inte användas med en statisk export (output satt till export i next.config)",
+    exportApiRouteFix: "Ta bort output: export från next.config så att Vercel kör API-routen som en funktion, eller flytta endpointen till ett API som körs någon annanstans.",
+    exportGssp: "använder getServerSideProps, som inte stöds i en statisk export (output satt till export i next.config)",
+    exportGsspFix: "Använd getStaticProps eller hämta datan i klienten, eller ta bort output: export från next.config så att Vercel renderar sidan vid varje anrop.",
+    remoteImage: (src, host) => `next/image laddar ${src}, men ${host} finns inte i images.remotePatterns eller images.domains i next.config; bildoptimeringen i Next.js svarar 400 Bad Request för en värd som inte matchar, så bilden visas inte, och next dev kastar Invalid src prop med hostname ${host} is not configured under images`,
+    remoteImageFix: (host) => `Tillåt värden i next.config med images: { remotePatterns: [new URL("https://${host}/**")] }, begränsad till sökvägen du använder om det går, och driftsätt igen. Behöver bilden inte optimeras kan du i stället lägga till propen unoptimized på den här Image.`,
+    svelteAdapter: (adapter, target) => `konfigurerar ${adapter}, som bygger appen för ${target}, inte för Vercel; SvelteKit-dokumentationen säger att man ska använda adapter-vercel för att driftsätta på Vercel`,
+    svelteAdapterFix: (file) => `Installera @sveltejs/adapter-vercel som dev-beroende, importera adaptern från det i ${file} i stället och driftsätt igen. @sveltejs/adapter-auto fungerar också på Vercel: den känner av Vercel och installerar adapter-vercel vid bygget, men Vercel rekommenderar att du installerar adapter-vercel själv för stabila versioner.`,
+    svelteTargets: { node: "en fristående Node-server som startas med node build", netlify: "Netlify", cloudflare: "Cloudflare", "cloudflare-workers": "Cloudflare Workers", bun: "en Bun-server" },
+    astroOutputNoAdapter: (output) => `sätter output till ${output}, som renderar sidor vid varje anrop, men saknar adapter, så astro build stoppar med NoAdapterInstalled: Cannot use server-rendered pages without an adapter`,
+    astroPrerenderNoAdapter: "sätter prerender till false, som renderar routen vid varje anrop, men projektet saknar Astro-adapter, så astro build stoppar med NoAdapterInstalled: Cannot use server-rendered pages without an adapter",
+    astroNoAdapterFix: "Kör npx astro add vercel, som installerar @astrojs/vercel och lägger till adapter: vercel() i astro.config, och driftsätt igen. En helt statisk Astro-sajt behöver ingen adapter på Vercel, så det fungerar också att ta bort renderingen vid anrop.",
+    astroOtherAdapter: (adapter) => `renderar sidor vid varje anrop med ${adapter}, men Vercels dokumentation för Astro säger att en serverrenderad Astro-app måste använda Astros Vercel-adapter, @astrojs/vercel`,
+    astroOtherAdapterFix: (adapter) => `Kör npx astro add vercel, ta bort ${adapter} från astro.config och package.json, och driftsätt igen.`,
+    red: (n) => `${n} projektinställning${n === 1 ? "" : "ar"} stoppar Vercel-bygget.`,
     yellow: (n) => `${n} projektinställning${n === 1 ? "" : "ar"} kan göra att Vercel-bygget beter sig annorlunda än på din dator.`,
     ok: "En lockfil, ett build-skript och en Node-version som Vercel stöder.",
+    okAdapter: (framework) => `En lockfil, ett build-skript, en Node-version som Vercel stöder och inga problem med ${framework}-adaptern.`,
   },
   prisma: {
     okDrizzle: "Drizzle hittades. SQLite-drivrutiner fångas av kontrollen för Vercel-inkompatibel serverkod.",
