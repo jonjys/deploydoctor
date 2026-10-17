@@ -10,7 +10,7 @@ Reads GitHub API files. Never clones, installs, builds or executes repository co
 
 MCP Streamable HTTP endpoint: https://deploydoctor.nyttolabs.com/api/mcp
 Tools: diagnose_build_log, scan_public_repository, get_public_report, get_deploydoctor_plans.
-Three free scans/day per source IP. AI clients may share that allowance.
+One free scan/day per source IP. AI clients may share that allowance.
 The remote plugin does not support private repositories or paid browser sessions.
 Saved reports can be partial or stale. Findings are not deployment or security guarantees.
 No directory listing, AI endorsement, user count or outcome is implied.

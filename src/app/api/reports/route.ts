@@ -2,6 +2,7 @@ import { analyzeGitHubRepository, GitHubApiError, parseGitHubRepoUrl } from "@/l
 import { parseGitRef } from "@/lib/git-ref";
 import { saveReport } from "@/lib/reports";
 import { activePlan, bearerToken, finishScan, requestCustomer, reserveScan, type Entitlement } from "@/lib/access";
+import { scanAllowance } from "@/lib/limits";
 import { maybePrivateRepo, needsTokenPrompt, tokenPromptKey } from "@/lib/github-status";
 import { OIDC_HEADER, verifyGitHubOidc } from "@/lib/github-oidc";
 import { sameOrigin } from "@/lib/stripe";
@@ -76,10 +77,12 @@ export async function POST(request: Request) {
       return Response.json({ error: t(lang, "err.privatePlan"), paywall: true, privateRepo: !viaCi && !plan }, { status: 402 });
     }
     if (!plan) {
-      const quota = await reserveScan(request, oidcRepo ? `repo:${oidcRepo.toLowerCase()}` : undefined);
+      const allowance = scanAllowance(oidcRepo);
+      const quota = await reserveScan(request, allowance);
       if (!quota.allowed) {
         console.log("dd-funnel", JSON.stringify({ step: "paywall", plan: null, reason: "limit" }));
-        return Response.json({ error: t(lang, "err.dailyLimit"),
+        // A free Action scan counts per repository, so it names that allowance instead of the visitor's daily scan.
+        return Response.json({ error: oidcRepo ? t(lang, "err.actionLimit", { n: allowance.limit }) : t(lang, "err.dailyLimit"),
           paywall: true, resetsAt: quota.resetsAt }, { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((Date.parse(quota.resetsAt) - Date.now()) / 1000))) } });
       }
       reservation = quota.id;

@@ -4,7 +4,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { countStatuses, overallLabel, overallOf } from "@/lib/report-summary";
 import { joinFixParts, type freeFixParts } from "@/lib/fix-instructions";
 import { CopyFixesButton as CopyButton } from "@/components/copy-fixes-button";
+import { CopyTextButton } from "@/components/copy-text-button";
 import { useLang, useT } from "@/components/lang";
+import type { FixFirstItem } from "@/lib/report-insights";
 import type { CheckStatus } from "@/types/report";
 
 type IgnoreState = { ignored: ReadonlySet<string>; toggle: (id: string) => void };
@@ -85,4 +87,35 @@ export function WhenOpenRed({ checks, children }: { checks: Array<{ id: string; 
 export function CopyFixes({ parts }: { parts: ReturnType<typeof freeFixParts> }) {
   const { ignored } = useContext(IgnoreContext);
   return <CopyButton instructions={joinFixParts(parts, ignored)} />;
+}
+
+/** The first open items to fix, in fix order; checks the reader ignored drop out, so the list agrees with the overall result. */
+export function FixFirst({ items, limit = 5 }: { items: FixFirstItem[]; limit?: number }) {
+  const { ignored } = useContext(IgnoreContext);
+  const t = useT();
+  const open = items.filter((item) => !ignored.has(item.checkId));
+  if (!open.length) return null;
+  return (
+    <nav className={`fix-first is-${open[0].status}`} aria-label={t("report.fixFirst")}>
+      <strong>{t("report.fixFirst")}</strong>
+      <ol>
+        {open.slice(0, limit).map((item, index) => (
+          <li key={`${item.checkId}-${index}`} className={`is-${item.status}`}>
+            <a className="fix-first-where" href={`#check-${item.checkId}`}>
+              {item.file ? (item.line ? `${item.file}:${item.line}` : item.file) : item.title}
+            </a>
+            {item.file && <span className="fix-first-check">{item.title}</span>}
+            <span className="fix-first-fix">{item.completeFile ? t("report.fixFirstFile", { path: item.completeFile }) : item.fix}</span>
+            {item.command && (
+              <span className="fix-first-command">
+                <code>{item.command}</code>
+                <CopyTextButton text={item.command} label={t("report.copyCommand")} copiedLabel={t("report.copied")} />
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+      {open.length > limit && <a className="fix-first-all" href="#checks">{t("report.fixFirstAll", { n: open.length })}</a>}
+    </nav>
+  );
 }
