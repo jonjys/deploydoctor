@@ -46,7 +46,7 @@ export function hashRequestIp(request: Request) {
 /** Reserves one of today's free scans: per visitor IP, or per repository for free GitHub Action scans. */
 export async function reserveScan(request: Request, { key, limit }: Allowance) {
   const id = crypto.randomUUID();
-  const result = await rpc<{ allowed: boolean; remaining: number; resetsAt: string }>("reserve_scan", {
+  const result = await rpc<{ allowed: boolean; remaining: number; resetsAt: string }>("reserve_scan_limited", {
     p_ip_hash: key ? digest(key) : hashRequestIp(request), p_id: id, p_limit: limit,
   });
   return { ...result, id };

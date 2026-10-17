@@ -38,26 +38,24 @@ test("free allowance: each route reserves with its own limit, and only those rou
   assert.match(read("src/lib/access.ts"), /p_id: id, p_limit: limit,/);
 });
 
-test("free allowance: the migration takes the limit as a parameter, keeps 3 for two-argument calls and leaves finish_scan alone", () => {
+test("free allowance: the migration only adds a limited reserve function and leaves reserve_scan and finish_scan alone", () => {
   const dir = "supabase/migrations";
   const files = readdirSync(join(root, dir)).sort();
-  const latest = files.filter((file) => /function public\.reserve_scan\(/.test(read(join(dir, file)))).at(-1);
+  const latest = files.filter((file) => /function public\.reserve_scan_limited\(/.test(read(join(dir, file)))).at(-1);
   assert.equal(latest, "20261017090000_reserve_scan_limit.sql");
   assert.ok(latest > "20261012090000", "after the last applied migration");
-  const sql = read(join(dir, latest));
-  assert.match(sql, /drop function public\.reserve_scan\(text, uuid\);/);
-  assert.match(sql, /create function public\.reserve_scan\(p_ip_hash text, p_id uuid, p_limit integer default 3\)/);
-  assert.match(sql, /if p_limit is null or p_limit < 1 or p_limit > 100 then\s+raise exception/);
+  const sql = read(join(dir, latest)).replace(/--.*$/gm, "");
+  assert.doesNotMatch(sql, /\b(?:drop|alter|truncate|delete)\b/i, "nothing existing is removed or changed");
+  assert.match(sql, /create function public\.reserve_scan_limited\(p_ip_hash text, p_id uuid, p_limit integer\)/);
+  assert.match(sql, /if p_limit is null or p_limit < 1 or p_limit > 3 then\s+raise exception/);
   assert.match(sql, /where public\.scan_limits\.scans < p_limit/);
   assert.match(sql, /'remaining', p_limit - coalesce\(v_count, p_limit\)/);
-  // The function body uses only p_limit; 3 survives as the default alone.
-  const body = sql.slice(sql.indexOf("as $$"), sql.indexOf("end $$"));
-  assert.doesNotMatch(body, /\b3\b/);
-  // The table accepts every limit the function does.
-  assert.match(sql, /check \(scans between 0 and 100\)/);
-  assert.match(sql, /revoke all on function public\.reserve_scan\(text, uuid, integer\) from public, anon, authenticated;/);
-  assert.match(sql, /grant execute on function public\.reserve_scan\(text, uuid, integer\) to service_role;/);
-  assert.doesNotMatch(sql.replace(/--.*$/gm, ""), /finish_scan/);
+  assert.match(sql, /revoke all on function public\.reserve_scan_limited\(text, uuid, integer\) from public, anon, authenticated;/);
+  assert.match(sql, /grant execute on function public\.reserve_scan_limited\(text, uuid, integer\) to service_role;/);
+  assert.doesNotMatch(sql, /finish_scan|function public\.reserve_scan\(/);
+  // Every allowance the app uses fits the function's range and the scan_limits cap of 3.
+  for (const limit of [FREE_SCANS_PER_DAY, FREE_DIAGNOSES_PER_DAY, FREE_ACTION_SCANS_PER_DAY]) assert.ok(limit >= 1 && limit <= 3, String(limit));
+  assert.match(read("src/lib/access.ts"), /rpc<[^>]+>\("reserve_scan_limited"/);
 });
 
 // Website wording for the old allowance, in either language.
