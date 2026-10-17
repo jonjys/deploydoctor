@@ -120,7 +120,7 @@ export default function CiPage() {
         <aside className="guide-cta">
           <div>
             <h2>Try it on a public repository first</h2>
-            <p>Three free scans a day on the website and in the Action, no account. A pass removes the limit and adds private repositories.</p>
+            <p>One free scan a day on the website and 3 a day for each public repository in the Action, no account. A {plans.day.usd} pass removes the limit for 24 hours and adds private repositories.</p>
           </div>
           <Link className="cta-button" href="/">Scan a repository →</Link>
         </aside>

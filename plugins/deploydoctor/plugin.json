@@ -24,7 +24,7 @@
       "interface": {
         "displayName": "DeployDoctor",
         "shortDescription": "Triage build and deploy errors",
-        "longDescription": "Paste a sanitized build log to investigate module resolution errors, npm ERESOLVE peer conflicts or React hydration mismatches. Get matching line numbers, possible causes, required context, verification steps and official documentation. Log triage uses deterministic rules: no code execution, storage or model API call. Unsupported errors request context rather than inventing a fix. Public GitHub repository scans also return saved file/line evidence and use the existing three scans/day per source-IP allowance. Private repositories and paid website sessions are not supported remotely. No deployment guarantee.",
+        "longDescription": "Paste a sanitized build log to investigate module resolution errors, npm ERESOLVE peer conflicts or React hydration mismatches. Get matching line numbers, possible causes, required context, verification steps and official documentation. Log triage uses deterministic rules: no code execution, storage or model API call. Unsupported errors request context rather than inventing a fix. Public GitHub repository scans also return saved file/line evidence and use the free allowance of one scan/day per source IP. Private repositories and paid website sessions are not supported remotely. No deployment guarantee.",
         "developerName": "Nytto Labs",
         "category": "Developer Tools",
         "capabilities": [
