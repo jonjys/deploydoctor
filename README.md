@@ -1,5 +1,11 @@
 # DeployDoctor
 
+## Vercel Deployment Rescue Kit
+
+Works locally but fails on Vercel? The [Vercel Deployment Rescue Kit](https://fieldworkstudio.gumroad.com/l/vercel-deployment-rescue-kit) is a **$19 one-time download**: a 14-page Next.js/Vercel debugging playbook, a 42-point editable release checklist and 5 reusable AI diagnosis prompts (PDF + CSV + Markdown in one ZIP).
+
+Start with [three free debugging checks](https://fieldworkstudio.gumroad.com/p/works-locally-fails-on-vercel-start-with-these-3-checks), or use the [free preflight scanner](https://deploydoctor.nyttolabs.com). The kit is independent educational material by NyttoLabs, not a hosted scan pass or a done-for-you debugging service.
+
 ## AI plugin
 
 Connect a custom remote MCP server at `https://deploydoctor.nyttolabs.com/api/mcp`.
