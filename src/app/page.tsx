@@ -81,6 +81,20 @@ export default async function Home() {
         <p className="plugin-line is-hint">{t("home.urlTrick")}</p>
       </section>
 
+      <section className="pass-strip" aria-labelledby="rescue-kit-heading">
+        <div>
+          <p className="section-kicker">{lang === "sv" ? "Nedladdningsbar guide · $19 engångsköp" : "Downloadable guide · $19 one time"}</p>
+          <h2 id="rescue-kit-heading">Vercel Deployment Rescue Kit</h2>
+          <p>{lang === "sv"
+            ? "Fungerar lokalt men kraschar på Vercel? Få en 14-sidig felsökningsguide, en redigerbar checklista med 42 punkter och 5 AI-prompter. PDF, CSV och Markdown i ett ZIP-paket."
+            : "Works locally but fails on Vercel? Get a 14-page debugging playbook, a 42-point editable release checklist and 5 AI prompts. PDF, CSV and Markdown in one ZIP."}</p>
+        </div>
+        <div className="pass-actions">
+          <a className="cta-button" href="https://fieldworkstudio.gumroad.com/l/vercel-deployment-rescue-kit">{lang === "sv" ? "Se kitet på Gumroad · $19" : "Get the kit on Gumroad · $19"}</a>
+          <a href="https://fieldworkstudio.gumroad.com/p/works-locally-fails-on-vercel-start-with-these-3-checks">{lang === "sv" ? "Läs 3 gratis felsökningstips" : "Read 3 free debugging tips"}</a>
+        </div>
+      </section>
+
       <section className="checks-panel" aria-labelledby="checks-heading">
         <div>
           <p className="section-kicker">{t("home.preflight")}</p>
