@@ -26,6 +26,8 @@ export default async function Home() {
     <main className="site-shell home-page">
       <SiteNav current="scan" />
 
+      <RecentScans />
+
       <section className="hero">
         <div className="eyebrow">
           <span className="eyebrow-icon">✦</span>
@@ -67,7 +69,6 @@ export default async function Home() {
             <span className="mini-check">✓</span> {t("home.trust.share")}
           </span>
         </div>
-        <RecentScans />
         <p className="plugin-line">
           <Link href="/diagnose">{t("home.diagLine")}</Link>
         </p>

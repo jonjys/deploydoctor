@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useT } from "@/components/lang";
+import { recentRepositories, type RecentScan } from "@/lib/recent-scans";
 
 type Kind = "report" | "diagnosis";
-type Recent = { id: string; repo: string; at: number };
+type Recent = RecentScan;
 
 const RECENT_KEY = "dd-recent-reports";
 const ANSWERS_KEY = "dd-solved";
@@ -30,7 +31,7 @@ export function SolvedPrompt({ kind, target, repo }: { kind: Kind; target: strin
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the stored answer only exists in the browser
     if (typeof saved === "boolean") setAnswer(saved);
     if (kind === "report" && repo) {
-      const recent = read<Recent[]>(RECENT_KEY, []).filter((item) => item.id !== target);
+      const recent = recentRepositories(read<unknown>(RECENT_KEY, []), Date.now(), 5).filter((item) => item.id !== target);
       write(RECENT_KEY, [{ id: target, repo, at: Date.now() }, ...recent].slice(0, 5));
     }
   }, [kind, target, repo]);
@@ -75,25 +76,27 @@ export function SolvedPrompt({ kind, target, repo }: { kind: Kind; target: strin
   );
 }
 
-/** On the home page: reports this browser opened and has not answered yet, so people can come back and say if it worked. */
+/** Return to the latest opened report per repository, even after confirming a fix. */
 export function RecentScans() {
   const t = useT();
   const [open, setOpen] = useState<Recent[]>([]);
   useEffect(() => {
-    const answers = read<Record<string, boolean>>(ANSWERS_KEY, {});
-    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the list only exists in the browser
-    setOpen(read<Recent[]>(RECENT_KEY, []).filter((item) => !(item.id in answers) && item.at > cutoff).slice(0, 3));
+    setOpen(recentRepositories(read<unknown>(RECENT_KEY, [])));
   }, []);
   if (!open.length) return null;
   return (
     <div className="recent-scans" role="region" aria-label={t("solved.recentTitle")}>
-      <p>{t("solved.recentTitle")}</p>
+      <h2>{t("solved.recentTitle")}</h2>
+      <p className="recent-scans-note">{t("solved.recentNote")}</p>
       <ul>
         {open.map((item) => (
           <li key={item.id}>
             <span>{item.repo.replace(/^https:\/\/github\.com\//, "")}</span>
-            <Link href={`/r/${item.id}#solved`}>{t("solved.recentOpen")} →</Link>
+            <div className="recent-scan-actions">
+              <Link href={`/r/${item.id}#since-last-scan`}>{t("solved.recentOpen")} →</Link>
+              <Link href={`/?repo=${encodeURIComponent(item.repo)}`}>{t("solved.recentRescan")} ↻</Link>
+            </div>
           </li>
         ))}
       </ul>

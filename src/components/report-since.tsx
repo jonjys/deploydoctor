@@ -27,7 +27,7 @@ export function SinceLastScan({ diff, previous, lang }: { diff: ReportDiff; prev
   const date = new Date(previous.created_at).toLocaleString(dateLocale(lang), { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
   const changed = hasChanges(diff);
   return (
-    <section className="since-last" aria-labelledby="since-heading">
+    <section className="since-last" id="since-last-scan" aria-labelledby="since-heading">
       <div className="since-last-head">
         <h2 id="since-heading">{t(lang, "report.sinceTitle")}</h2>
         <Link href={`/r/${previous.id}`}>{t(lang, "report.sinceLink", { date: `${date} UTC` })}</Link>

@@ -144,6 +144,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           </div>
           <ScoreCard checks={checkStates} notNext={neutral} />
         </div>
+        {previous && since && <SinceLastScan diff={since} previous={previous} lang={lang} />}
         <FixFirst items={fixFirst} />
         <div className="report-meta">
           <a className="report-repo" href={report.repo_url} target="_blank" rel="noreferrer">
@@ -169,8 +170,9 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
             <p>{t("report.partialNote")}</p>
           </aside>
         )}
-        {previous && since && <SinceLastScan diff={since} previous={previous} lang={lang} />}
       </header>
+
+      <WatchBox reportId={id} repo={repoName} isPrivate={report.is_private} />
 
       <section className="results-list" id="checks" aria-label="Deployment checks">
         {scanned.map((category) => {
@@ -251,7 +253,6 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         </div>
       </section>
 
-      <WatchBox reportId={id} repo={repoName} isPrivate={report.is_private} />
 
       {!report.is_private && (
         <section className="badge-section" aria-labelledby="badge-heading">
