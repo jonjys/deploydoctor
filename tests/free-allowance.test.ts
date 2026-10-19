@@ -89,10 +89,14 @@ test("free allowance copy: the numbers match the limits and the $2 pass is the n
   assert.equal(t("sv", "pricing.freeScans"), `${FREE_SCANS_PER_DAY} publik skanning / dag`);
   assert.match(t("en", "pricing.freeDiag"), new RegExp(`^${FREE_DIAGNOSES_PER_DAY} AI build log diagnosis / day$`));
   assert.match(t("sv", "pricing.freeDiag"), new RegExp(`^${FREE_DIAGNOSES_PER_DAY} AI-diagnos av bygglogg / dag$`));
-  assert.match(t("en", "diag.sub"), new RegExp(`${FREE_DIAGNOSES_PER_DAY} free diagnosis a day, then \\$2 for 24 hours unlimited\\.$`));
-  assert.match(t("sv", "diag.sub"), new RegExp(`${FREE_DIAGNOSES_PER_DAY} gratis diagnos per dag, sedan 19 kr för 24 timmar obegränsat\\.$`));
   assert.match(t("en", "account.noPlan"), /1 free scan and 1 free AI diagnosis a day/);
   assert.match(t("sv", "account.noPlan"), /1 gratis skanning och 1 gratis AI-diagnos per dag/);
+  for (const lang of ["en", "sv"] as const) {
+    assert.match(t(lang, "diag.sub"), /10/);
+    assert.match(t(lang, "pricing.diag"), /10/);
+    assert.match(t(lang, "pricing.capacity"), /10/);
+    assert.doesNotMatch(t(lang, "pricing.diag"), /unlimited|obegränsat/i);
+  }
   // The limit message says the free one is used and that the pass continues right away; the paywall below repeats it.
   assert.match(t("en", "err.dailyLimit"), /^You have used today's free scan\. Get 24 hours for \$2 and scan again right away/);
   assert.match(t("sv", "err.dailyLimit"), /^Du har använt dagens gratis skanning\. Köp 24 timmar för 19 kr och skanna igen direkt/);
@@ -100,8 +104,6 @@ test("free allowance copy: the numbers match the limits and the $2 pass is the n
   assert.match(t("sv", "diag.limit"), /^Du har använt dagens gratis diagnos\. Köp 24 timmar för 19 kr och diagnostisera igen direkt/);
   assert.equal(t("en", "paywall.title"), "Continue right away for $2");
   assert.equal(t("sv", "paywall.title"), "Fortsätt direkt för 19 kr");
-  assert.match(t("en", "paywall.body"), /works the moment you pay: unlimited scans and AI diagnoses, private repos included\. 7 days is \$5\./);
-  assert.match(t("sv", "paywall.body"), /gäller så fort du har betalat: obegränsade skanningar och AI-diagnoser, privata repon ingår\. 7 dagar kostar 49 kr\./);
   const changed: MessageKey[] = ["home.copy", "home.trust.free", "pricing.freeDiag", "err.actionLimit", "diag.sub", "diag.limit",
     "paywall.title", "paywall.body", "err.dailyLimit", "pricing.freeScans", "account.noPlan"];
   for (const key of changed) {

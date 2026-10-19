@@ -29,6 +29,7 @@ export default async function Pricing() {
       <ScanCheckoutButton plan={key}>{key === "day" ? t("pricing.cta.day") : key === "week" ? t("pricing.cta.week") : t("pricing.cta.choose")} →</ScanCheckoutButton>
     </article>)}
   </section><section className="pricing-notes"><h2>{t("pricing.notesTitle")}</h2>
+    <p>{t("pricing.capacity")}</p>
     <p>{t("pricing.note2")}</p>
     <p>{t("pricing.note3")}</p>
   </section></main>;

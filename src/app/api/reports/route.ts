@@ -1,3 +1,4 @@
+import { workLimitResponse } from "@/lib/work-budget";
 import { analyzeGitHubRepository, GitHubApiError, parseGitHubRepoUrl } from "@/lib/github";
 import { parseGitRef } from "@/lib/git-ref";
 import { saveReport } from "@/lib/reports";
@@ -93,6 +94,8 @@ export async function POST(request: Request) {
     if (viaCi) return Response.json(reportJson(report), { status: 201, headers: { "Cache-Control": "no-store" } });
     return Response.json({ id: report.id, href: `/r/${report.id}` }, { status: 201 });
   } catch (error) {
+    const limited = workLimitResponse(error, lang);
+    if (limited) return limited;
     if (error instanceof SyntaxError) {
       return Response.json({ error: t(lang, "err.invalidJson") }, { status: 400 });
     }

@@ -24,6 +24,8 @@ export async function GET(request: Request) {
   await db(query("repo_watches", { confirmed_at: "is.null", created_at: `lt.${new Date(Date.now() - PENDING_DAYS * 86_400_000).toISOString()}` }),
     { method: "DELETE", headers: { Prefer: "return=minimal" } }).catch(() => console.error("Watch cleanup failed"));
 
+  await db(query("public_scan_cache", { expires_at: `lt.${new Date().toISOString()}` }),
+    { method: "DELETE", headers: { Prefer: "return=minimal" } }).catch(() => console.error("Scan cache cleanup failed"));
   const summary = await runWatchCron({
     claim: (limit) => rpc<WatchRow[]>("claim_repo_watches", { p_limit: limit }),
     loadReport: async (id) => (await db<StoredReport[]>(query("reports", { id: `eq.${id}`, select: "id,repo_url,results,created_at", limit: "1" })))[0] ?? null,

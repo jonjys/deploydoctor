@@ -1,3 +1,6 @@
+import { detectionRules } from "@/lib/budget-policy";
+import { hashRequestIp } from "@/lib/access";
+import { acquireWork, workLimitResponse } from "@/lib/work-budget";
 import { activePlan, customerSession } from "@/lib/access";
 import { defaultChecks, describeStack } from "@/lib/stack";
 import { langFromRequest, t } from "@/lib/i18n";
@@ -25,9 +28,12 @@ export async function POST(request: Request) {
       const plan = await activePlan(await customerSession());
       if (!allowsPrivate(plan?.plan) || privateToken.length > 300) privateToken = undefined;
     }
+    await acquireWork(detectionRules(hashRequestIp(request)));
     const { stack } = await detectRepositoryStack(body.repoUrl, { privateToken });
     return Response.json({ stack, summary: describeStack(stack, lang), checks: defaultChecks(stack) });
   } catch (error) {
+    const limited = workLimitResponse(error, lang);
+    if (limited) return limited;
     if (error instanceof SyntaxError) return Response.json({ error: t(lang, "err.invalidJson") }, { status: 400 });
     if (error instanceof GitHubApiError) {
       // The plan is read only on this path: without a pass the visitor gets the $2 offer, with one a prompt to paste

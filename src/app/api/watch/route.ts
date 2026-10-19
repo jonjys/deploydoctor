@@ -1,3 +1,5 @@
+import { mailRules } from "@/lib/budget-policy";
+import { acquireWork, workLimitResponse } from "@/lib/work-budget";
 import { hashRequestIp } from "@/lib/access";
 import { rpc } from "@/lib/db";
 import { GitHubApiError, githubRequest, parseGitHubRepoUrl } from "@/lib/github";
@@ -45,6 +47,8 @@ export async function POST(request: Request) {
       return Response.json({ error: t(lang, "watch.badTarget") }, { status: 400 });
     }
 
+    // Retain this lease for the full cooldown, including across fixed quota window boundaries.
+    await acquireWork(mailRules(email), `mail:${email}`, 1, 900);
     const { token, hash } = newWatchToken();
     const result = await rpc<{ status: "created" | "pending" | "confirmed" | "ip_limit" | "email_limit"; id?: string }>("request_repo_watch", {
       p_ip_hash: hashRequestIp(request), p_email: email, p_repo_url: repoUrl, p_token_hash: hash, p_report_id: reportId,
@@ -63,6 +67,8 @@ export async function POST(request: Request) {
     console.log("dd-funnel", JSON.stringify({ step: "watch_request", status: result.status }));
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    const limited = workLimitResponse(error, lang);
+    if (limited) return limited;
     if (error instanceof SyntaxError) return Response.json({ error: t(lang, "err.invalidJson") }, { status: 400 });
     if (error instanceof GitHubApiError) return Response.json({ error: error.localized(lang) }, { status: error.status });
     console.error("Watch request failed:", error instanceof Error ? error.name : "unknown");

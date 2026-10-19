@@ -1,4 +1,5 @@
 import "server-only";
+import { AI_MAX_OUTPUT_TOKENS } from "@/lib/budget-policy";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
@@ -45,7 +46,7 @@ Write plainly, no marketing tone, no em dashes. Answer in the language you are a
 let client: Anthropic | null = null;
 function anthropic(): Anthropic {
   if (!process.env.ANTHROPIC_API_KEY) throw new DiagnoseUnavailable();
-  client ??= new Anthropic({ timeout: 55_000, maxRetries: 1 });
+  client ??= new Anthropic({ timeout: 55_000, maxRetries: 0 });
   return client;
 }
 
@@ -69,9 +70,7 @@ export async function diagnoseWithClaude(rawLog: string, lang: Lang): Promise<{ 
 
   const response = await anthropic().beta.messages.parse({
     model: MODEL,
-    max_tokens: 8000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    max_tokens: AI_MAX_OUTPUT_TOKENS,
     output_config: { effort: "medium", format: betaZodOutputFormat(DiagnosisSchema) },
     system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
     messages: [{
