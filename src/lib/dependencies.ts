@@ -1,3 +1,4 @@
+import ts from "typescript";
 import { builtinModules } from "node:module";
 
 /**
@@ -99,21 +100,31 @@ export function blankTemplates(code: string): string {
 }
 
 /** Every import that exists at runtime. Type-only imports (`import type`, `import { type A }`) are left out. */
-export function moduleImports(source: string): ImportUse[] {
-  const code = blankTemplates(stripComments(source));
-  const lineOf = (index: number) => code.slice(0, index).split("\n").length;
+export function moduleImports(source: string, fileName = "source.tsx", includeTypes = false): ImportUse[] {
+  const parsed = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true);
   const found: ImportUse[] = [];
-  const staticImport = /(?:^|[;\n}])\s*(import|export)\s+(type\s+)?(?:([^"'`;]*?)\s+from\s+)?["']([^"'\n]+)["']/g;
-  for (const match of code.matchAll(staticImport)) {
-    const clause = (match[3] ?? "").trim();
-    const onlyTypes = /^\{\s*(?:type\s+[^,}]+,?\s*)+\}$/.test(clause);
-    // `export { a }` without `from` never reaches here; `export * from` and `export { a } from` do.
-    if (match[2] || onlyTypes) continue;
-    found.push({ specifier: match[4], line: lineOf(match.index + match[0].indexOf(match[1])), kind: "static" });
-  }
-  for (const match of code.matchAll(/\b(?:require|import)\(\s*["']([^"'\n]+)["']\s*\)/g)) {
-    found.push({ specifier: match[1], line: lineOf(match.index), kind: "call" });
-  }
+  const add = (literal: ts.StringLiteralLike, kind: ImportUse["kind"], position = literal.getStart(parsed)) => {
+    found.push({ specifier: literal.text, line: parsed.getLineAndCharacterOfPosition(position).line + 1, kind });
+  };
+  const visit = (node: ts.Node) => {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      const clause = node.importClause;
+      const typesOnly = clause?.isTypeOnly || (!clause?.name && clause?.namedBindings && ts.isNamedImports(clause.namedBindings)
+        && clause.namedBindings.elements.length > 0 && clause.namedBindings.elements.every(item => item.isTypeOnly));
+      if (includeTypes || !typesOnly) add(node.moduleSpecifier, "static", node.getStart(parsed));
+    } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      const typesOnly = node.isTypeOnly || (node.exportClause && ts.isNamedExports(node.exportClause)
+        && node.exportClause.elements.length > 0 && node.exportClause.elements.every(item => item.isTypeOnly));
+      if (includeTypes || !typesOnly) add(node.moduleSpecifier, "static", node.getStart(parsed));
+    } else if (ts.isCallExpression(node) && node.arguments.length === 1 && ts.isStringLiteralLike(node.arguments[0])
+      && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === "require"))) {
+      add(node.arguments[0], "call");
+    } else if (includeTypes && ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) {
+      add(node.argument.literal, "static");
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(parsed);
   return found;
 }
 

@@ -137,10 +137,10 @@ const en: AnalysisText = {
   env: {
     missing: (n, names) => `${n} env variable${n === 1 ? " is" : "s are"} missing from .env.example: ${names}`,
     exposed: (n, names) => `${n} possible secret${n === 1 ? " is" : "s are"} exposed in the browser: ${names}`,
-    fixMissing: (names) => `Add empty lines to .env.example in the repository root: ${names}; push the file`,
+    fixMissing: (names) => `Document ${names} in .env.example and verify the values in Vercel. Repository files cannot prove whether hosting variables are set`,
     fixExposed: "remove NEXT_PUBLIC_ from the secrets and rotate any exposed keys",
     missingProblem: (name) => `${name} is missing from .env.example`,
-    missingFix: (name) => `Add ${name}= (empty) to .env.example; set the value privately in Vercel.`,
+    missingFix: (name) => `Document ${name} in .env.example and verify it is set privately in Vercel; this scan cannot read hosting variables.`,
     exposedProblem: (name) => `${name} may expose a secret`,
     exposedFix: (name) => `Use ${name} on the server only and rotate the old key.`,
     evidenceMissing: (name) => `${name} → missing from committed env template`,

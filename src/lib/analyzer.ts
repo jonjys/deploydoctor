@@ -138,19 +138,8 @@ function checkNextEntrypoint(snapshot: RepositorySnapshot, x: AnalysisText): Che
     hasNext ? ["package.json → next", x.next.routeFound] : []);
 }
 
-function extractImports(source: string): Array<{ specifier: string; line: number }> {
-  const imports = new Map<string, { specifier: string; line: number }>();
-  const staticImport = /(?:import|export)\s+(?:type\s+)?(?:[^"'`;]*?\s+from\s+)?["']([^"']+)["']/g;
-  const callImport = /(?:require|import)\(\s*["']([^"']+)["']\s*\)/g;
-
-  for (const matcher of [staticImport, callImport]) {
-    let match: RegExpExecArray | null;
-    while ((match = matcher.exec(source))) {
-      const line = lineAt(source, match.index);
-      imports.set(`${line}:${match[1]}`, { specifier: match[1], line });
-    }
-  }
-  return [...imports.values()];
+function extractImports(source: string, fileName = "source.tsx") {
+  return moduleImports(source, fileName, true);
 }
 
 function possibleImportTargets(base: string): string[] {
@@ -171,13 +160,12 @@ function possibleImportTargets(base: string): string[] {
  * TypeScript resolves it. Without a tsconfig entry, `@/` means `src/` or the repository root.
  */
 function aliasRoots(snapshot: RepositorySnapshot): Array<{ prefix: string; roots: string[] }> {
-  const tsconfig = snapshot.contents.get("tsconfig.json") ?? snapshot.contents.get("jsconfig.json") ?? "";
-  const aliases: Array<{ prefix: string; roots: string[] }> = [];
-  for (const match of tsconfig.matchAll(/["'](@\/(?:[^"'*]*\/)?)\*["']\s*:\s*\[([^\]]*)\]/g)) {
-    const roots = [...match[2].matchAll(/["']([^"']*)\*["']/g)].map((target) => target[1].replace(/^\.\//, "").replace(/\/$/, ""));
-    if (roots.length) aliases.push({ prefix: match[1], roots });
-  }
-  if (!aliases.some((alias) => alias.prefix === "@/")) aliases.push({ prefix: "@/", roots: ["src", ""] });
+  const raw = snapshot.contents.get("tsconfig.json") ?? snapshot.contents.get("jsconfig.json") ?? "";
+  const config = tsconfigAliases(raw);
+  const aliases = config.prefixes.filter(item => item.prefix.startsWith("@/")).map(item => ({
+    prefix: item.prefix, roots: item.targets.map(target => path.posix.join(config.baseUrl ?? "", target).replace(/\/$/, "").replace(/^\.$/, "")),
+  }));
+  if (!aliases.some(alias => alias.prefix === "@/")) aliases.push({ prefix: "@/", roots: config.baseUrl !== undefined ? [config.baseUrl] : ["src", ""] });
   return aliases.sort((left, right) => right.prefix.length - left.prefix.length);
 }
 
@@ -192,7 +180,7 @@ function withCaseOf(wanted: string, actual: string): string {
  */
 export type ImportProblem =
   | { kind: "case"; file: string; line: number; specifier: string; actual: string; exact: string }
-  | { kind: "missing"; file: string; line: number; specifier: string; target: string };
+  | { kind: "missing"; file: string; line: number; specifier: string; target: string; uncertain?: boolean };
 
 /** Every unresolved relative or `@/` import in the snapshot's source files. The imports check and the patch service share it. */
 export function importProblems(snapshot: RepositorySnapshot): ImportProblem[] {
@@ -204,9 +192,9 @@ export function importProblems(snapshot: RepositorySnapshot): ImportProblem[] {
 
   for (const [file, source] of snapshot.contents) {
     // next-env.d.ts intentionally references generated .next type files that are gitignored.
-    if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file) || path.posix.basename(file) === "next-env.d.ts") continue;
+    if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file) || /\.d\.[cm]?ts$/.test(file)) continue;
 
-    for (const { specifier: original, line } of extractImports(source)) {
+    for (const { specifier: original, line } of extractImports(source, file)) {
       const specifier = original.split(/[?#]/)[0];
       let bases: Array<{ base: string; toSpecifier: (resolved: string) => string }> = [];
       if (specifier.startsWith("./") || specifier.startsWith("../")) {
@@ -233,7 +221,13 @@ export function importProblems(snapshot: RepositorySnapshot): ImportProblem[] {
           problems.push({ kind: "case", file, line, specifier: original, actual: caseMatch.actual, exact });
           continue;
         }
-        problems.push({ kind: "missing", file, line, specifier: original, target: candidates[0] });
+        const scripts = snapshot.contents.get("package.json") ?? "";
+        const config = snapshot.contents.get("tsconfig.json") ?? snapshot.contents.get("jsconfig.json") ?? "";
+        const uncertain = snapshot.partialReasons?.includes("truncated_tree") || /"extends"\s*:/.test(config)
+          || /(?:generate|codegen|prisma\s+generate)/i.test(scripts)
+          || candidates.some(candidate => /(?:^|\/)(?:generated|__generated__|\.next|\.nuxt|\.svelte-kit)(?:\/|\.)/.test(candidate)
+            || ignoringRule(snapshot.contents.get(".gitignore") ?? "", candidate));
+        problems.push({ kind: "missing", file, line, specifier: original, target: candidates[0], ...(uncertain ? { uncertain: true } : {}) });
       }
     }
   }
@@ -252,7 +246,7 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
     return makeCheck(
       "imports",
       x.titles.imports,
-      "red",
+      problems.some(problem => problem.kind === "case" || !problem.uncertain) ? "red" : "yellow",
       x.imports.summary(missing.length, caseMismatches),
       missing[0].fix,
       missing.map((item) => `${item.file}:${item.line} → ${item.problem}`), missing,
@@ -286,20 +280,8 @@ const MIDDLEWARE = /^(?:src\/)?middleware\.[cm]?[jt]s$/;
 const NODE_RUNTIME_CONFIG = /^\s*export\s+const\s+config\s*=\s*\{[^}]*\bruntime\s*:\s*["']nodejs["']/m;
 
 /** Imports that exist at runtime: type-only imports and commented-out lines are skipped. */
-function runtimeImports(source: string): Array<{ specifier: string; line: number }> {
-  const found: Array<{ specifier: string; line: number }> = [];
-  source.split("\n").forEach((text, index) => {
-    if (/^\s*(?:\/\/|\/?\*)/.test(text)) return;
-    const matchers = [/^\s*(?:import|export)\s+(type\s+)?(?:([^"'`;]*?)\s+from\s+)?["']([^"']+)["']/g,
-      /\b(?:require|import)\(\s*["']([^"']+)["']\s*\)/g];
-    for (const match of text.matchAll(matchers[0])) {
-      const clause = match[2] ?? "";
-      const onlyTypes = /^\{\s*(?:type\s+[^,}]+,?\s*)+\}$/.test(clause.trim());
-      if (!match[1] && !onlyTypes) found.push({ specifier: match[3], line: index + 1 });
-    }
-    for (const match of text.matchAll(matchers[1])) found.push({ specifier: match[1], line: index + 1 });
-  });
-  return found;
+function runtimeImports(source: string) {
+  return moduleImports(source);
 }
 
 function edgeRuntimeFindings(snapshot: RepositorySnapshot, x: AnalysisText): Finding[] {
@@ -1108,7 +1090,7 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
   };
 
   if (evidence.length) {
-    return withEnvExample(makeCheck("env", title, "red",
+    return withEnvExample(makeCheck("env", title, exposed.size ? "red" : "yellow",
       [missing.length ? x.env.missing(missing.length, missing.join(", ")) : "",
         exposed.size ? x.env.exposed(exposed.size, [...exposed].join(", ")) : "",
         ...conventionProblems, optionalProblem].filter(Boolean).join("; ") + ".",
