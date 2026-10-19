@@ -1,4 +1,9 @@
 import "server-only";
+import { db, query } from "@/lib/db";
+import { digest } from "@/lib/session-token";
+import { readRepositoryArchive } from "@/lib/repository-archive";
+import { acquireWork, releaseWork } from "@/lib/work-budget";
+import { githubRules } from "@/lib/budget-policy";
 
 import { analyzeSnapshot, MISNAMED_ENV_TEMPLATE, type RepositorySnapshot } from "@/lib/analyzer";
 import { detectStack, type Stack } from "@/lib/stack";
@@ -17,6 +22,7 @@ const MAX_LOCKFILE_BYTES = 8_000_000;
 
 type GitHubRepository = {
   default_branch: string;
+  pushed_at?: string | null;
   private: boolean;
 };
 
@@ -84,6 +90,7 @@ export function parseGitHubRepoUrl(input: string): {
 
 /** `userToken`: the token is the buyer's own, so a 401, 403 or 404 means it cannot read the repository. */
 export async function githubRequest<T>(pathname: string, token?: string, userToken = false): Promise<T> {
+  if (token && token === process.env.GITHUB_TOKEN) await acquireWork(githubRules());
   const response = await fetch(`${GITHUB_API}${pathname}`, {
     headers: {
       Accept: "application/vnd.github+json",
@@ -133,66 +140,53 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
   // CI scans the pull request head; the website scans the default branch.
   const ref = options.ref && options.ref !== repository.default_branch ? options.ref : undefined;
   // With a ref, a 404 means the ref is missing, not that the token lacks access.
-  const tree = await githubRequest<GitTree>(
-    `${repoPath}/git/trees/${encodeURIComponent(ref ?? repository.default_branch)}?recursive=1`, token, userToken && !ref,
-  ).catch((error: unknown) => {
-    if (ref && error instanceof GitHubApiError && error.status === 404) throw new GitHubApiError(`Branch or commit "${ref}" was not found in the repository.`, 404, "gh.refNotFound");
-    throw error;
-  });
-  const entries = tree.tree
-    .filter((entry): entry is typeof entry & { type: "blob" | "tree" } =>
-      entry.type === "blob" || entry.type === "tree",
-    )
-    .map(({ path, type, size }) => ({ path, type, size }));
-  const sourceFiles = tree.tree.filter(
-    (entry) => entry.type === "blob" && SOURCE_FILE.test(entry.path),
-  );
-  const interesting = tree.tree
-    .filter(
-      (entry) =>
-        entry.type === "blob" &&
-        ((ROOT_LOCKFILE.test(entry.path) && (entry.size ?? 0) <= MAX_LOCKFILE_BYTES) ||
-        ((entry.size ?? 0) <= MAX_FILE_BYTES &&
-        (SOURCE_FILE.test(entry.path) ||
-          entry.path === "package.json" ||
-          entry.path === ".gitignore" ||
-          entry.path === "vercel.json" ||
-          /^(?:tsconfig|jsconfig)\.json$/.test(entry.path) ||
-          /\.prisma$/.test(entry.path) ||
-          MIGRATION_FILE.test(entry.path) ||
-          MISNAMED_ENV_TEMPLATE.test(entry.path) ||
-          /(?:^|\/)\.env(?:\..+)?$/.test(entry.path)))),
-    )
-    .sort((left, right) => priorityFor(left.path) - priorityFor(right.path) || left.path.localeCompare(right.path));
-  const requestLimit = token ? 180 : 48;
-  const selected = interesting.slice(0, requestLimit);
-  const contents = new Map<string, string>();
-  let readFailures = 0;
-  const reasons = new Set<string>();
-  const started = Date.now();
-  if (tree.truncated) reasons.add("truncated_tree");
-  if (interesting.length > requestLimit) reasons.add("file_limit");
-  if (sourceFiles.some((entry) => (entry.size ?? 0) > MAX_FILE_BYTES)) reasons.add("file_size");
-
-  for (let start = 0; start < selected.length; start += 8) {
-    if (Date.now() - started > 35_000) { reasons.add("time_limit"); break; }
-    if (reasons.has("rate_limit")) break;
-    const batch = selected.slice(start, start + 8);
-    const loaded = await Promise.all(
-      batch.map(async (entry) => {
-        try {
-          const blob = await githubRequest<GitBlob>(`${repoPath}/git/blobs/${entry.sha}`, token);
-          if (blob.encoding !== "base64") throw new Error("Unsupported blob encoding");
-          return [entry.path, Buffer.from(blob.content.replace(/\n/g, ""), "base64").toString("utf8")] as const;
-        } catch (error) {
-          readFailures += 1;
-          reasons.add(error instanceof GitHubApiError && error.status === 429 ? "rate_limit" : "read_error");
-          return null;
-        }
-      }),
-    );
-    for (const item of loaded) if (item) contents.set(item[0], item[1]);
+  const cacheKey = !options.privateToken && !repository.private && repository.pushed_at
+    ? digest(JSON.stringify(["scan-v2", owner.toLowerCase(), name.toLowerCase(), repository.pushed_at, ref ?? "", [...(options.checks ?? [])].sort(), options.lang ?? "en"])) : null;
+  if (cacheKey) {
+    const rows = await db<Array<{ results: ReportResults }>>(query("public_scan_cache", {
+      key: `eq.${cacheKey}`, expires_at: `gt.${new Date().toISOString()}`, select: "results", limit: "1",
+    })).catch(() => []);
+    if (rows[0]) return { canonicalUrl, results: rows[0].results, isPrivate: false };
   }
+  const lease = await acquireWork([], "repository-download", 3, 50);
+  let archive;
+  try {
+    const archivePath = `${repoPath}/tarball/${encodeURIComponent(ref ?? repository.default_branch)}`;
+    if (token && token === process.env.GITHUB_TOKEN) await acquireWork(githubRules());
+    const redirect = await fetch(`${GITHUB_API}${archivePath}`, {
+      headers: { "User-Agent": "DeployDoctor", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      redirect: "manual", signal: AbortSignal.timeout(15_000), cache: "no-store",
+    });
+    if (redirect.status !== 302) {
+      if (ref && redirect.status === 404) throw new GitHubApiError(`Branch or commit "${ref}" was not found in the repository.`, 404, "gh.refNotFound");
+      const rateLimited = redirect.headers.get("x-ratelimit-remaining") === "0" || redirect.headers.has("retry-after");
+      const failure = githubFailure(redirect.status, { userToken, rateLimited });
+      throw new GitHubApiError(failure.message, failure.status, failure.key);
+    }
+    const location = new URL(redirect.headers.get("location") ?? "");
+    if (location.protocol !== "https:" || location.hostname !== "codeload.github.com" || location.username || location.password || location.port) {
+      throw new Error("Unexpected repository archive host.");
+    }
+    // The signed redirect is sufficient for private archives; never forward our token to another host.
+    const signal = AbortSignal.timeout(35_000);
+    const downloaded = await fetch(location, { redirect: "error", cache: "no-store", signal });
+    if (!downloaded.ok || !downloaded.body) throw new Error("Could not download repository archive.");
+    archive = await readRepositoryArchive(downloaded.body, (file, size) =>
+      (ROOT_LOCKFILE.test(file) && size <= MAX_LOCKFILE_BYTES) || (size <= MAX_FILE_BYTES &&
+      (SOURCE_FILE.test(file) || /^(?:package|tsconfig|jsconfig|vercel)\.json$/.test(file) || file === ".gitignore"
+        || /\.prisma$/.test(file) || MIGRATION_FILE.test(file) || MISNAMED_ENV_TEMPLATE.test(file) || /(?:^|\/)\.env(?:\..+)?$/.test(file))), priorityFor, signal);
+  } catch (error) {
+    if (error instanceof GitHubApiError) throw error;
+    throw new GitHubApiError("Repository archive could not be read within safety limits.", 422, "gh.archiveLimit");
+  } finally {
+    if (lease) await releaseWork(lease);
+  }
+  const { entries, contents } = archive;
+  const sourceFiles = entries.filter(entry => entry.type === "blob" && SOURCE_FILE.test(entry.path));
+  const reasons = new Set<string>();
+  if (archive.truncated) reasons.add("file_limit");
+  if (sourceFiles.some(entry => (entry.size ?? 0) > MAX_FILE_BYTES)) reasons.add("file_size");
+  const readFailures = 0;
 
   const sourceFilesRead = [...contents.keys()].filter((pathname) => SOURCE_FILE.test(pathname)).length;
   const snapshot: RepositorySnapshot = {
@@ -205,7 +199,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
     sourceFilesRead,
     partialReasons: [...reasons],
     partial:
-      tree.truncated ||
+      archive.truncated ||
       readFailures > 0 ||
       sourceFilesRead < sourceFiles.length ||
       sourceFiles.some((entry) => (entry.size ?? 0) > MAX_FILE_BYTES),
@@ -213,6 +207,11 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
 
   const results = analyzeSnapshot(snapshot, { checks: options.checks, lang: options.lang });
   if (ref) results.repository.ref = ref;
+  if (cacheKey && !snapshot.partial) {
+    await db(query("public_scan_cache", { on_conflict: "key" }), { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({ key: cacheKey, results, expires_at: new Date(Date.now() + 120_000).toISOString() }),
+    }).catch(() => console.error("Public scan cache write failed"));
+  }
   return { canonicalUrl, results, isPrivate: repository.private };
 }
 
