@@ -91,13 +91,13 @@ test("the plan patches relative and @/ imports, proves them with the analyzer an
     "src/lib/util.ts:1 ./Config -> ./config",
   ]);
   assert.deepEqual(plan.files, ["src/app/page.tsx", "src/lib/util.ts"]);
-  // The commented import and the file with a syntax error are reported, never patched.
-  assert.deepEqual(plan.skipped.map((item) => `${item.file}:${item.line} ${item.reason}`).sort(), ["src/app/page.tsx:4 import", "src/broken.ts:1 syntax"]);
+  // Comments are ignored; only the file with a syntax error is refused.
+  assert.deepEqual(plan.skipped.map((item) => `${item.file}:${item.line} ${item.reason}`).sort(), ["src/broken.ts:1 syntax"]);
 
   const patched = applyWithGit(Object.fromEntries(Object.entries(files)), plan.patch);
   const left = importProblems(snapshot(patched, extra));
   assert.deepEqual(left.map((problem) => `${problem.kind} ${problem.file}:${problem.line}`).sort(),
-    ["case src/app/page.tsx:4", "case src/broken.ts:1", "missing src/app/page.tsx:3"]);
+    ["case src/broken.ts:1", "missing src/app/page.tsx:3"]);
 });
 
 test("nothing patchable gives an empty plan with reasons, not an offer", () => {

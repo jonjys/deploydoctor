@@ -134,7 +134,7 @@ test("an env template under another name is read, and the rename is the finding"
     "app/page.tsx": "export default function Page() { return process.env.MONGO_URL + process.env.MONGODB_URI }",
   }));
   const red = partly.checks.find((check) => check.id === "env")!;
-  assert.equal(red.status, "red");
+  assert.equal(red.status, "yellow");
   assert.match(red.explanation, /1 env variable is missing from \.env\.example: MONGODB_URI; the env template is named env\.example/);
   assert.equal(red.findings?.[0].command, "git mv env.example .env.example");
   // The suggested .env.example keeps assignment and comment lines, never the markdown prose or code fences.
@@ -275,7 +275,7 @@ test("Vercel system env variables are built in, but custom variables must be doc
       + " const c = process.env.VERCEL_ENV; const d = process.env.MY_SECRET; export default function Page() { return null }",
   }), { checks: ["env"] });
   const env = results.checks[0];
-  assert.equal(env.status, "red");
+  assert.equal(env.status, "yellow");
   assert.deepEqual(env.findings?.map((finding) => finding.problem), ["MY_SECRET is missing from .env.example"]);
 });
 
@@ -287,7 +287,7 @@ test("GitHub Actions runner variables are built in, but an app's own GITHUB_TOKE
       + " export default function Page() { return null }",
   }), { checks: ["env"] });
   const env = results.checks[0];
-  assert.equal(env.status, "red");
+  assert.equal(env.status, "yellow");
   assert.deepEqual(env.findings?.map((finding) => finding.problem), ["GITHUB_TOKEN is missing from .env.example"]);
 });
 
@@ -331,7 +331,7 @@ test("env reads through destructuring and optional chaining are found", () => {
     ".env.example": "DATABASE_URL=\n",
     "app/page.tsx": "const { DATABASE_URL, API_KEY: key } = process.env;\nexport default function Page() { return null }",
   }), { checks: ["env"] });
-  assert.equal(results.checks[0].status, "red");
+  assert.equal(results.checks[0].status, "yellow");
   assert.deepEqual(results.checks[0].findings?.map((finding) => [finding.problem, finding.line]), [["API_KEY is missing from .env.example", 1]]);
 });
 
@@ -429,7 +429,7 @@ test("an env read on the right of a comparison or arithmetic stays required befo
     "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }), ".env.example": "\n",
     "app/page.tsx": 'const ok = auth === process.env.CRON_SECRET ? "ok" : "deny";\nexport default function Page() { return null }',
   }), { checks: ["env"] }).checks[0];
-  assert.equal(env.status, "red");
+  assert.equal(env.status, "yellow");
   assert.equal(env.suggestedFile?.content, "CRON_SECRET=\n");
 });
 
@@ -471,7 +471,7 @@ test("variables read only with a fallback are yellow, and the suggested .env.exa
   assert.equal(renamed.suggestedFile?.content, "DATABASE_URL=\n# LOG_LEVEL=\n# PORT=\n# REGION=\n");
 });
 
-test("reads without a literal fallback stay red, even when the same variable has a fallback elsewhere", () => {
+test("reads without a literal fallback stay reviewable, even when the same variable has a fallback elsewhere", () => {
   const entries: RepositorySnapshot["entries"] = [...nextEntries, { path: ".env.example", type: "blob" },
     { path: "lib", type: "tree" }, { path: "lib/config.ts", type: "blob" }];
   const env = analyzeSnapshot(snapshot(entries, {
@@ -484,7 +484,7 @@ test("reads without a literal fallback stay red, even when the same variable has
       "export const key = process.env.SECRET_KEY ?? defaults.key;",
     ].join("\n"),
   }), { checks: ["env"] }).checks[0];
-  assert.equal(env.status, "red");
+  assert.equal(env.status, "yellow");
   assert.equal(env.explanation, "4 env variables are missing from .env.example: API_URL, DATABASE_URL, POSTGRES_URL, SECRET_KEY.");
   // API_URL points at its read without a fallback.
   assert.deepEqual(env.findings?.map((finding) => `${finding.file}:${finding.line}`), ["lib/config.ts:1", "lib/config.ts:2", "lib/config.ts:2", "lib/config.ts:3"]);
@@ -504,7 +504,7 @@ test("NEXT_PUBLIC_ variables follow the same fallback rule, and an exposed secre
   assert.equal(optional.explanation, "2 optional env variables have a fallback in the code but are not in .env.example: NEXT_PUBLIC_SITE_URL, NEXT_PUBLIC_STAGE.");
 
   const required = scan("", "const api = process.env.NEXT_PUBLIC_API_URL;");
-  assert.equal(required.status, "red");
+  assert.equal(required.status, "yellow");
   assert.deepEqual(required.findings?.map((finding) => finding.problem), ["NEXT_PUBLIC_API_URL is missing from .env.example"]);
 
   const exposed = scan("NEXT_PUBLIC_ADMIN_TOKEN=\n", 'const token = process.env.NEXT_PUBLIC_ADMIN_TOKEN ?? "";');
@@ -522,7 +522,7 @@ test("missing and optional variables share one suggested .env.example, and the n
   };
   const results = analyzeSnapshot(snapshot(entries, files), { checks: ["env"] });
   const env = results.checks[0];
-  assert.equal(env.status, "red");
+  assert.equal(env.status, "yellow");
   assert.equal(env.explanation, "1 env variable is missing from .env.example: STRIPE_SECRET_KEY; "
     + "1 optional env variable has a fallback in the code but is not in .env.example: LOG_LEVEL.");
   assert.deepEqual(env.evidence, ["STRIPE_SECRET_KEY → missing from committed env template", "LOG_LEVEL → optional, has a fallback in the code"]);
@@ -610,9 +610,9 @@ test("a .gitignore that hides .env.example gives a yellow env check with the lin
   assert.equal(env.findings?.[0].line, 3);
   assert.match(env.fix, /!\.env\.example/);
 
-  // Missing variables stay red, and the .gitignore line is part of the fix.
+  // Missing declarations require review, and the .gitignore line is part of the fix.
   const red = analyzeSnapshot(snapshot(entries, { ...files, ".env.local.example": "", ".gitignore": ".env*\n!.env.example\n.env*\n" }), { checks: ["env"] }).checks[0];
-  assert.equal(red.status, "red");
+  assert.equal(red.status, "yellow");
   assert.match(red.fix, /!\.env\.example/);
 });
 
@@ -869,7 +869,7 @@ test("missing env variables come with a complete .env.example that is also in th
     "app/page.tsx": "const a = process.env.DATABASE_URL; const b = process.env.ZED; const c = process.env.ALPHA;\nexport default function Page() { return null }",
   }), { checks: ["env"] });
   const env = results.checks[0];
-  assert.equal(env.status, "red");
+  assert.equal(env.status, "yellow");
   assert.deepEqual(env.suggestedFile, {
     path: ".env.example",
     content: "# Database\nDATABASE_URL=postgres://localhost/dev\nSTRIPE_SECRET_KEY=\nALPHA=\nZED=\n",
@@ -1086,7 +1086,7 @@ test("commented-out defaults in .env.example count as documented (no empty KEY= 
 
   // A variable that is truly undocumented is still reported, and a commented lower-case word is not a variable.
   const missing = scan(template, "export const env = [process.env.LOG_LEVEL, process.env.NOTE, process.env.CRON_SECRET];");
-  assert.equal(missing.status, "red");
+  assert.equal(missing.status, "yellow");
   assert.match(missing.explanation, /missing from \.env\.example: CRON_SECRET, NOTE/);
   assert.doesNotMatch(missing.explanation, /LOG_LEVEL/);
 
@@ -1099,7 +1099,7 @@ test("commented-out defaults in .env.example count as documented (no empty KEY= 
       "src/env.ts": "export const level = process.env.LOG_LEVEL;",
     },
   )).checks.find((check) => check.id === "env")!;
-  assert.equal(real.status, "red");
+  assert.equal(real.status, "yellow");
 });
 
 test("build configuration: a Vite SPA with a history router needs a rewrite to index.html", () => {

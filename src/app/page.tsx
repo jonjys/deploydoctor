@@ -69,31 +69,9 @@ export default async function Home() {
             <span className="mini-check">✓</span> {t("home.trust.share")}
           </span>
         </div>
-        <p className="plugin-line">
-          <Link href="/diagnose">{t("home.diagLine")}</Link>
-        </p>
-        <p className="plugin-line">
-          <Link href="/ci">{t("home.ciLine")}</Link>
-        </p>
-        <p className="plugin-line">
-          <Link href="/ai-plugin">{t("home.pluginLine")}</Link>
-        </p>
-        <p className="plugin-line is-hint">{t("home.urlTrick")}</p>
+        <p className="plugin-line"><Link href="/diagnose">{t("home.diagLine")}</Link></p>
       </section>
 
-      <section className="pass-strip" aria-labelledby="rescue-kit-heading">
-        <div>
-          <p className="section-kicker">{lang === "sv" ? "Nedladdningsbar guide · $19 engångsköp" : "Downloadable guide · $19 one time"}</p>
-          <h2 id="rescue-kit-heading">Vercel Deployment Rescue Kit</h2>
-          <p>{lang === "sv"
-            ? "Fungerar lokalt men kraschar på Vercel? Få en 14-sidig felsökningsguide, en redigerbar checklista med 42 punkter och 5 AI-prompter. PDF, CSV och Markdown i ett ZIP-paket."
-            : "Works locally but fails on Vercel? Get a 14-page debugging playbook, a 42-point editable release checklist and 5 AI prompts. PDF, CSV and Markdown in one ZIP."}</p>
-        </div>
-        <div className="pass-actions">
-          <a className="cta-button" href="https://fieldworkstudio.gumroad.com/l/vercel-deployment-rescue-kit">{lang === "sv" ? "Se kitet på Gumroad · $19" : "Get the kit on Gumroad · $19"}</a>
-          <a href="https://fieldworkstudio.gumroad.com/p/works-locally-fails-on-vercel-start-with-these-3-checks">{lang === "sv" ? "Läs 3 gratis felsökningstips" : "Read 3 free debugging tips"}</a>
-        </div>
-      </section>
 
       <section className="checks-panel" aria-labelledby="checks-heading">
         <div>
@@ -127,6 +105,16 @@ export default async function Home() {
           </div>
         </section>
       )}
+
+      <section className="checks-panel" aria-label="Developer tools">
+        <div><h2>{lang === "sv" ? "Använd där du bygger" : "Use it where you build"}</h2></div>
+        <div>
+          <p><Link href="/ci">GitHub Action →</Link></p>
+          <p><Link href="/ai-plugin">Claude / Cursor MCP →</Link></p>
+          <p>{t("home.urlTrick")}</p>
+          <p><a href="https://fieldworkstudio.gumroad.com/l/vercel-deployment-rescue-kit">{lang === "sv" ? "Föredrar du en nedladdningsbar guide? Rescue Kit · $19 →" : "Prefer a downloadable guide? Rescue Kit · $19 →"}</a></p>
+        </div>
+      </section>
 
       <footer className="footer">
         <span>DeployDoctor</span>
