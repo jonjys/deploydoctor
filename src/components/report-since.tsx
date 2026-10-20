@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Breakable } from "@/components/breakable-path";
 import { dateLocale, t, type Lang, type MessageKey } from "@/lib/i18n";
 import { hasChanges, improved, type ChangedFinding, type ReportDiff } from "@/lib/report-insights";
 import type { CheckStatus } from "@/types/report";
@@ -12,7 +13,7 @@ function ChangedList({ items, base, lang }: { items: ChangedFinding[]; base: str
     <ul className="since-last-items">
       {items.slice(0, SHOWN).map((item, index) => (
         <li key={`${item.checkId}-${index}`}>
-          <a href={`${base}#check-${item.checkId}`}><code>{item.file}:{item.line}</code></a> {item.problem}
+          <a href={`${base}#check-${item.checkId}`}><code><Breakable text={`${item.file}:${item.line}`} /></code></a> {item.problem}
         </li>
       ))}
       {items.length > SHOWN && <li className="since-last-more">{t(lang, "report.sinceMore", { n: items.length - SHOWN })}</li>}

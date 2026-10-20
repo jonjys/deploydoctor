@@ -19,7 +19,7 @@ import { SITE_URL } from "@/lib/site";
 import { getT } from "@/lib/lang";
 import { FIX_SERVICE_ENABLED } from "@/lib/fix-service";
 import { dateLocale, type MessageKey } from "@/lib/i18n";
-import { overallLabel } from "@/lib/report-summary";
+import { neutralReport, overallLabel } from "@/lib/report-summary";
 import { activePlan, customerSession } from "@/lib/access";
 import { frameworkName } from "@/lib/stack";
 
@@ -114,7 +114,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const badgeMarkdown = `[![DeployDoctor](${SITE_URL}/r/${id}/badge)](${SITE_URL}/r/${id})`;
   // A root app on another framework the scan knows still gets real results, so it keeps the normal headline.
   const otherStack = results.nextApp === "none" ? results.stack?.framework : undefined;
-  const neutral = notNext && !otherStack;
+  const neutral = neutralReport(results);
   const overall = overallLabel(results.summary, lang, { notNext: neutral });
   const fixFirst = neutral ? [] : fixFirstItems(results.checks);
   const since = sinceDiff(previous, results);
@@ -189,7 +189,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                   {check.status === "yellow" && <span className="severity is-review">{t("report.severity.review")}</span>}
                   <h2>{check.title}</h2>
                   <p>{check.explanation}</p>
-                  {showsLocalWhy(check) && (
+                  {showsLocalWhy(check, results.nextApp) && (
                     <div className="local-why"><strong>{t("report.localWhy")}</strong> {t(`report.localWhy.${check.id}`)}</div>
                   )}
                   {check.evidence.length ? (

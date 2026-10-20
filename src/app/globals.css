@@ -13,6 +13,10 @@
   --yellow-soft: #fff7da;
   --green: #188358;
   --green-soft: #e9f8ef;
+  /* Status colors for small text on the soft tints and the panel: deeper than the above so 11 to 13px labels reach 4.5:1. */
+  --red-text: #b8392b;
+  --yellow-text: #8a5c00;
+  --green-text: #14704b;
 }
 
 * { box-sizing: border-box; }
@@ -443,7 +447,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .rescan-link { color: var(--ink); font-weight: 600; text-decoration: none; }
 .rescan-link:hover { text-decoration: underline; }
 .fix-first { margin: 22px 0 0; padding: 16px 20px; border: 1px solid var(--ink); border-left-width: 4px; border-radius: 12px; background: var(--red-soft); font-size: 14px; }
-.fix-first strong { display: block; margin-bottom: 6px; font-family: var(--font-geist-mono), monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--red); }
+.fix-first strong { display: block; margin-bottom: 6px; font-family: var(--font-geist-mono), monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--red-text); }
 .fix-first ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
 .fix-first a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .result-card { scroll-margin-top: 24px; }
@@ -484,6 +488,9 @@ button:disabled { opacity: .55; cursor: not-allowed; }
     --yellow-soft: #352c12;
     --green: #5ad28f;
     --green-soft: #15302a;
+    --red-text: #ff7a70;
+    --yellow-text: #f0c050;
+    --green-text: #5ad28f;
   }
   body { background: radial-gradient(circle at 20% 0%, rgba(185, 242, 39, 0.08), transparent 27rem), var(--paper); }
   .topbar, .check-list, .footer { border-color: rgba(238, 242, 238, 0.14); }
@@ -581,6 +588,8 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .guide pre code { padding: 0; border: 0; background: none; }
 .guide ul { padding-left: 22px; }
 .guide li { margin: 6px 0; }
+/* CLI flags in guide prose stay on one line instead of breaking after a hyphen. */
+.nowrap { white-space: nowrap; }
 .ci-copy { margin-top: -6px; }
 .ci-token { margin: 10px 0 28px; }
 .ci-token textarea { display: block; width: 100%; max-width: 640px; padding: 12px 14px; margin: 0 0 12px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 9px; resize: vertical; }
@@ -651,12 +660,12 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 @media (prefers-color-scheme: dark) { .watch-row input { background: #0f1a16; } }
 /* Report: fix-first items with file:line and command, the comparison with the previous scan, and why it works locally. */
 .fix-first.is-yellow { background: var(--yellow-soft); }
-.fix-first.is-yellow strong { color: var(--yellow); }
+.fix-first.is-yellow strong { color: var(--yellow-text); }
 .fix-first ol { gap: 12px; list-style: decimal; }
 .fix-first li { min-width: 0; line-height: 1.45; overflow-wrap: anywhere; }
 .fix-first li::marker { font-family: var(--font-geist-mono), monospace; font-size: 12px; font-weight: 700; }
-.fix-first li.is-red::marker { color: var(--red); }
-.fix-first li.is-yellow::marker { color: var(--yellow); }
+.fix-first li.is-red::marker { color: var(--red-text); }
+.fix-first li.is-yellow::marker { color: var(--yellow-text); }
 .fix-first-where { font-family: var(--font-geist-mono), monospace; font-size: 12.5px; font-weight: 650; }
 .fix-first-check { margin-left: 8px; color: var(--muted); font-size: 12px; }
 .fix-first-fix { display: block; margin-top: 2px; }
@@ -672,12 +681,12 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .since-last-same { margin: 10px 0 0; color: var(--muted); }
 .since-last-status { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 12px 0 0; padding: 0; list-style: none; }
 .since-last-status li { padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; }
-.since-last-status li.is-better { border-color: var(--green); color: var(--green); background: var(--green-soft); }
-.since-last-status li.is-worse { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+.since-last-status li.is-better { border-color: var(--green); color: var(--green-text); background: var(--green-soft); }
+.since-last-status li.is-worse { border-color: var(--red); color: var(--red-text); background: var(--red-soft); }
 .since-last-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px 28px; margin-top: 14px; }
 .since-last h3 { margin: 0 0 6px; font-family: var(--font-geist-mono), monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
-.since-last .is-fixed h3 { color: var(--green); }
-.since-last .is-new h3 { color: var(--red); }
+.since-last .is-fixed h3 { color: var(--green-text); }
+.since-last .is-new h3 { color: var(--red-text); }
 .since-last-items { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .since-last-items li { min-width: 0; line-height: 1.45; }
 .since-last-items a { color: var(--ink); text-underline-offset: 3px; }

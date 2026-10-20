@@ -6,8 +6,12 @@ import { FixFirst, IgnoreProvider } from "../src/components/report-ignore";
 import { LangProvider } from "../src/components/lang";
 import { SinceLastScan } from "../src/components/report-since";
 import { messages, t } from "../src/lib/i18n";
-import { diffReports, fixFirstItems, hasChanges, improved, previousReportFilter, severityOf, showsLocalWhy, type FixFirstItem } from "../src/lib/report-insights";
+import { analysisText } from "../src/lib/analysis-text";
+import { diffReports, fixFirstItems, hasChanges, improved, isPartialPlaceholder, previousReportFilter, severityOf, showsLocalWhy, type FixFirstItem } from "../src/lib/report-insights";
 import type { CheckId, CheckResult, CheckStatus, Finding, ReportResults, StoredReport } from "../src/types/report";
+
+/** Paths render with a break opportunity after every slash; most assertions read them without it. */
+const plain = (html: string) => html.replaceAll("<wbr/>", "");
 
 const CHECK_IDS = Object.keys(severityOf) as CheckId[];
 
@@ -78,7 +82,7 @@ function renderFixFirst(items: FixFirstItem[], lang: "en" | "sv" = "en") {
 test("the fix first list shows at most five items, links to the full list and copies commands", () => {
   const items = fixFirstItems([check("imports", "red", Array.from({ length: 7 }, (_, index) =>
     finding(`app/f${index}.tsx`, index + 1, `imports ./m${index}`, index === 0 ? "git add -- app/M0.tsx" : undefined)))]);
-  const html = renderFixFirst(items);
+  const html = plain(renderFixFirst(items));
   assert.equal(html.match(/<li /g)?.length, 5);
   assert.match(html, /app\/f0\.tsx:1/);
   assert.match(html, /app\/f4\.tsx:5/);
@@ -152,6 +156,12 @@ test("checks only one of the scans ran are not compared, and are listed as such"
   assert.equal(hasChanges(diff), false);
   assert.equal(diff.compared, 1);
   assert.deepEqual(diff.notCompared, [{ checkId: "imports", title: "Title imports" }, { checkId: "prisma", title: "Title prisma" }]);
+  // A finding of a check the previous scan did not run is not new code, so it is never listed as new.
+  assert.deepEqual(diff.added, []);
+  const html = renderToStaticMarkup(createElement(SinceLastScan, { diff, previous: { id: "22222222-2222-4222-8222-222222222222", created_at: "2026-10-10T08:30:00.000Z" }, lang: "en" }));
+  assert.doesNotMatch(html, /New \(/);
+  assert.doesNotMatch(html, /package\.json/);
+  assert.match(html, /Ran in only one of the two scans, so not compared: Title imports, Title prisma\./);
 });
 
 test("the since section is hidden when the two scans share no check", () => {
@@ -229,7 +239,7 @@ test("the since section links the previous report and lists what was fixed and w
     results([check("imports", "red", Array.from({ length: 7 }, (_, index) => finding(`app/f${index}.tsx`, index + 1, `imports ./m${index}`)))], true),
     results([check("imports", "red", [finding("app/new.tsx", 2, "imports ./Gone")])]),
   );
-  const html = renderToStaticMarkup(createElement(SinceLastScan, { diff, previous, lang: "en" }));
+  const html = plain(renderToStaticMarkup(createElement(SinceLastScan, { diff, previous, lang: "en" })));
   assert.match(html, /Since the previous scan/);
   assert.match(html, /href="\/r\/22222222-2222-4222-8222-222222222222"[^>]*>Previous report from Oct 10, 2026, 8:30\s?AM UTC</);
   assert.match(html, /Fixed \(7\)/);
@@ -268,6 +278,60 @@ test("private reports are never compared", () => {
   assert.equal(previousReportFilter(stored({ is_private: true })), null);
 });
 
+test("a CI scan of a commit is compared with the previous scan of the repository, whatever its ref", () => {
+  // The GitHub Action sends the pull request head SHA, which no other report shares; a filter on it would never match.
+  for (const sha of ["a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", "A1B2C3D4E5F60718293A4B5C6D7E8F9012345678", "a1b2c3d"]) {
+    const filter = previousReportFilter(stored({}, sha));
+    assert.ok(filter);
+    assert.equal("results->repository->>ref" in filter, false, sha);
+    assert.equal(filter.repo_url, "ilike.https://github.com/acme/shop\\_app");
+    assert.equal(filter.created_at, "lt.2026-10-17T10:00:00.123456+00:00");
+    assert.equal(filter.order, "created_at.desc");
+  }
+  // Branch names, even hex-looking short ones, and the default branch keep their own line of history.
+  assert.equal(previousReportFilter(stored({}, "feature/login"))?.["results->repository->>ref"], "eq.feature/login");
+  assert.equal(previousReportFilter(stored({}, "deadbe"))?.["results->repository->>ref"], "eq.deadbe");
+  assert.equal(previousReportFilter(stored({}, "v1.2.3"))?.["results->repository->>ref"], "eq.v1.2.3");
+  assert.equal(previousReportFilter(stored())?.["results->repository->>ref"], "is.null");
+});
+
+test("partial-scan placeholders are left out of fix first, so operator advice never shows there", () => {
+  for (const lang of ["en", "sv"] as const) {
+    const x = analysisText(lang);
+    for (const fix of [x.partialFixToken, x.partialFixRetry]) {
+      const placeholder = check("dependencies", "yellow", [], { fix, explanation: x.deps.partial });
+      assert.equal(isPartialPlaceholder(placeholder), true, `${lang} ${fix}`);
+      const items = fixFirstItems([
+        check("imports", "red", [finding("app/a.tsx", 1, "imports ./B")]),
+        placeholder,
+        check("env", "yellow", [], { fix }),
+        check("secrets", "yellow", [], { fix }),
+      ]);
+      assert.deepEqual(items.map((item) => item.checkId), ["imports"]);
+      assert.doesNotMatch(renderFixFirst(items, lang), /GITHUB_TOKEN|Vercel > Settings/);
+    }
+  }
+  assert.match(analysisText("en").partialFixToken, /GITHUB_TOKEN/);
+  // A review item with findings, the entrypoint check with its own advice and a red check are real items whatever the scan read.
+  assert.equal(isPartialPlaceholder(check("supabase", "yellow", [finding("supabase/migrations/1.sql", 5, "no grants")])), false);
+  assert.equal(isPartialPlaceholder(check("next-entry", "yellow", [], { fix: analysisText("en").next.unreadableFix })), false);
+  assert.equal(isPartialPlaceholder(check("env", "red", [], { fix: analysisText("en").partialFixToken })), false);
+  const kept = fixFirstItems([check("next-entry", "yellow", [], { fix: "Commit a valid package.json" }), check("env", "yellow", [], { fix: analysisText("sv").partialFixRetry })]);
+  assert.deepEqual(kept.map((item) => `${item.checkId} ${item.fix}`), ["next-entry Commit a valid package.json"]);
+  // A placeholder-only report has no fix first list at all.
+  assert.equal(renderFixFirst(fixFirstItems([check("env", "yellow", [], { fix: analysisText("en").partialFixToken })])), "");
+});
+
+test("long paths in fix first and since the previous scan get a break opportunity after every slash", () => {
+  const items = fixFirstItems([check("imports", "red", [finding("src/components/account/Header.tsx", 12, "imports ./nav", "git add -- src/components/account/Nav.tsx")])]);
+  const html = renderFixFirst(items);
+  assert.match(html, /src\/<wbr\/>components\/<wbr\/>account\/<wbr\/>Header\.tsx:12/);
+  assert.match(html, /<code>git add -- src\/<wbr\/>components\/<wbr\/>account\/<wbr\/>Nav\.tsx<\/code>/);
+  const diff = diffReports(results([check("imports", "red", [])]), results([check("imports", "red", [finding("app/(shop)/cart/page.tsx", 2, "imports ./Gone")])]));
+  const since = renderToStaticMarkup(createElement(SinceLastScan, { diff, previous: { id: "22222222-2222-4222-8222-222222222222", created_at: "2026-10-10T08:30:00.000Z" }, lang: "en" }));
+  assert.match(since, /<code>app\/<wbr\/>\(shop\)\/<wbr\/>cart\/<wbr\/>page\.tsx:2<\/code>/);
+});
+
 test("the why it works locally line shows on failing cards and on review cards with findings, not on a partial scan", () => {
   assert.equal(showsLocalWhy(check("env", "red", [finding("app/a.ts", 1, "X is missing")])), true);
   // Older reports have no findings; a red card still explains itself.
@@ -276,6 +340,23 @@ test("the why it works locally line shows on failing cards and on review cards w
   assert.equal(showsLocalWhy(check("env", "yellow", [])), false);
   assert.equal(showsLocalWhy(check("dependencies", "yellow", undefined)), false);
   assert.equal(showsLocalWhy(check("env", "green", [finding("app/a.ts", 1, "X is optional")])), false);
+});
+
+test("notes about next dev and the app folder are left off reports of another stack", () => {
+  const env = check("env", "red", [finding("src/lib/db.ts", 1, "DATABASE_URL is missing")]);
+  const entry = check("next-entry", "red", undefined);
+  for (const nextApp of ["none", "nested"] as const) {
+    assert.equal(showsLocalWhy(env, nextApp), false, nextApp);
+    assert.equal(showsLocalWhy(entry, nextApp), false, nextApp);
+    // Linux, lockfiles, a clean install and hardcoded keys hold for SvelteKit, Astro and Vite on Vercel too.
+    for (const id of ["server-libs", "build-config", "dependencies", "secrets", "supabase", "prisma"] as const) {
+      assert.equal(showsLocalWhy(check(id, "red", [finding("vercel.json", 1, "x")]), nextApp), true, `${id} ${nextApp}`);
+    }
+  }
+  assert.equal(showsLocalWhy(env, "root"), true);
+  // Older reports have no nextApp and keep every note.
+  assert.equal(showsLocalWhy(env, undefined), true);
+  assert.equal(showsLocalWhy(entry), true);
 });
 
 test("new report copy exists in both languages, explains every check and has no dashes or quotation marks", () => {
@@ -291,6 +372,13 @@ test("new report copy exists in both languages, explains every check and has no 
   assert.equal(CHECK_IDS.length, 9);
   assert.match(t("en", "report.localWhy.imports"), /macOS and Windows ignore letter case.*Linux/);
   assert.match(t("sv", "report.localWhy.imports"), /Linux/);
+  // Two clauses joined by a conjunction, not a comma splice.
+  assert.match(t("en", "report.localWhy.imports"), /file names, but Vercel builds on Linux, which does not\./);
+  // The Swedish file line says complete, as the English does, and the card and the copied text agree with it.
+  assert.equal(t("sv", "report.fixFirstFile", { path: ".env.example" }), "Committa den kompletta .env.example som visas i kontrollen.");
+  assert.equal(t("sv", "report.completeFile", { path: ".env.example" }), "Komplett .env.example");
+  assert.match(t("sv", "fix.completeFile", { path: ".env.example" }), /^Komplett \.env\.example/);
+  assert.doesNotMatch(`${messages.sv["report.fixFirstFile"]} ${messages.sv["report.completeFile"]} ${messages.sv["fix.completeFile"]}`, /[Ff]ärdig/);
   assert.equal(t("en", "report.sinceFixed", { n: 3 }), "Fixed (3)");
   assert.equal(t("sv", "report.fixFirstAll", { n: 7 }), "Visa alla 7 punkter");
 });

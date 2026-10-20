@@ -1,4 +1,6 @@
 import type { CheckId, CheckResult, CheckStatus, Finding, ReportResults, StoredReport } from "@/types/report";
+import { analysisText } from "@/lib/analysis-text";
+import { LANGS } from "@/lib/i18n";
 
 /** What a failed check means for the deploy, so a report can be read in three seconds. */
 export const severityOf: Record<CheckId, "build" | "runtime" | "security"> = {
@@ -24,9 +26,20 @@ export type FixFirstItem = {
   completeFile?: string;
 };
 
-/** Every open item in the order to fix it: red before yellow, then build, runtime and security, then report order. */
+/** The fix texts of a check that is yellow only because the scan did not finish: they say to scan again, not what to change. */
+const PARTIAL_FIXES = new Set(LANGS.flatMap((lang) => [analysisText(lang).partialFixToken, analysisText(lang).partialFixRetry]));
+
+/** A check that found nothing and is yellow only because the scan was partial. Its fix is about the scan, not about the code. */
+export function isPartialPlaceholder(check: CheckResult): boolean {
+  return check.status === "yellow" && !check.findings?.length && PARTIAL_FIXES.has(check.fix);
+}
+
+/**
+ * Every open item in the order to fix it: red before yellow, then build, runtime and security, then report order.
+ * Partial-scan placeholders are left out: they have nothing to fix, and the partial notice already says the scan did not finish.
+ */
 export function fixFirstItems(checks: CheckResult[]): FixFirstItem[] {
-  const open = checks.map((check, index) => ({ check, index })).filter(({ check }) => check.status !== "green");
+  const open = checks.map((check, index) => ({ check, index })).filter(({ check }) => check.status !== "green" && !isPartialPlaceholder(check));
   open.sort((a, b) => STATUS_RANK[a.check.status] - STATUS_RANK[b.check.status]
     || SEVERITY_RANK[severityOf[a.check.id] ?? "runtime"] - SEVERITY_RANK[severityOf[b.check.id] ?? "runtime"]
     || a.index - b.index);
@@ -48,8 +61,15 @@ export function fixFirstItems(checks: CheckResult[]): FixFirstItem[] {
   });
 }
 
-/** Failing cards explain why they work locally; a card that is yellow only because the scan was partial found nothing to explain. */
-export function showsLocalWhy(check: CheckResult): boolean {
+/** Notes that speak of next dev, NEXT_PUBLIC_ or the app folder, which only hold for a Next.js app at the repository root. */
+const NEXT_ONLY_WHY = new Set<CheckId>(["next-entry", "env"]);
+
+/**
+ * Failing cards explain why they work locally; a card that is yellow only because the scan was partial found nothing to explain,
+ * and a note about Next.js is left off a report of another stack. Older reports have no nextApp and keep every note.
+ */
+export function showsLocalWhy(check: CheckResult, nextApp?: ReportResults["nextApp"]): boolean {
+  if ((nextApp === "none" || nextApp === "nested") && NEXT_ONLY_WHY.has(check.id)) return false;
   return check.id in severityOf && (check.status === "red" || (check.status === "yellow" && !!check.findings?.length));
 }
 
@@ -121,19 +141,24 @@ export function improved(change: StatusChange): boolean {
   return STATUS_RANK[change.to] > STATUS_RANK[change.from];
 }
 
+/** A commit SHA, which is what the GitHub Action sends as the ref of a pull request head. */
+const COMMIT_SHA = /^[0-9a-f]{7,40}$/i;
+
 /**
  * PostgREST filters for the newest public report of the same repository and ref saved before `report`, or null for a
  * private report: the viewer may not be allowed to see an older private scan, so private reports are never compared.
+ * A CI scan of a commit has a ref no other report shares, so it is compared with the previous scan of the repository, whatever its ref.
  */
 export function previousReportFilter(report: StoredReport): Record<string, string> | null {
   if (report.is_private) return null;
   const ref = report.results.repository.ref;
+  // A CI scan of a branch is compared with the previous scan of that branch, a default branch scan with the default branch.
+  const sameRef: Record<string, string> = ref && COMMIT_SHA.test(ref) ? {} : { "results->repository->>ref": ref ? `eq.${ref}` : "is.null" };
   return {
     // GitHub names ignore case and the scanner keeps the case that was typed; _ is a LIKE wildcard, so it is escaped.
     repo_url: `ilike.${report.repo_url.replace(/[\\_%]/g, "\\$&")}`,
     created_at: `lt.${report.created_at}`,
-    // A CI scan of a branch is compared with the previous scan of that branch, a default branch scan with the default branch.
-    "results->repository->>ref": ref ? `eq.${ref}` : "is.null",
+    ...sameRef,
     select: "id,repo_url,results,created_at",
     order: "created_at.desc",
     limit: "1",
