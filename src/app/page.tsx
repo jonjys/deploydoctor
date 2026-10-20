@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import { ScanActivitySection } from "@/components/scan-activity-section";
+import { CommunityReviews } from "@/components/community-reviews";
 import Link from "next/link";
 import { RepoForm } from "@/components/repo-form";
 import { EXAMPLE_REPORTS } from "@/lib/site";
@@ -27,6 +29,7 @@ export default async function Home() {
       <SiteNav current="scan" />
 
       <RecentScans />
+      <Suspense fallback={null}><ScanActivitySection /></Suspense>
 
       <section className="hero">
         <div className="eyebrow">
@@ -69,7 +72,7 @@ export default async function Home() {
             <span className="mini-check">✓</span> {t("home.trust.share")}
           </span>
         </div>
-        <p className="plugin-line"><Link href="/diagnose">{t("home.diagLine")}</Link></p>
+        <p className="plugin-line"><Link href="/diagnose">{t("home.diagLine")}</Link>{" · "}<a href="#reviews">{lang === "sv" ? "Betyg & feedback" : "Ratings & feedback"}</a></p>
       </section>
 
 
@@ -115,6 +118,8 @@ export default async function Home() {
           <p><a href="https://fieldworkstudio.gumroad.com/l/vercel-deployment-rescue-kit">{lang === "sv" ? "Föredrar du en nedladdningsbar guide? Rescue Kit · $19 →" : "Prefer a downloadable guide? Rescue Kit · $19 →"}</a></p>
         </div>
       </section>
+
+      <Suspense fallback={null}><CommunityReviews /></Suspense>
 
       <footer className="footer">
         <span>DeployDoctor</span>
