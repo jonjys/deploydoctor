@@ -1,20 +1,22 @@
 import { cookies } from "next/headers";
 import { PatchError } from "@/lib/patch/case-patch";
-import { PATCH_ACCESS_COOKIE, PATCH_FILENAME, readAccessKeys } from "@/lib/patch/payments";
+import { PATCH_ACCESS_COOKIE, readAccessKeys } from "@/lib/patch/payments";
 import { retrievePaidPatch } from "@/lib/patch/service";
+import { signingSecret } from "@/lib/session-token";
+import { paidPatchResponse, PATCH_HEADERS } from "@/lib/patch/delivery";
+import { workLimitResponse } from "@/lib/work-budget";
+import { langFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
-
-/** The paid patch as a file, for the browser that bought it. Every download re-checks the payment with Stripe. */
 export async function GET(request: Request) {
-  const sessionId = new URL(request.url).searchParams.get("session_id") ?? "";
   try {
-    const order = await retrievePaidPatch(sessionId, readAccessKeys((await cookies()).get(PATCH_ACCESS_COOKIE)?.value));
-    return new Response(order.patch, { headers: { "Content-Type": "text/x-diff; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${PATCH_FILENAME}"`, "Cache-Control": "private, no-store" } });
+    return await paidPatchResponse(request, readAccessKeys((await cookies()).get(PATCH_ACCESS_COOKIE)?.value), signingSecret(), retrievePaidPatch);
   } catch (error) {
-    const status = error instanceof PatchError ? error.status : 503;
+    const limited = workLimitResponse(error, langFromRequest(request));
+    if (limited) return limited;
     return new Response(error instanceof PatchError ? error.message : "The patch is unavailable right now.", {
-      status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" } });
+      status: error instanceof PatchError ? error.status : 503,
+      headers: { ...PATCH_HEADERS, "Content-Type": "text/plain; charset=utf-8" },
+    });
   }
 }

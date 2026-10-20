@@ -1,9 +1,9 @@
 import { importProblems, type ImportProblem, type RepositorySnapshot } from "@/lib/analyzer";
-import { buildCasePatch, PatchError, type PatchReason } from "@/lib/patch/case-patch";
+import { buildCasePatch, sourceHash, PatchError, type PatchReason } from "@/lib/patch/case-patch";
 
 export type PlannedFix = { file: string; line: number; from: string; to: string };
 export type SkippedFix = { file: string; line: number; specifier: string; reason: PatchReason };
-export type CasePatchPlan = { patch: string; files: string[]; fixes: PlannedFix[]; skipped: SkippedFix[] };
+export type CasePatchPlan = { patch: string; files: string[]; fixes: PlannedFix[]; skipped: SkippedFix[]; sourceHashes?: Record<string, string> };
 
 /** Big enough for every realistic case fix, small enough to travel encrypted in Stripe metadata. */
 export const MAX_PATCH_BYTES = 24_000;
@@ -27,7 +27,9 @@ export function planCasePatch(snapshot: RepositorySnapshot): CasePatchPlan {
   const patched = new Map(snapshot.contents);
   const diffs: string[] = [];
   const fixes: PlannedFix[] = [];
-  const skipped: SkippedFix[] = [];
+  const skipped: SkippedFix[] = before.filter(p => p.kind === "missing").map(p => ({
+    file: p.file, line: p.line, specifier: p.specifier, reason: p.kind === "missing" && p.ambiguous ? "ambiguous" : "missing",
+  }));
   for (const [file, problems] of [...byFile].sort(([left], [right]) => left.localeCompare(right))) {
     const source = snapshot.contents.get(file);
     if (source === undefined) continue;
@@ -55,8 +57,7 @@ export function planCasePatch(snapshot: RepositorySnapshot): CasePatchPlan {
   if (after.some((problem) => !beforeKeys.has(key(problem)))) {
     throw new PatchError("The patch did not pass its own verification, so it is not offered.", 500, "verify");
   }
-  // A fix only counts once its problem is gone. The analyzer also reads import-like text in comments,
-  // which the patch never touches; those stay listed as not covered.
+  // A fix only counts once its parsed import problem is gone; comments and strings are ignored.
   const afterKeys = new Set(after.map(key));
   const verified = fixes.filter((fix) => !afterKeys.has(key({ file: fix.file, line: fix.line, specifier: fix.from })));
   for (const fix of fixes) {
@@ -66,5 +67,6 @@ export function planCasePatch(snapshot: RepositorySnapshot): CasePatchPlan {
 
   const patch = diffs.join("");
   if (Buffer.byteLength(patch) > MAX_PATCH_BYTES) throw new PatchError("The patch is too large for automatic delivery.", 422, "too-large");
-  return { patch, files: [...new Set(verified.map((fix) => fix.file))], fixes: verified, skipped };
+  return { patch, files: [...new Set(verified.map((fix) => fix.file))], fixes: verified, skipped,
+    sourceHashes: Object.fromEntries([...new Set(verified.map(fix => fix.file))].map(file => [file, sourceHash(snapshot.contents.get(file)!)])) };
 }

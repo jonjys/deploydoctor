@@ -1,10 +1,14 @@
+import { PATCH_HEADERS } from "@/lib/patch/delivery";
+import { boundedBody } from "@/lib/bounded-body";
+import { acquireWork, workLimitResponse } from "@/lib/work-budget";
+import { patchRules } from "@/lib/budget-policy";
 import { cookies } from "next/headers";
 import { z } from "zod";
-import { cookieOptions } from "@/lib/access";
+import { cookieOptions, hashRequestIp } from "@/lib/access";
 import { GitHubApiError } from "@/lib/github";
 import { langFromRequest, t } from "@/lib/i18n";
 import { PatchError } from "@/lib/patch/case-patch";
-import { PATCH_ACCESS_COOKIE, PATCH_AMOUNT, withAccessKey } from "@/lib/patch/payments";
+import { PATCH_ACCESS_COOKIE, PATCH_AMOUNT, readAccessKeys, withAccessKey } from "@/lib/patch/payments";
 import { createPatchCheckout, preparePatch } from "@/lib/patch/service";
 import { appOrigin } from "@/lib/site";
 import { sameOrigin } from "@/lib/stripe";
@@ -22,20 +26,28 @@ const input = z.discriminatedUnion("action", [
 export async function POST(request: Request) {
   const lang = langFromRequest(request);
   if (!sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });
-  const headers = { "Cache-Control": "private, no-store" };
+  const headers = PATCH_HEADERS;
   try {
-    const raw = await request.text();
+    const raw = await boundedBody(request, 14_000);
     if (raw.length > 14_000) return Response.json({ error: t(lang, "pay.tooLarge") }, { status: 413, headers });
     const parsed = input.safeParse(JSON.parse(raw));
     if (!parsed.success) return Response.json({ error: t(lang, "patch.badRequest") }, { status: 400, headers });
     const body = parsed.data;
-    if (body.action === "prepare") return Response.json(await preparePatch(request, body.reportId), { headers });
-
-    const checkout = await createPatchCheckout(body.quoteToken, appOrigin(request), lang);
     const store = await cookies();
+    if (body.action === "prepare") {
+      const offer = await preparePatch(request, body.reportId);
+      if (offer.eligible) store.set(PATCH_ACCESS_COOKIE, withAccessKey(store.get(PATCH_ACCESS_COOKIE)?.value, offer.recoveryKey), { ...cookieOptions, maxAge: 365 * 86400 });
+      return Response.json(offer, { headers });
+    }
+    await acquireWork(patchRules(hashRequestIp(request), "checkout"));
+
+    const checkout = await createPatchCheckout(body.quoteToken, appOrigin(request), lang, readAccessKeys(store.get(PATCH_ACCESS_COOKIE)?.value));
     store.set(PATCH_ACCESS_COOKIE, withAccessKey(store.get(PATCH_ACCESS_COOKIE)?.value, checkout.accessKey), { ...cookieOptions, maxAge: 365 * 86400 });
     return Response.json({ url: checkout.url }, { headers });
   } catch (error) {
+    const limited = workLimitResponse(error, lang);
+    if (limited) return limited;
+    if (error instanceof RangeError) return Response.json({ error: t(lang, "pay.tooLarge") }, { status: 413, headers });
     if (error instanceof SyntaxError) return Response.json({ error: t(lang, "pay.invalidJson") }, { status: 400, headers });
     if (error instanceof PatchError) return Response.json({ error: error.message, code: error.code }, { status: error.status, headers });
     if (error instanceof GitHubApiError) return Response.json({ error: error.localized(lang) }, { status: error.status, headers });

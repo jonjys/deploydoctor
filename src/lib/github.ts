@@ -1,4 +1,5 @@
 import "server-only";
+import { boundedBody } from "@/lib/bounded-body";
 import { db, query } from "@/lib/db";
 import { digest } from "@/lib/session-token";
 import { readRepositoryArchive } from "@/lib/repository-archive";
@@ -31,6 +32,7 @@ export type GitTree = {
   tree: Array<{
     path: string;
     type: "blob" | "tree" | "commit";
+    mode?: string;
     sha: string;
     size?: number;
   }>;
@@ -109,7 +111,22 @@ export async function githubRequest<T>(pathname: string, token?: string, userTok
     throw new GitHubApiError(failure.message, failure.status, failure.key);
   }
 
-  return (await response.json()) as T;
+  try {
+    return JSON.parse(await boundedBody(response, 6_000_000)) as T;
+  } catch {
+    throw new GitHubApiError("GitHub response exceeded safe limits or was invalid.", 422, "gh.archiveLimit");
+  }
+}
+
+/** Immutable snapshot resolution, also used by patch preparation. No branch is read again after this. */
+export async function resolveCommitSha(repoPath: string, ref: string, token?: string, userToken = false): Promise<string> {
+  const commit = await githubRequest<{ sha: string }>(`${repoPath}/commits/${encodeURIComponent(ref)}`, token, userToken)
+    .catch((error: unknown) => {
+      if (error instanceof GitHubApiError && error.status === 404) throw new GitHubApiError("The scanned revision was not found.", 404, "gh.refNotFound");
+      throw error;
+    });
+  if (!/^[a-f0-9]{40}$/.test(commit.sha)) throw new GitHubApiError("Unexpected commit reference.", 502);
+  return commit.sha;
 }
 
 function priorityFor(pathname: string): number {
@@ -139,9 +156,10 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
 
   // CI scans the pull request head; the website scans the default branch.
   const ref = options.ref && options.ref !== repository.default_branch ? options.ref : undefined;
-  // With a ref, a 404 means the ref is missing, not that the token lacks access.
-  const cacheKey = !options.privateToken && !repository.private && repository.pushed_at
-    ? digest(JSON.stringify(["scan-v2", owner.toLowerCase(), name.toLowerCase(), repository.pushed_at, ref ?? "", [...(options.checks ?? [])].sort(), options.lang ?? "en"])) : null;
+  // Resolve once, then read only this immutable commit (including the archive and cache key).
+  const commitSha = await resolveCommitSha(repoPath, ref ?? repository.default_branch, token, userToken);
+  const cacheKey = !options.privateToken && !repository.private && commitSha
+    ? digest(JSON.stringify(["scan-v3", owner.toLowerCase(), name.toLowerCase(), commitSha, ref ?? "", [...(options.checks ?? [])].sort(), options.lang ?? "en"])) : null;
   if (cacheKey) {
     const rows = await db<Array<{ results: ReportResults }>>(query("public_scan_cache", {
       key: `eq.${cacheKey}`, expires_at: `gt.${new Date().toISOString()}`, select: "results", limit: "1",
@@ -151,7 +169,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
   const lease = await acquireWork([], "repository-download", 3, 50);
   let archive;
   try {
-    const archivePath = `${repoPath}/tarball/${encodeURIComponent(ref ?? repository.default_branch)}`;
+    const archivePath = `${repoPath}/tarball/${commitSha}`;
     if (token && token === process.env.GITHUB_TOKEN) await acquireWork(githubRules());
     const redirect = await fetch(`${GITHUB_API}${archivePath}`, {
       headers: { "User-Agent": "DeployDoctor", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -206,6 +224,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
   };
 
   const results = analyzeSnapshot(snapshot, { checks: options.checks, lang: options.lang });
+  results.repository.commitSha = commitSha;
   if (ref) results.repository.ref = ref;
   if (cacheKey && !snapshot.partial) {
     await db(query("public_scan_cache", { on_conflict: "key" }), { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },

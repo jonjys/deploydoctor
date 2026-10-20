@@ -10,6 +10,7 @@ export function reportJson(report: StoredReport) {
     url: `${SITE_URL}/r/${report.id}`,
     repoUrl: report.repo_url,
     ref: results.repository.ref ?? results.repository.defaultBranch,
+    commitSha: results.repository.commitSha ?? null,
     checkedAt: results.checkedAt,
     overall: results.overall,
     summary: results.summary,

@@ -151,6 +151,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
             {report.repo_url} ↗
           </a>
           <span>{t("report.branch", { branch: results.repository.defaultBranch })}</span>
+          {results.repository.commitSha && <a href={`${report.repo_url}/commit/${results.repository.commitSha}`} target="_blank" rel="noopener noreferrer">{t("report.commit")}: {results.repository.commitSha.slice(0, 12)}</a>}
           <span>{t("report.scannedFiles", { read: results.scan.sourceFilesRead, found: results.scan.sourceFilesFound })}</span>
           <span>{new Date(report.created_at).toLocaleString(dateLocale(lang), { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC</span>
           <Link className="rescan-link" href={rescanHref}>{t("report.scanAgain")} ↻</Link>

@@ -13,6 +13,7 @@ const quoteSchema = z.object({
   version: z.literal(1), createdAt: z.number(), expiresAt: z.number(),
   reportId: z.string().uuid(), repoUrl: z.string().url(), commitSha: z.string().regex(/^[a-f0-9]{40}$/),
   files: z.array(z.string().max(220)).min(1).max(20), fixes: z.number().int().positive(), patch: z.string().max(24_000),
+  sourceHashes: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/)).optional(),
   accessKey: z.string().regex(/^[a-f0-9]{64}$/), nonce: z.string().regex(/^[a-f0-9]{32}$/),
 });
 export type PatchQuote = z.infer<typeof quoteSchema>;
@@ -45,8 +46,9 @@ export function sealQuote(data: QuoteInput, secret: string, now = Date.now()) {
     expiresAt: Math.floor(now / 1000) + QUOTE_HOURS * 3600, accessKey: randomBytes(32).toString("hex"), nonce: randomBytes(16).toString("hex") });
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", encryptionKey(secret), iv);
+  cipher.setAAD(Buffer.from(`deploydoctor:quote:${quote.reportId}`));
   const encrypted = Buffer.concat([cipher.update(deflateRawSync(JSON.stringify(quote))), cipher.final()]);
-  const token = `p1.${Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString("base64url")}`;
+  const token = `p2.${quote.reportId}.${Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString("base64url")}`;
   if (token.length > MAX_TOKEN_LENGTH) throw new PatchError("The patch is too large for automatic delivery.", 422, "too-large");
   return { quote, token };
 }
@@ -57,12 +59,17 @@ export function sealQuote(data: QuoteInput, secret: string, now = Date.now()) {
  */
 export function openQuote(token: string, secret: string, requireFresh = true, now = Date.now()): PatchQuote {
   try {
-    if (!/^p1\.[A-Za-z0-9_-]{50,12600}$/.test(token)) throw new Error("format");
-    const bytes = Buffer.from(token.slice(3), "base64url");
+    if (token.length > MAX_TOKEN_LENGTH) throw new Error("size");
+    const legacy = /^p1\.([A-Za-z0-9_-]{50,12600})$/.exec(token);
+    const current = /^p2\.([a-f0-9-]{36})\.([A-Za-z0-9_-]{50,12600})$/.exec(token);
+    if (!legacy && !current) throw new Error("format");
+    const bytes = Buffer.from(current?.[2] ?? legacy![1], "base64url");
     const decipher = createDecipheriv("aes-256-gcm", encryptionKey(secret), bytes.subarray(0, 12));
+    if (current) decipher.setAAD(Buffer.from(`deploydoctor:quote:${current[1]}`));
     decipher.setAuthTag(bytes.subarray(12, 28));
     const json = inflateRawSync(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]), { maxOutputLength: 64_000 }).toString("utf8");
     const quote = quoteSchema.parse(JSON.parse(json));
+    if (current && current[1] !== quote.reportId) throw new Error("context");
     if (requireFresh && quote.expiresAt < Math.floor(now / 1000) + 1860) throw new Error("expired");
     return quote;
   } catch {

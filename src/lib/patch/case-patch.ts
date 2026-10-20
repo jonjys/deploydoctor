@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { createHash } from "node:crypto";
 import { findSecrets } from "@/lib/secrets";
 
 /**
@@ -10,7 +11,7 @@ import { findSecrets } from "@/lib/secrets";
  */
 /** Why a file, an import or an order was refused. The page shows each code in the visitor's language. */
 export const PATCH_REASONS = ["path", "size", "crlf", "secret", "syntax", "case", "import", "escaped", "verify", "too-large",
-  "expired", "delivery", "payment", "pending", "access", "report"] as const;
+  "expired", "delivery", "payment", "pending", "access", "report", "ambiguous", "missing", "version", "link"] as const;
 export type PatchReason = typeof PATCH_REASONS[number];
 export class PatchError extends Error {
   constructor(message: string, public readonly status = 422, public readonly code: PatchReason = "verify") { super(message); }
@@ -45,7 +46,7 @@ export function buildCasePatch(filePath: string, source: string, edits: CaseEdit
   if (Buffer.byteLength(source) > MAX_PATCH_SOURCE_BYTES || source.includes("\0"))
     throw new PatchError("The file is too large or not plain text.", 422, "size");
   if (source.includes("\r")) throw new PatchError("The file uses Windows line endings; apply the change by hand.", 422, "crlf");
-  if (findSecrets(source).length) throw new PatchError("The file contains what looks like a live credential, so it is never copied into a patch.", 422, "secret");
+  if (findSecrets(source).length || /(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}|sk_test_[A-Za-z0-9]{24,}|gh[ousr]_[A-Za-z0-9]{20,})/.test(source)) throw new PatchError("The file contains what looks like a live credential, so it is never copied into a patch.", 422, "secret");
   const parsed = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true);
   if ((parsed as unknown as { parseDiagnostics: unknown[] }).parseDiagnostics.length)
     throw new PatchError("The file has syntax errors, so no automatic patch is offered.", 422, "syntax");
@@ -80,44 +81,59 @@ export function buildCasePatch(filePath: string, source: string, edits: CaseEdit
   return { filePath, diff: applied.length ? unifiedDiff(filePath, source, after) : "", after, applied, skipped };
 }
 
-/**
- * A git-style unified diff for an edit that replaces text inside lines without adding or removing any,
- * which is all a case fix does. Three lines of context, overlapping hunks merged.
- */
+/** Full-file context, adapted from DeployFix: any changed source line makes git apply --check refuse. */
 export function unifiedDiff(filePath: string, before: string, after: string): string {
+  if (before === after) return "";
   const finalNewline = before.endsWith("\n");
-  const oldLines = before.split("\n");
-  const newLines = after.split("\n");
+  const oldLines = before.split("\n"), newLines = after.split("\n");
   if (finalNewline) { oldLines.pop(); newLines.pop(); }
-  if (oldLines.length !== newLines.length || finalNewline !== after.endsWith("\n")) throw new PatchError("The patch would change the line structure.", 500, "verify");
-  const changed = oldLines.flatMap((line, index) => line === newLines[index] ? [] : [index]);
-  if (!changed.length) return "";
-
-  const hunks: Array<{ start: number; end: number }> = [];
-  for (const index of changed) {
-    const start = Math.max(0, index - 3);
-    const end = Math.min(oldLines.length, index + 4);
-    const last = hunks.at(-1);
-    if (last && start <= last.end) last.end = end;
-    else hunks.push({ start, end });
-  }
-
-  const noNewline = "\\ No newline at end of file";
-  const isLast = (index: number) => index === oldLines.length - 1 && !finalNewline;
-  const body = hunks.map(({ start, end }) => {
-    const lines = [`@@ -${start + 1},${end - start} +${start + 1},${end - start} @@`];
-    for (let index = start; index < end; index++) {
-      if (oldLines[index] === newLines[index]) {
-        lines.push(` ${oldLines[index]}`);
-        if (isLast(index)) lines.push(noNewline);
-      } else {
-        lines.push(`-${oldLines[index]}`);
-        if (isLast(index)) lines.push(noNewline);
-        lines.push(`+${newLines[index]}`);
-        if (isLast(index)) lines.push(noNewline);
-      }
+  if (oldLines.length !== newLines.length || finalNewline !== after.endsWith("\n"))
+    throw new PatchError("The patch would change the line structure.", 500, "verify");
+  const rows: string[] = [];
+  for (let i = 0; i < oldLines.length; i++) {
+    if (oldLines[i] === newLines[i]) rows.push(` ${oldLines[i]}`);
+    else {
+      rows.push(`-${oldLines[i]}`);
+      if (i === oldLines.length - 1 && !finalNewline) rows.push("\\ No newline at end of file");
+      rows.push(`+${newLines[i]}`);
     }
-    return lines.join("\n");
-  });
-  return `diff --git a/${filePath} b/${filePath}\n--- a/${filePath}\n+++ b/${filePath}\n${body.join("\n")}\n`;
+    if (i === oldLines.length - 1 && !finalNewline) rows.push("\\ No newline at end of file");
+  }
+  const diff = `diff --git a/${filePath} b/${filePath}\nindex ${gitBlobHash(before)}..${gitBlobHash(after)}\n--- a/${filePath}\n+++ b/${filePath}\n@@ -1,${oldLines.length} +1,${newLines.length} @@\n${rows.join("\n")}\n`;
+  if (applyVerifiedDiff(filePath, before, diff) !== after) throw new PatchError("Patch verification failed.", 500, "verify");
+  return diff;
+}
+
+const gitBlobHash = (source: string) => createHash("sha1").update(`blob ${Buffer.byteLength(source)}\0`).update(source).digest("hex");
+export const sourceHash = (source: string) => createHash("sha256").update(source).digest("hex");
+
+/** Strict application of our full-context, single-file diff. Pure text processing; never executes repo code. */
+export function applyVerifiedDiff(filePath: string, source: string, diff: string): string {
+  const rows = diff.split("\n");
+  const title = rows.shift();
+  const index = /^index ([a-f0-9]{40})\.\.([a-f0-9]{40})$/.exec(rows.shift() ?? "");
+  if (title !== `diff --git a/${filePath} b/${filePath}` || !index || rows.shift() !== `--- a/${filePath}`
+    || rows.shift() !== `+++ b/${filePath}`) throw new PatchError("Invalid patch path.", 422, "verify");
+  const header = /^@@ -1,(\d+) \+1,(\d+) @@$/.exec(rows.shift() ?? "");
+  if (!header || rows.pop() !== "") throw new PatchError("Invalid patch hunk.", 422, "verify");
+  const oldLines: string[] = [], newLines: string[] = [];
+  let oldNewline = true, newNewline = true, previous = "";
+  for (const row of rows) {
+    const kind = row[0];
+    if (row === "\\ No newline at end of file") {
+      if (previous === " " || previous === "-") oldNewline = false;
+      if (previous === " " || previous === "+") newNewline = false;
+      continue;
+    }
+    if (kind === " " || kind === "-") oldLines.push(row.slice(1));
+    if (kind === " " || kind === "+") newLines.push(row.slice(1));
+    if (![" ", "-", "+"].includes(kind)) throw new PatchError("Invalid patch body.", 422, "verify");
+    previous = kind;
+  }
+  const original = oldLines.join("\n") + (oldNewline ? "\n" : "");
+  if (oldLines.length !== Number(header[1]) || newLines.length !== Number(header[2]) || original !== source)
+    throw new PatchError("Source changed; rescan instead of forcing the patch.", 409, "version");
+  const after = newLines.join("\n") + (newNewline ? "\n" : "");
+  if (gitBlobHash(source) !== index[1] || gitBlobHash(after) !== index[2]) throw new PatchError("Patch hash mismatch.", 409, "version");
+  return after;
 }
