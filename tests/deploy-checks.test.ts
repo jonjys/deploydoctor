@@ -71,9 +71,8 @@ test("build configuration: a webpack config that a plugin, a function or a sprea
   assert.match(build.findings?.[0].fix ?? "", /^Run next build on your machine\./);
   assert.match(buildConfig({ "package.json": nextPkg(), "next.config.ts": intl, ...page }, { lang: "sv" }).findings?.[0].problem ?? "", /skickar konfigurationen genom ett plugin/);
   const wrapped: Array<[string, string]> = [
-    ["withMDX", "import createMDX from \"@next/mdx\";\n\nconst withMDX = createMDX({});\nconst nextConfig = {\n  pageExtensions: [\"ts\", \"tsx\", \"mdx\"],\n  webpack(config) { return config },\n};\n\nexport default withMDX(nextConfig);\n"],
     ["plugin called inline", "const nextConfig = { webpack: (config) => config };\nexport default require(\"next-intl/plugin\")()(nextConfig);"],
-    ["a config wrapped where it is declared", "const withMDX = require(\"@next/mdx\")();\nconst nextConfig = withMDX({ webpack: (config) => config });\nmodule.exports = nextConfig;"],
+    ["a config wrapped where it is declared", "const withTM = require(\"next-transpile-modules\")([]);\nconst nextConfig = withTM({ webpack: (config) => config });\nmodule.exports = nextConfig;"],
     ["reassigned", "let nextConfig = { webpack: (config) => config };\nnextConfig = withPlugins(nextConfig);\nexport default nextConfig;"],
     ["a function", "module.exports = (phase) => ({ webpack: (config) => config });"],
     ["a spread", "import base from \"./base.mjs\";\nexport default { ...base, webpack: (config) => config };"],
@@ -82,6 +81,26 @@ test("build configuration: a webpack config that a plugin, a function or a sprea
   // A spread inside the webpack function and a type annotation keep the plain object red.
   const plain = "import type { NextConfig } from \"next\";\nconst nextConfig: NextConfig = {\n  webpack: (config) => {\n    config.resolve.alias = { ...config.resolve.alias, a: \"b\" };\n    return config;\n  },\n};\nexport default nextConfig satisfies NextConfig;\n";
   assert.equal(buildConfig({ "package.json": nextPkg(), "next.config.ts": plain, ...page }).status, "red");
+});
+
+test("build configuration: @next/mdx and nextra add a turbopack option when the config loads, while next-pwa adds only webpack and stops the build", () => {
+  const mdx = "import createMDX from \"@next/mdx\";\n\nconst withMDX = createMDX({});\nconst nextConfig = {\n  pageExtensions: [\"ts\", \"tsx\", \"mdx\"],\n  webpack(config) { return config },\n};\n\nexport default withMDX(nextConfig);\n";
+  assert.equal(buildConfig({ "package.json": nextPkg(), "next.config.mjs": mdx, ...page }).status, "green");
+  assert.equal(buildConfig({ "package.json": nextPkg(), "next.config.mjs": "import nextra from \"nextra\";\nexport default nextra({})({ webpack: (config) => config });", ...page }).status, "green");
+  // next-pwa adds a webpack function of its own, so the build stops even though next.config has none.
+  const pwa = "import withPWA from \"next-pwa\";\n\nexport default withPWA({ dest: \"public\" })({\n  reactStrictMode: true,\n});\n";
+  const stopped = buildConfig({ "package.json": nextPkg(), "next.config.mjs": pwa, ...page });
+  assert.equal(stopped.status, "red");
+  assert.equal(stopped.findings?.[0].line, 1);
+  assert.match(stopped.findings?.[0].problem ?? "", /^loads next-pwa, which adds a webpack config and no turbopack option, so Next\.js 16 stops next build/);
+  assert.match(stopped.findings?.[0].fix ?? "", /^Build with Webpack by changing the build script to next build --webpack/);
+  assert.match(buildConfig({ "package.json": nextPkg(), "next.config.mjs": pwa, ...page }, { lang: "sv" }).findings?.[0].problem ?? "", /^laddar next-pwa/);
+  for (const plugin of ["@ducanh2912/next-pwa", "@serwist/next"]) {
+    assert.equal(buildConfig({ "package.json": nextPkg(), "next.config.mjs": pwa.replace("next-pwa", plugin), ...page }).status, "red", plugin);
+  }
+  // Next.js 15 builds with Webpack, and a build script that picks Webpack is fine too.
+  assert.equal(buildConfig({ "package.json": nextPkg("15.5.0"), "next.config.mjs": pwa, ...page }).status, "green");
+  assert.equal(buildConfig({ "package.json": nextPkg("16.3.6", "next build --webpack"), "next.config.mjs": pwa, ...page }).status, "green");
 });
 
 test("build configuration: the turbopack shorthand, quoted and assigned keys, and the build script behind npm run build", () => {
@@ -142,7 +161,6 @@ test("build configuration: with output export, the features the static exports g
     "app/form.tsx": "export default function Form() {\n  async function submit() {\n    'use server';\n  }\n  return <form action={submit} />;\n}\n",
     "app/notes.tsx": "export const note = \"use server only for actions\";\n",
     "pages/api/legacy.ts": "export default function handler(req, res) { res.json({}) }\n",
-    "pages/ssr.tsx": "export async function getServerSideProps() { return { props: {} } }\nexport default function Ssr() { return null }\n",
     "pages/isr.tsx": "export async function getStaticProps() {\n  return { props: {}, revalidate: 30 };\n}\nexport default function Isr() { return null }\n",
   };
   const build = buildConfig(files);
@@ -150,7 +168,7 @@ test("build configuration: with output export, the features the static exports g
   const found = build.findings?.map((finding) => `${finding.file}:${finding.line}`);
   assert.deepEqual(found, [
     "app/actions.ts:1", "app/api/hello/route.ts:7", "app/form.tsx:3", "app/news/page.tsx:1",
-    "middleware.ts:1", "pages/api/legacy.ts:1", "pages/isr.tsx:2", "pages/ssr.tsx:1",
+    "middleware.ts:1", "pages/api/legacy.ts:1", "pages/isr.tsx:2",
   ]);
   const problems = build.findings?.map((finding) => finding.problem) ?? [];
   assert.match(problems[1], /^exports POST, but with output set to export in next\.config Next\.js only supports GET route handlers/);
@@ -159,11 +177,22 @@ test("build configuration: with output export, the features the static exports g
   assert.match(problems[0], /^defines a Server Action with use server/);
   assert.match(problems[5], /API Routes cannot be used with a static export/);
   assert.match(problems[6], /^sets revalidate to 30/);
-  assert.match(problems[7], /^uses getServerSideProps/);
-  assert.match(build.explanation, /^8 project settings may make/);
+  assert.match(build.explanation, /^7 project settings may make/);
   // Rewrites in next.config and next/image with the default loader are not reported: Next.js skips both warnings on Vercel.
   assert.ok(problems.every((problem) => !/rewrites|image/i.test(problem)));
   // The same files without output export are fine.
+  assert.equal(buildConfig({ ...files, "next.config.js": "module.exports = {};" }).status, "green");
+});
+
+test("build configuration: with output export, getServerSideProps stops next build, so it is red", () => {
+  const ssr = "export async function getServerSideProps() { return { props: {} } }\nexport default function Ssr() { return null }\n";
+  const files = { "package.json": nextPkg(), "next.config.js": exportConfig, ...page, "pages/ssr.tsx": ssr };
+  const build = buildConfig(files);
+  assert.equal(build.status, "red");
+  assert.equal(build.findings?.[0].file, "pages/ssr.tsx");
+  assert.equal(build.findings?.[0].line, 1);
+  assert.match(build.findings?.[0].problem ?? "", /^uses getServerSideProps, which next build rejects in a static export/);
+  assert.match(buildConfig(files, { lang: "sv" }).findings?.[0].problem ?? "", /^använder getServerSideProps, som next build avvisar/);
   assert.equal(buildConfig({ ...files, "next.config.js": "module.exports = {};" }).status, "green");
 });
 
@@ -175,7 +204,7 @@ test("build configuration: with output export, a GET route handler not marked st
   assert.equal(build.findings?.length, 1);
   assert.equal(build.findings?.[0].line, 1);
   assert.match(build.findings?.[0].problem ?? "", /^has a GET route handler that is not marked static, so with output set to export in next\.config, next build stops/);
-  assert.match(build.findings?.[0].fix ?? "", /export const dynamic = "force-static"/);
+  assert.match(build.findings?.[0].fix ?? "", /export const dynamic = force-static/);
   assert.match(build.explanation, /^1 project setting stops the Vercel build\.$/);
   const marked = [
     "export const dynamic = \"force-static\";\n" + handler,
@@ -210,6 +239,9 @@ test("build configuration: with output export, private folders, export star, and
     ["export star in a layout", { "app/blog/layout.tsx": "export * from \"./params\";\nexport default function L({ children }) { return children }", "app/blog/[slug]/page.tsx": draft }],
     ["src middleware with a root app folder", { "src/middleware.ts": "export function middleware() {}" }],
     ["a dev proxy script on Next.js 15", { "package.json": nextPkg("15.5.0"), "proxy.ts": "import http from \"node:http\";\nhttp.createServer().listen(3001);" }],
+    // Next.js only loads middleware and proxy files with its page extensions, so a .mjs script of that name is not one.
+    ["a middleware.mjs script", { "middleware.mjs": "export function middleware() {}" }],
+    ["a proxy.cjs script", { "proxy.cjs": "module.exports = {}" }],
   ];
   for (const [name, extra] of fine) assert.equal(buildConfig({ ...files, ...extra }).status, "green", name);
   assert.deepEqual(buildConfig({ ...files, "proxy.ts": "export function proxy() {}" }).findings?.map((finding) => finding.file), ["proxy.ts"]);
@@ -241,7 +273,7 @@ test("build configuration: next/image with a literal remote src on a host next.c
   assert.equal(build.findings?.[0].line, 7);
   assert.match(build.findings?.[0].problem ?? "", /^next\/image loads https:\/\/images\.example\.com\/u\/1\.png, but images\.example\.com is not in images\.remotePatterns or images\.domains/);
   assert.match(build.findings?.[0].problem ?? "", /400 Bad Request/);
-  assert.match(build.findings?.[0].fix ?? "", /new URL\("https:\/\/images\.example\.com\/\*\*"\)/);
+  assert.match(build.findings?.[0].fix ?? "", /new URL\(https:\/\/images\.example\.com\/\*\*\)/);
   assert.equal(buildConfig({ ...files, "next.config.ts": "export default { images: { remotePatterns: [] } };" }).status, "yellow");
   assert.equal(buildConfig({ ...files, "next.config.ts": "export default { images: { remotePatterns: [{ protocol: 'https', hostname: 'cdn.other.com' }] } };" }).status, "yellow");
   // A host that looks like images.something is a string, not a change to the images config.
@@ -348,6 +380,23 @@ test("build configuration: Astro rendering on demand needs an adapter, and on Ve
   assert.equal(other.findings?.[0].line, 6);
   assert.match(other.findings?.[0].problem ?? "", /^renders pages on demand with @astrojs\/node, but the Vercel docs for Astro say a server-rendered Astro app must use Astro's Vercel adapter/);
   assert.match(buildConfig({ "package.json": astroPkg, "astro.config.mjs": node }, { lang: "sv" }).findings?.[0].fix ?? "", /^Kör npx astro add vercel, ta bort @astrojs\/node/);
+
+  // The shorthand adapter key counts as an adapter, and a subpath import still names the other platform.
+  const shorthand = "import { defineConfig } from 'astro/config';\nimport adapter from '@astrojs/vercel';\n\nexport default defineConfig({\n  output: 'server',\n  adapter,\n});\n";
+  assert.equal(buildConfig({ "package.json": astroPkg, "astro.config.mjs": shorthand }).status, "green");
+  const netlify = withVercel.replace("import vercel from '@astrojs/vercel';", "import netlify from '@astrojs/netlify/functions';").replace("vercel()", "netlify()");
+  assert.match(buildConfig({ "package.json": astroPkg, "astro.config.mjs": netlify }).findings?.[0].problem ?? "", /^renders pages on demand with @astrojs\/netlify,/);
+  // A spread hides a missing adapter, but not the adapter that is in view.
+  const spreadNode = "import base from './base.mjs';\nimport node from '@astrojs/node';\nexport default { ...base, output: 'server', adapter: node({ mode: 'standalone' }) };";
+  assert.equal(buildConfig({ "package.json": astroPkg, "astro.config.mjs": spreadNode }).status, "yellow");
+  // An Astro page opts out of prerendering in its frontmatter. Astro 4 builds a static site whole and ignores it without an adapter.
+  const astroPage = "---\nexport const prerender = false;\nconst now = new Date();\n---\n<p>{now.toISOString()}</p>\n";
+  const onDemand = buildConfig({ "package.json": astroPkg, "src/pages/now.astro": astroPage });
+  assert.equal(onDemand.status, "red");
+  assert.equal(onDemand.findings?.[0].file, "src/pages/now.astro");
+  assert.equal(onDemand.findings?.[0].line, 2);
+  assert.equal(buildConfig({ "package.json": astro4, "src/pages/now.astro": astroPage }).status, "green");
+  assert.equal(buildConfig({ "package.json": astro4, "src/pages/api/ping.ts": endpoint }).status, "green");
 
   // Static sites need no adapter, and configs that are unread or spread from elsewhere are not judged.
   const notFlagged: Array<[string, Record<string, string>, string[]?]> = [

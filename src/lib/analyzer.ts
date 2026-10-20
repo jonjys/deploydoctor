@@ -155,17 +155,43 @@ function possibleImportTargets(base: string): string[] {
   return targets;
 }
 
+type AliasRoots = Array<{ prefix: string; roots: string[] }>;
+
+/** The tsconfig or jsconfig text by the folder it sits in. A nested app (a monorepo example, a docs site) resolves from its own. */
+function aliasConfigs(snapshot: RepositorySnapshot): Map<string, string> {
+  const configs = new Map<string, string>();
+  for (const [file, raw] of snapshot.contents) {
+    const match = /^(?:(.*)\/)?(tsconfig|jsconfig)\.json$/.exec(file);
+    if (!match) continue;
+    // tsconfig wins over jsconfig in the same folder, as it does for TypeScript itself.
+    if (match[2] === "jsconfig" && configs.has(match[1] ?? "")) continue;
+    configs.set(match[1] ?? "", raw);
+  }
+  return configs;
+}
+
+/** The folder of the config that governs `file`: the nearest one above it, else the root ("" even when there is none). */
+function nearestConfigDir(file: string, configs: Map<string, string>): string {
+  let dir = path.posix.dirname(file);
+  while (dir !== "." && dir !== "") {
+    if (configs.has(dir)) return dir;
+    dir = path.posix.dirname(dir);
+  }
+  return "";
+}
+
 /**
- * Every `@/...` alias from tsconfig paths, longest prefix first, so `@/public/*` wins over `@/*` the way
- * TypeScript resolves it. Without a tsconfig entry, `@/` means `src/` or the repository root.
+ * Every `@/...` alias from the config's paths, longest prefix first, so `@/public/*` wins over `@/*` the way
+ * TypeScript resolves it. Targets and baseUrl are relative to the config's folder. Without a tsconfig entry,
+ * `@/` means `src/` or the folder itself.
  */
-function aliasRoots(snapshot: RepositorySnapshot): Array<{ prefix: string; roots: string[] }> {
-  const raw = snapshot.contents.get("tsconfig.json") ?? snapshot.contents.get("jsconfig.json") ?? "";
+function aliasRoots(raw: string, dir: string): AliasRoots {
   const config = tsconfigAliases(raw);
-  const aliases = config.prefixes.filter(item => item.prefix.startsWith("@/")).map(item => ({
-    prefix: item.prefix, roots: item.targets.map(target => path.posix.join(config.baseUrl ?? "", target).replace(/\/$/, "").replace(/^\.$/, "")),
-  }));
-  if (!aliases.some(alias => alias.prefix === "@/")) aliases.push({ prefix: "@/", roots: config.baseUrl !== undefined ? [config.baseUrl] : ["src", ""] });
+  const under = (target: string) => path.posix.join(dir, config.baseUrl ?? "", target).replace(/\/$/, "").replace(/^\.$/, "");
+  const aliases = config.prefixes.filter(item => item.prefix.startsWith("@/")).map(item => ({ prefix: item.prefix, roots: item.targets.map(under) }));
+  if (!aliases.some(alias => alias.prefix === "@/")) {
+    aliases.push({ prefix: "@/", roots: config.baseUrl !== undefined ? [under("")] : [path.posix.join(dir, "src"), dir].map(root => root.replace(/^\.$/, "")) });
+  }
   return aliases.sort((left, right) => right.prefix.length - left.prefix.length);
 }
 
@@ -188,12 +214,17 @@ export function importProblems(snapshot: RepositorySnapshot): ImportProblem[] {
   // Linux file systems (and so Vercel builds) are case-sensitive; macOS and Windows are not.
   const filesByLowerCase = new Map<string, string[]>();
   for (const file of files) filesByLowerCase.set(file.toLowerCase(), [...(filesByLowerCase.get(file.toLowerCase()) ?? []), file]);
-  const aliases = aliasRoots(snapshot);
+  const configs = aliasConfigs(snapshot);
+  const aliasesByDir = new Map<string, AliasRoots>();
   const problems: ImportProblem[] = [];
 
   for (const [file, source] of snapshot.contents) {
     // next-env.d.ts intentionally references generated .next type files that are gitignored.
     if (!SOURCE_EXTENSION.test(file) || TEST_FILE.test(file) || /\.d\.[cm]?ts$/.test(file)) continue;
+    const configDir = nearestConfigDir(file, configs);
+    const config = configs.get(configDir) ?? "";
+    let aliases = aliasesByDir.get(configDir);
+    if (!aliases) { aliases = aliasRoots(config, configDir); aliasesByDir.set(configDir, aliases); }
 
     for (const { specifier: original, line } of extractImports(source, file)) {
       const specifier = original.split(/[?#]/)[0];
@@ -229,7 +260,6 @@ export function importProblems(snapshot: RepositorySnapshot): ImportProblem[] {
           continue;
         }
         const scripts = snapshot.contents.get("package.json") ?? "";
-        const config = snapshot.contents.get("tsconfig.json") ?? snapshot.contents.get("jsconfig.json") ?? "";
         const uncertain = snapshot.partialReasons?.includes("truncated_tree") || /"extends"\s*:/.test(config)
           || /(?:generate|codegen|prisma\s+generate)/i.test(scripts)
           || candidates.some(candidate => /(?:^|\/)(?:generated|__generated__|\.next|\.nuxt|\.svelte-kit)(?:\/|\.)/.test(candidate)
@@ -249,7 +279,8 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
     : problem.ambiguous
       ? { file: problem.file, line: problem.line, problem: x.imports.ambiguous(problem.specifier), fix: x.imports.review }
       : { file: problem.file, line: problem.line, problem: x.imports.problem(problem.specifier), fix: x.imports.fix(problem.target, problem.line),
-        command: `git add -- ${shellQuote(problem.target)}` });
+        // git add needs the real file name; a specifier without an extension only gives the base, which git rejects.
+        ...(/\.[A-Za-z0-9]+$/.test(problem.target) ? { command: `git add -- ${shellQuote(problem.target)}` } : {}) });
 
   if (missing.length) {
     return makeCheck(
@@ -554,6 +585,11 @@ function nestedProjects(snapshot: RepositorySnapshot): (file: string) => boolean
   return (file) => dirs.some((dir) => file.startsWith(`${dir}/`));
 }
 
+// Plugins that set a turbopack option when the config loads under Next.js 16 (@next/mdx 16, nextra 4), read from their sources.
+const TURBOPACK_PLUGINS = /["'](?:@next\/mdx|nextra)["']/;
+// Plugins that add a webpack function and no turbopack option, so Next.js 16 stops even when next.config itself has no webpack function.
+const WEBPACK_ONLY_PLUGINS = /["'](next-pwa|@ducanh2912\/next-pwa|@serwist\/next)["']/;
+
 /**
  * Next.js 16 builds with Turbopack by default and stops when the loaded config has a webpack function and no turbopack
  * option, unless the build command picks a bundler with a flag or TURBOPACK or NEXT_RSPACK. Next.js checks the config
@@ -567,8 +603,16 @@ function webpackFindings(config: ConfigFile | undefined, buildCommand: string, n
   if (!/\bnext\s+build\b/.test(buildCommand) || /--(?:webpack|turbopack|turbo)\b|\bTURBOPACK=(?!["']?auto\b)["']?\w|\bNEXT_RSPACK=["']?\w/.test(buildCommand)) return [];
   // Only a function counts: plugin options such as Sentry's webpack: { ... } are objects, not a webpack config.
   const match = /(?:^|[{,\s])webpack\s*(?:\(|:\s*(?:async\s+)?(?:function\b|\(|[A-Za-z_$][\w$]*\s*=>))|\.webpack\s*=(?!=)/m.exec(config.code);
-  if (!match) return [];
-  const line = lineAt(config.raw!, match.index + match[0].indexOf("webpack"));
+  const webpackOnly = WEBPACK_ONLY_PLUGINS.exec(config.code);
+  if (!match && !webpackOnly) return [];
+  // These plugins add a turbopack option when the config loads, so Next.js sees both and builds.
+  if (TURBOPACK_PLUGINS.test(config.code)) return [];
+  if (webpackOnly) {
+    const item: Finding = { file: config.file, line: lineAt(config.raw!, webpackOnly.index), problem: x.build.webpackOnlyPlugin(webpackOnly[1], major), fix: x.build.webpackOnlyPluginFix };
+    red.add(item);
+    return [item];
+  }
+  const line = lineAt(config.raw!, match!.index + match![0].indexOf("webpack"));
   if (!plainConfigObject(config.code)) return [{ file: config.file, line, problem: x.build.webpackPlugin(major), fix: x.build.webpackPluginFix }];
   const item: Finding = { file: config.file, line, problem: x.build.webpack(major), fix: x.build.webpackFix };
   red.add(item);
@@ -594,7 +638,8 @@ function staticExportFindings(snapshot: RepositorySnapshot, config: ConfigFile |
   // Next.js reads middleware, and from Next.js 16 proxy, next to the pages or app folder it builds: at the root or in src.
   const hasDir = (dir: string) => snapshot.entries.some((entry) => entry.path.startsWith(`${dir}/`));
   const base = (["pages", "src/pages"].find(hasDir) ?? ["app", "src/app"].find(hasDir) ?? "").startsWith("src/") ? "src/" : "";
-  const requestFile = new RegExp(`^${base}(?:middleware${Number(/\d+/.exec(nextVersion ?? "")?.[0]) >= 16 ? "|proxy" : ""})\\.[cm]?[jt]s$`);
+  // Next.js looks for them with its page extensions only (js, jsx, ts, tsx), so a .mjs or .cjs file of that name is not loaded.
+  const requestFile = new RegExp(`^${base}(?:middleware${Number(/\d+/.exec(nextVersion ?? "")?.[0]) >= 16 ? "|proxy" : ""})\\.[jt]sx?$`);
 
   for (const file of files) {
     if (requestFile.test(file)) { findings.push(finding(file, 0, x.build.exportProxy, x.build.exportProxyFix)); continue; }
@@ -644,7 +689,10 @@ function staticExportFindings(snapshot: RepositorySnapshot, config: ConfigFile |
     } else if (pages && pages[1].startsWith("api/")) {
       findings.push(finding(file, 0, x.build.exportApiRoute, x.build.exportApiRouteFix));
     } else if (pages && exportsName(code, "getServerSideProps")) {
-      findings.push(finding(file, exportIndex(code, "getServerSideProps"), x.build.exportGssp, x.build.exportGsspFix));
+      // next build stops: pages with getServerSideProps can not be exported.
+      const item = finding(file, exportIndex(code, "getServerSideProps"), x.build.exportGssp, x.build.exportGsspFix);
+      red.add(item);
+      findings.push(item);
     } else if (pages && exportsName(code, "getStaticProps")) {
       const revalidate = /\brevalidate\s*:\s*(\d+)/.exec(code);
       if (revalidate && Number(revalidate[1]) > 0) findings.push(finding(file, revalidate.index, x.build.exportIsr(Number(revalidate[1])), x.build.exportIsrFix));
@@ -770,15 +818,18 @@ function svelteKitFindings(snapshot: RepositorySnapshot, x: AnalysisText): Findi
 function astroFindings(snapshot: RepositorySnapshot, astroVersion: string | undefined, x: AnalysisText, red: Set<Finding>): Finding[] {
   const config = rootConfig(snapshot, /^astro\.config\.[cm]?[jt]s$/);
   const code = config ? config.code : "";
-  // An unread config, or one spread from elsewhere, could set the adapter where we cannot see it.
-  if (code === undefined || code.includes("...")) return [];
+  if (code === undefined) return [];
+  // The adapter key, written out or as the shorthand `adapter,` of an imported value.
+  const adapter = /\badapter\s*[:,}]/.exec(code);
+  // A config spread from elsewhere could set the adapter where we cannot see it; one in view still says which it is.
+  if (!adapter && code.includes("...")) return [];
   // Astro 5 removed hybrid (static now covers it), so there hybrid fails config validation instead of needing an adapter.
-  const hybrid = Number(/\d+/.exec(astroVersion ?? "")?.[0]) <= 4;
-  const output = (hybrid ? /\boutput\s*:\s*["'`](server|hybrid)["'`]/ : /\boutput\s*:\s*["'`](server)["'`]/).exec(code);
-  const prerender = output ? undefined : [...snapshot.contents].filter(([file]) => /^src\/pages\//.test(file) && SOURCE_EXTENSION.test(file))
+  const astro4 = Number(/\d+/.exec(astroVersion ?? "")?.[0]) <= 4;
+  const output = (astro4 ? /\boutput\s*:\s*["'`](server|hybrid)["'`]/ : /\boutput\s*:\s*["'`](server)["'`]/).exec(code);
+  // Astro 4 builds a static site whole and ignores prerender false there; from Astro 5 the route renders on demand.
+  const prerender = output || astro4 ? undefined : [...snapshot.contents].filter(([file]) => /^src\/pages\//.test(file) && (SOURCE_EXTENSION.test(file) || /\.astro$/i.test(file)))
     .map(([file, raw]) => ({ file, raw, match: /^\s*export\s+const\s+prerender\s*=\s*false\b/m.exec(stripComments(raw)) })).find((item) => item.match);
   if (!output && !prerender) return [];
-  const adapter = /\badapter\s*:/.exec(code);
   if (!adapter) {
     const item: Finding = output
       ? { file: config!.file, line: lineAt(config!.raw!, output.index), problem: x.build.astroOutputNoAdapter(output[1]), fix: x.build.astroNoAdapterFix }
@@ -786,7 +837,7 @@ function astroFindings(snapshot: RepositorySnapshot, astroVersion: string | unde
     red.add(item);
     return [item];
   }
-  const other = /["'](@astrojs\/(?:node|netlify|cloudflare))["']/.exec(code)?.[1];
+  const other = /["'](@astrojs\/(?:node|netlify|cloudflare))(?:\/[\w-]+)?["']/.exec(code)?.[1];
   if (!other || /["']@astrojs\/vercel(?:\/[\w-]+)?["']/.test(code)) return [];
   return [{ file: config!.file, line: lineAt(config!.raw!, adapter.index), problem: x.build.astroOtherAdapter(other), fix: x.build.astroOtherAdapterFix(other) }];
 }

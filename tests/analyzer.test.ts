@@ -789,6 +789,35 @@ test("a second tsconfig alias such as @/public/* resolves before @/*", () => {
   assert.deepEqual(imports?.findings?.map((finding) => finding.problem.includes("missing.svg")), [true]);
 });
 
+test("a nested app resolves @/ imports from its own tsconfig, and an import without an extension gets no git add command", () => {
+  const entries: RepositorySnapshot["entries"] = [
+    { path: "package.json", type: "blob" }, { path: "tsconfig.json", type: "blob" },
+    { path: "src", type: "tree" }, { path: "src/app", type: "tree" }, { path: "src/app/page.tsx", type: "blob" }, { path: "src/lib", type: "tree" }, { path: "src/lib/util.ts", type: "blob" },
+    { path: "dashboard", type: "tree" }, { path: "dashboard/final-example", type: "tree" },
+    { path: "dashboard/final-example/package.json", type: "blob" }, { path: "dashboard/final-example/tsconfig.json", type: "blob" },
+    { path: "dashboard/final-example/app", type: "tree" }, { path: "dashboard/final-example/app/page.tsx", type: "blob" },
+    { path: "dashboard/final-example/app/ui", type: "tree" }, { path: "dashboard/final-example/app/ui/skeletons.tsx", type: "blob" },
+  ];
+  const results = analyzeSnapshot(snapshot(entries, {
+    "package.json": JSON.stringify({ dependencies: { next: "16.3.6" } }),
+    "tsconfig.json": JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } }),
+    // The shape of vercel/next-learn: each example is its own app with baseUrl . and @/* pointing at its own folder.
+    "dashboard/final-example/tsconfig.json": JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } } }),
+    "dashboard/final-example/app/page.tsx": 'import { CardSkeleton } from "@/app/ui/skeletons";\nimport missing from "@/app/ui/missing";\nimport data from "./data.json";\nexport default function Page() { return null }',
+    "dashboard/final-example/app/ui/skeletons.tsx": "export const CardSkeleton = () => null;",
+    "src/app/page.tsx": 'import { util } from "@/lib/util"; export default function Page() { return null }',
+    "src/lib/util.ts": "export const util = 1;",
+  }), { checks: ["next"] });
+  const imports = results.checks.find((check) => check.id === "imports");
+  assert.equal(imports?.status, "red");
+  assert.deepEqual(imports?.findings?.map((finding) => [finding.file, finding.line, finding.command]), [
+    ["dashboard/final-example/app/page.tsx", 2, undefined],
+    ["dashboard/final-example/app/page.tsx", 3, "git add -- 'dashboard/final-example/app/data.json'"],
+  ]);
+  // The missing file is looked for in the nested app, not under the root src folder.
+  assert.match(imports?.findings?.[0].fix ?? "", /dashboard\/final-example\/app\/ui\/missing/);
+});
+
 test("Node-only imports in Edge runtime code are red in server-libs", () => {
   const entries: RepositorySnapshot["entries"] = [...nextEntries,
     { path: "middleware.ts", type: "blob" }, { path: "app/api/og/route.ts", type: "blob" }];

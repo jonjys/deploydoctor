@@ -15,6 +15,7 @@ import type { Category, ReportResults } from "@/types/report";
 
 const GITHUB_API = "https://api.github.com";
 const SOURCE_FILE = /\.(?:[cm]?[jt]sx?|vue|svelte)$/i;
+const ASTRO_PAGE = /^src\/pages\/.*\.astro$/i;
 const API_ROUTE = /(?:^|\/)(?:src\/)?app\/api(?:\/.*)?\/route\.[cm]?[jt]s$|(?:^|\/)(?:src\/)?pages\/api\/.*\.[cm]?[jt]s$/i;
 const MAX_FILE_BYTES = 256_000;
 // Root lockfiles are read in full (they can be large) so the dependencies check can compare them with package.json.
@@ -132,7 +133,7 @@ export async function resolveCommitSha(repoPath: string, ref: string, token?: st
 function priorityFor(pathname: string): number {
   if (pathname === "package.json") return 0;
   if (/(?:^|\/)\.env(?:\..+)?$/.test(pathname) || MISNAMED_ENV_TEMPLATE.test(pathname) || pathname === ".gitignore") return 1;
-  if (/^(?:tsconfig|jsconfig|vercel)\.json$/.test(pathname) || /\.prisma$/.test(pathname) || ROOT_LOCKFILE.test(pathname)
+  if (/(?:^|\/)(?:tsconfig|jsconfig)\.json$|^vercel\.json$/.test(pathname) || /\.prisma$/.test(pathname) || ROOT_LOCKFILE.test(pathname)
     || /^(?:next|svelte|astro|vite)\.config\.[cm]?[jt]s$/.test(pathname)) return 2;
   if (API_ROUTE.test(pathname)) return 3;
   if (MIGRATION_FILE.test(pathname)) return 4;
@@ -191,7 +192,8 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
     if (!downloaded.ok || !downloaded.body) throw new Error("Could not download repository archive.");
     archive = await readRepositoryArchive(downloaded.body, (file, size) =>
       (ROOT_LOCKFILE.test(file) && size <= MAX_LOCKFILE_BYTES) || (size <= MAX_FILE_BYTES &&
-      (SOURCE_FILE.test(file) || /^(?:package|tsconfig|jsconfig|vercel)\.json$/.test(file) || file === ".gitignore"
+      // Nested tsconfig files resolve a nested app's aliases; Astro pages can opt out of prerendering in their frontmatter.
+      (SOURCE_FILE.test(file) || /^(?:package|vercel)\.json$/.test(file) || /(?:^|\/)(?:tsconfig|jsconfig)\.json$/.test(file) || ASTRO_PAGE.test(file) || file === ".gitignore"
         || /\.prisma$/.test(file) || MIGRATION_FILE.test(file) || MISNAMED_ENV_TEMPLATE.test(file) || /(?:^|\/)\.env(?:\..+)?$/.test(file))), priorityFor, signal);
   } catch (error) {
     if (error instanceof GitHubApiError) throw error;
