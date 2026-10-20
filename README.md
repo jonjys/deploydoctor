@@ -21,15 +21,28 @@ DeployDoctor scans a public GitHub repository for the mistakes that most often b
 
 ## CI: GitHub Action and API
 
-With a pass, the same checks run on every pull request before Vercel builds it.
-Create an API token under My scans, store it as the `DEPLOYDOCTOR_TOKEN` secret and add:
+The same checks run on every pull request before Vercel builds it. A public repository
+gets 3 a day for free, with no account and no secret: the `id-token: write` permission
+lets GitHub prove which repository is asking, and when the day's allowance is used the job
+warns and passes instead of blocking the pull request.
 
 ```yaml
+name: DeployDoctor
 on: pull_request
 jobs:
   deploydoctor:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
+      - uses: jonjys/deploydoctor-action@v1
+```
+
+For a private repository, or more than 3 a day, a pass is needed. Create an API
+token under My scans, store it as the `DEPLOYDOCTOR_TOKEN` secret and pass it:
+
+```yaml
       - uses: jonjys/deploydoctor-action@v1
         with:
           token: ${{ secrets.DEPLOYDOCTOR_TOKEN }}

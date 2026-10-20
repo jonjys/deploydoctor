@@ -16,7 +16,7 @@ export default async function Pricing() {
     <p>{t("pricing.sub")}</p>
   </header><section className="pricing-grid" aria-label={t("pricing.plans")}>
     <article className="price-card"><span className="plan-badge">{t("pricing.startHere")}</span><h2>{t("pricing.free")}</h2>
-      <p className="price">$0</p><p>{t("pricing.freeScans")}</p><ul><li>{t("pricing.freeDiag")}</li><li>{t("pricing.free1")}</li><li>{t("pricing.free2")}</li><li>{t("pricing.free3")}</li><li>{t("pricing.free4")}</li></ul><Link className="cta-button" href="/">{t("pricing.scanFree")}</Link></article>
+      <p className="price">$0</p><p>{t("pricing.freeScans")}</p><ul><li>{t("pricing.freeDiag")}</li><li>{t("pricing.free1")}</li><li>{t("pricing.free2")}</li><li>{t("pricing.free3")}</li><li>{t("pricing.free4")}</li><li>{t("pricing.freeCi")}</li></ul><Link className="cta-button" href="/">{t("pricing.scanFree")}</Link></article>
     {(["day", "week", "public"] as const).map((key) => <article className={`price-card ${key === "week" ? "featured" : ""}`} key={key}>
       <span className="plan-badge">{t(`pricing.badge.${key}`)}</span>
       <h2>{t(`plan.${key}.name`)}</h2><p className="price">{planPrice(key, lang)}<small>{t(`plan.${key}.cadence`)}</small></p>

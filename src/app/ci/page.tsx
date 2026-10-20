@@ -67,7 +67,7 @@ export default function CiPage() {
         </section>
 
         <section>
-          <h2>2. Private repository or more than 3 pull requests a day</h2>
+          <h2>2. Private repository or more than 3 scans a day</h2>
           <p>
             Open <Link href="/account">My scans</Link> in the browser you paid in and click Create API token. Tokens work while a pass is
             active, which is any pass: {plans.day.usd} for 24 hours, {plans.week.usd} for 7 days or {plans.public.usd} a month, and are never

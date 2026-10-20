@@ -386,6 +386,7 @@ a.cta-button[aria-busy="true"]:hover { transform: none; background: var(--acid);
 .checkout-card { max-width: 640px; margin: 60px auto; padding: 38px; border: 1px solid var(--line); border-radius: 15px; background: var(--panel); }
 .checkout-card h1 { margin-top: 0; font-size: 38px; letter-spacing: -.04em; }
 .checkout-card p { line-height: 1.6; overflow-wrap: anywhere; }
+.checkout-card form { margin: 22px 0 26px; }
 .checkout-form label, .private-input label { display: block; font-size: 14px; margin: 22px 0 10px; font-weight: 600; }
 .checkout-form input, .private-input input { width: 100%; padding: 13px; border: 1px solid var(--line); border-radius: 7px; background: white; }
 .checkout-form p, .private-input p { font-size: 13px; color: var(--muted); }
@@ -408,7 +409,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .account-list small { display: block; color: var(--muted); margin-top: 5px; }
 .copy-button + textarea { display: block; width: 100%; min-height: 200px; color: var(--ink); background: white; }
 @media (max-width: 1000px) { .pricing-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .pricing-grid { grid-template-columns: 1fr; } .checkout-card { padding: 23px; margin: 35px auto; } .nav-links { gap: 12px; } }
+@media (max-width: 560px) { .pricing-grid { grid-template-columns: 1fr; } .checkout-card { padding: 23px; margin: 35px auto; } .nav-links { gap: 12px; } .repo-input { font-size: 16px; } }
 
 /* Category scanning */
 .stack-panel { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 16px 0 0; background: var(--panel); text-align: left; min-width: 0; }

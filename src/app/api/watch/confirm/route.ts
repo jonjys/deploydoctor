@@ -7,7 +7,7 @@ const LINK_DAYS = 7;
 
 type ConfirmedWatch = { repo_url: string; last_report_id: string | null };
 
-function result(request: Request, state: "confirmed" | "invalid", watch?: ConfirmedWatch) {
+function result(request: Request, state: "confirmed" | "invalid" | "failed", watch?: ConfirmedWatch) {
   const target = new URL("/watch", request.url);
   target.searchParams.set("state", state);
   if (watch) {
@@ -57,6 +57,7 @@ export async function POST(request: Request) {
     return existing[0] ? result(request, "confirmed", existing[0]) : result(request, "invalid");
   } catch (error) {
     console.error("Watch confirmation failed:", error instanceof Error ? error.name : "unknown");
-    return Response.json({ error: t(lang, "watch.linkFailed") }, { status: 502 });
+    // The button lives on a page, so the answer is a page too.
+    return result(request, "failed");
   }
 }
