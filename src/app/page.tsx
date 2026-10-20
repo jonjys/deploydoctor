@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { ScanActivitySection } from "@/components/scan-activity-section";
 import { CommunityReviews } from "@/components/community-reviews";
 import Link from "next/link";
 import { RepoForm } from "@/components/repo-form";
@@ -28,6 +29,7 @@ export default async function Home() {
       <SiteNav current="scan" />
 
       <RecentScans />
+      <Suspense fallback={null}><ScanActivitySection /></Suspense>
 
       <section className="hero">
         <div className="eyebrow">

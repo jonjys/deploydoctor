@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { LangSwitch } from "@/components/lang";
 import { getT } from "@/lib/lang";
 
-export type NavPage = "scan" | "diagnose" | "pricing" | "guides" | "ci" | "account";
+export type NavPage = "scan" | "diagnose" | "pricing" | "guides" | "ci" | "account" | "stats";
 
 export function PulseMark() {
   return (
@@ -33,6 +33,7 @@ export async function SiteNav({ current, note }: { current?: NavPage; note?: Rea
         <Link href="/ci" {...active("ci")}>{t("nav.ci")}</Link>
         <Link href="/ai-plugin">AI plugin</Link>
         <Link href="/account" {...active("account")}>{t("nav.myScans")}</Link>
+        <Link href="/stats" {...active("stats")}>{t("nav.stats")}</Link>
         <LangSwitch />
       </div>
     </nav>

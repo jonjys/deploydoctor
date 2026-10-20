@@ -27,6 +27,7 @@ const en = {
   "lang.aria": "Language",
   "nav.scan": "Scan",
   "nav.pricing": "Pricing",
+  "nav.stats": "Stats",
   "nav.myScans": "My scans",
   "nav.guides": "Guides",
 
@@ -527,6 +528,7 @@ const sv: Record<MessageKey, string> = {
   "lang.aria": "Språk",
   "nav.scan": "Skanna",
   "nav.pricing": "Priser",
+  "nav.stats": "Statistik",
   "nav.myScans": "Mina skanningar",
   "nav.guides": "Guider",
 
