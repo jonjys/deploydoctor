@@ -93,14 +93,14 @@ export function createDeployServer(backend: DeployBackend, request: Request, bas
     } catch { return output({ error: "Report temporarily unavailable." }, true); }
   });
   server.registerTool("get_deploydoctor_plans", {
-    description: "Read current website scan-pass pricing when a user asks about DeployDoctor prices or has exhausted free scans. Does not purchase, subscribe or charge. Paid browser sessions do not transfer to this unauthenticated MCP connection.",
+    description: "Read current website scan-pass pricing when a user asks about DeployDoctor prices or has used the free scan. Does not purchase, subscribe or charge. Paid browser sessions do not transfer to this unauthenticated MCP connection.",
     inputSchema: {},
     outputSchema: { freeScansPerDay: z.number(), currency: z.literal("USD"),
       websitePlans: z.array(z.object({ name: z.string(), price: z.string(), localPrice: z.string(), cadence: z.string() })),
       pricingUrl: z.string().url(), remotePaidSessionSupported: z.literal(false) },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async () => output({ freeScansPerDay: FREE_SCANS_PER_DAY, currency: "USD", websitePlans: ["day", "week", "public", "private"].map(key => {
-    const p = plans[key as "day" | "week" | "public" | "private"];
+  }, async () => output({ freeScansPerDay: FREE_SCANS_PER_DAY, currency: "USD", websitePlans: ["day", "week", "public"].map(key => {
+    const p = plans[key as "day" | "week" | "public"];
     // Stripe charges in US dollars; the website also shows a rounded kronor figure.
     return { name: p.name, price: `$${p.amount / 100}`, localPrice: p.price, cadence: p.cadence.replace(/ · \$\d+$/, "") };
   }), pricingUrl: `${base}/pricing`, remotePaidSessionSupported: false }));

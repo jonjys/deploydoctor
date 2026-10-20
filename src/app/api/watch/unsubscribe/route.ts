@@ -47,6 +47,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: true });
   } catch (error) {
     console.error("Watch unsubscribe failed:", error instanceof Error ? error.name : "unknown");
+    if (fromPage) { target.searchParams.set("state", "failed"); return Response.redirect(target, 303); }
     return Response.json({ error: "Try again later." }, { status: 502 });
   }
 }

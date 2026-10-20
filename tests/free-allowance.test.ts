@@ -64,8 +64,8 @@ const OLD_ALLOWANCE = /\b(?:3|three|tre)\s+(?:free\s+|gratis\s+)?(?:public\s+|pu
 test("free allowance copy: no visitor copy still offers 3 free scans or 3 free diagnoses", () => {
   for (const lang of ["en", "sv"] as const) {
     for (const [key, text] of Object.entries(messages[lang])) {
-      // The Action keeps 3 per repository and fills in the number from its constant.
-      if (key === "err.actionLimit") continue;
+      // The Action keeps 3 per repository: its limit message fills in the number from its constant, and the pricing page lists it under Free.
+      if (key === "err.actionLimit" || key === "pricing.freeCi") continue;
       assert.doesNotMatch(text, OLD_ALLOWANCE, `${lang} ${key}`);
     }
   }
