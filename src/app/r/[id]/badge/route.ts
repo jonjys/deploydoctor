@@ -1,7 +1,5 @@
 import { getReport } from "@/lib/reports";
-import { overallLabel, overallOf } from "@/lib/report-summary";
-
-const colors = { red: "#d6453d", yellow: "#c99a07", green: "#2f8f52", neutral: "#6b7a74" };
+import { badgeStatus } from "@/lib/report-badge";
 
 function escape(text: string) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -12,8 +10,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const report = await getReport(id);
   const results = report && !report.is_private ? report.results : null;
-  const status = results ? overallLabel(results.summary) : "report not found";
-  const color = results ? colors[overallOf(results.summary)] : colors.neutral;
+  const { label: status, color } = badgeStatus(results);
 
   const left = "DeployDoctor";
   const charWidth = 6.6;

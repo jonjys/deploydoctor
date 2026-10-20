@@ -1,4 +1,4 @@
-import type { CheckStatus } from "@/types/report";
+import type { CheckStatus, ReportResults } from "@/types/report";
 import { t, type Lang } from "@/lib/i18n";
 
 export function countStatuses(checks: Array<{ status: CheckStatus }>): Record<CheckStatus, number> {
@@ -6,6 +6,14 @@ export function countStatuses(checks: Array<{ status: CheckStatus }>): Record<Ch
     (counts, check) => ({ ...counts, [check.status]: counts[check.status] + 1 }),
     { red: 0, yellow: 0, green: 0 },
   );
+}
+
+/**
+ * A report with no result to headline: no Next.js app at the root and no other framework the scan knows, or an app nested in a
+ * subfolder. The page and the README badge both read it, so they agree. Older reports have no nextApp and keep their normal headline.
+ */
+export function neutralReport(results: Pick<ReportResults, "nextApp" | "stack">): boolean {
+  return results.nextApp === "nested" || (results.nextApp === "none" && !results.stack?.framework);
 }
 
 export function overallOf(summary: Record<CheckStatus, number>): CheckStatus {

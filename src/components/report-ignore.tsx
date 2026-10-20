@@ -5,6 +5,7 @@ import { countStatuses, overallLabel, overallOf } from "@/lib/report-summary";
 import { joinFixParts, type freeFixParts } from "@/lib/fix-instructions";
 import { CopyFixesButton as CopyButton } from "@/components/copy-fixes-button";
 import { CopyTextButton } from "@/components/copy-text-button";
+import { Breakable } from "@/components/breakable-path";
 import { useLang, useT } from "@/components/lang";
 import type { FixFirstItem } from "@/lib/report-insights";
 import type { CheckStatus } from "@/types/report";
@@ -102,13 +103,13 @@ export function FixFirst({ items, limit = 5 }: { items: FixFirstItem[]; limit?: 
         {open.slice(0, limit).map((item, index) => (
           <li key={`${item.checkId}-${index}`} className={`is-${item.status}`}>
             <a className="fix-first-where" href={`#check-${item.checkId}`}>
-              {item.file ? (item.line ? `${item.file}:${item.line}` : item.file) : item.title}
+              {item.file ? <Breakable text={item.line ? `${item.file}:${item.line}` : item.file} /> : item.title}
             </a>
             {item.file && <span className="fix-first-check">{item.title}</span>}
             <span className="fix-first-fix">{item.completeFile ? t("report.fixFirstFile", { path: item.completeFile }) : item.fix}</span>
             {item.command && (
               <span className="fix-first-command">
-                <code>{item.command}</code>
+                <code><Breakable text={item.command} /></code>
                 <CopyTextButton text={item.command} label={t("report.copyCommand")} copiedLabel={t("report.copied")} />
               </span>
             )}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteNav } from "@/components/site-nav";
+import { GuideText } from "@/components/guide-text";
 import { guideBySlug, guides } from "@/lib/guides";
 import { SITE_URL } from "@/lib/site";
 
@@ -44,7 +45,7 @@ export default async function GuidePage({ params }: GuideProps) {
         {guide.sections.map((section) => (
           <section key={section.heading}>
             <h2>{section.heading}</h2>
-            {section.body.map((paragraph) => <p key={paragraph.slice(0, 40)}>{paragraph}</p>)}
+            {section.body.map((paragraph) => <p key={paragraph.slice(0, 40)}><GuideText text={paragraph} /></p>)}
             {section.code && <pre><code>{section.code}</code></pre>}
           </section>
         ))}
