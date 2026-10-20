@@ -56,8 +56,9 @@ async function preparePinnedReport(report: StoredReport, secret: string): Promis
   const tree = await githubRequest<GitTree>(`${repoPath}/git/trees/${commitSha}?recursive=1`, token);
   if (tree.truncated || tree.tree.length > 30_000) return { eligible: false, reason: "truncated", skipped: [] };
 
-  // The flagged files, plus the TypeScript config the analyzer uses to resolve `@/` aliases.
-  const wanted = new Set([...flagged.slice(0, MAX_FILES), "tsconfig.json", "jsconfig.json", "package.json", ".gitignore"]);
+  // The flagged files, plus every TypeScript config the analyzer uses to resolve `@/` aliases (a nested app has its own).
+  const configs = tree.tree.filter((entry) => entry.type === "blob" && /(?:^|\/)(?:tsconfig|jsconfig)\.json$/.test(entry.path)).map((entry) => entry.path);
+  const wanted = new Set([...flagged.slice(0, MAX_FILES), ...configs, "package.json", ".gitignore"]);
   const blobs = tree.tree.filter((entry) => entry.type === "blob" && entry.mode !== "120000" && wanted.has(entry.path) && (entry.size ?? 0) <= MAX_PATCH_SOURCE_BYTES);
   const contents = new Map<string, string>();
   await Promise.all(blobs.map(async (entry) => {

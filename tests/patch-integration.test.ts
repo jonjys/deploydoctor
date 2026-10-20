@@ -202,7 +202,8 @@ test("GitHub scans and patch offers use the same immutable commit despite a movi
     await assert.rejects(() => createPatchCheckout(offer.quoteToken, "https://fixture.test", "en", []), (error: unknown) => (error as { status: number }).status === 403);
     assert.equal(openQuote(offer.quoteToken, secret).sourceHashes?.["src/main.ts"], sourceHash(source));
     assert.ok(!calls.some(url => url.includes("/tarball/main") || url.includes("/git/ref/")));
-    assert.ok(calls.length < 15);
+    // The GitHub calls stay few: one tarball for the scan and one tree plus one blob for the offer. Work budget and cache calls go to the database, not GitHub.
+    assert.ok(calls.filter(url => !url.includes("database.fixture")).length < 15);
   } finally {
     globalThis.fetch = originalFetch;
     for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
