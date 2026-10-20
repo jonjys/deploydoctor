@@ -52,7 +52,7 @@ test("every import form in one file becomes one diff, including a file without a
     .map(([specifier, exact]) => ({ specifier, exact }));
   const result = buildCasePatch("src/index.ts", source, edits);
   assert.equal(result.applied.length, 5);
-  assert.equal(result.diff.match(/^@@ /gm)?.length, 2, "nearby lines share a hunk, distant lines get their own");
+  assert.equal(result.diff.match(/^@@ /gm)?.length, 1, "the full file is one strict hunk");
   assert.match(result.diff, /No newline at end of file/);
   const after = applyWithGit({ "src/index.ts": source }, result.diff)["src/index.ts"];
   assert.equal(after, result.after);
@@ -92,7 +92,7 @@ test("the plan patches relative and @/ imports, proves them with the analyzer an
   ]);
   assert.deepEqual(plan.files, ["src/app/page.tsx", "src/lib/util.ts"]);
   // Comments are ignored; only the file with a syntax error is refused.
-  assert.deepEqual(plan.skipped.map((item) => `${item.file}:${item.line} ${item.reason}`).sort(), ["src/broken.ts:1 syntax"]);
+  assert.deepEqual(plan.skipped.map((item) => `${item.file}:${item.line} ${item.reason}`).sort(), ["src/app/page.tsx:3 missing", "src/broken.ts:1 syntax"]);
 
   const patched = applyWithGit(Object.fromEntries(Object.entries(files)), plan.patch);
   const left = importProblems(snapshot(patched, extra));
@@ -156,7 +156,7 @@ function paidSession() {
   return { quote, session: {
     metadata: quoteMetadata(token, quote.accessKey, reportId), mode: "payment", currency: "usd", amount_total: PATCH_AMOUNT,
     status: "complete", payment_status: "paid",
-    payment_intent: { status: "succeeded", latest_charge: { paid: true, refunded: false, amount_refunded: 0, disputed: false } },
+    payment_intent: { status: "succeeded", amount_received: PATCH_AMOUNT, currency: "usd", latest_charge: { status: "succeeded", paid: true, refunded: false, amount_refunded: 0, disputed: false } },
   } as unknown as Stripe.Checkout.Session };
 }
 

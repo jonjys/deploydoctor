@@ -25,6 +25,8 @@ export type ReportResults = {
     defaultBranch: string;
     /** The branch, tag or commit that was scanned when it was not the default branch (CI scans a PR head). Absent on older reports. */
     ref?: string;
+    /** Immutable Git commit used for this scan. Older reports must be rescanned before buying a patch. */
+    commitSha?: string;
   };
   checkedAt: string;
   scan: {

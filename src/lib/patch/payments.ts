@@ -29,7 +29,7 @@ export function patchCheckoutParams(token: string, secret: string, origin: strin
     payment_intent_data: { metadata: { app: PATCH_APP, quote_hash: tokenHash(token), report_id: quote.reportId } },
     success_url: `${origin}/patch/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/r/${quote.reportId}#check-imports`,
-    integration_identifier: `${PATCH_APP}_checkout`,
+    integration_identifier: `${PATCH_APP}_checkout_${quote.nonce.slice(0, 8).replace(/[0-9]/g, "a")}`,
   };
 }
 
@@ -37,20 +37,23 @@ export function patchCheckoutParams(token: string, secret: string, origin: strin
  * The patch is only released for a complete, paid, matching session whose charge is not refunded or
  * disputed, and only to the browser holding the quote's private access key.
  */
-export function validatePatchPayment(session: Stripe.Checkout.Session, secret: string, accessKey?: string): PatchQuote {
+export function validatePatchPayment(session: Stripe.Checkout.Session, secret: string, accessKey?: string, live?: boolean): PatchQuote {
   const metadata = session.metadata ?? {};
   if (metadata.app !== PATCH_APP || session.mode !== "payment" || session.currency !== PATCH_CURRENCY || session.amount_total !== PATCH_AMOUNT)
     throw new PatchError("This payment does not match a patch order.", 403, "payment");
   if (accessKey !== undefined && (!/^[a-f0-9]{64}$/.test(accessKey) || tokenHash(accessKey) !== metadata.access_hash))
     throw new PatchError("Open this page in the browser you paid from to download the patch.", 403, "access");
   const quote = openQuote(tokenFromMetadata(metadata), secret, false);
-  if (tokenHash(quote.accessKey) !== metadata.access_hash) throw new PatchError("Order access data is invalid.", 403, "payment");
+  if (quote.reportId !== metadata.report_id || tokenHash(quote.accessKey) !== metadata.access_hash) throw new PatchError("Order access data is invalid.", 403, "payment");
+  if (live !== undefined && session.livemode !== live) throw new PatchError("Payment environment does not match.", 403, "payment");
   if (session.status !== "complete") throw new PatchError("The payment is not complete, so no patch is released.", 402, "payment");
   if (session.payment_status !== "paid") throw new PatchError("The payment is still processing. Reload this page in a minute.", 402, "pending");
   const intent = session.payment_intent;
   if (!intent || typeof intent === "string" || intent.status !== "succeeded") throw new PatchError("The payment is not confirmed yet. Reload this page in a minute.", 402, "pending");
+  if (intent.amount_received !== PATCH_AMOUNT || intent.currency !== PATCH_CURRENCY)
+    throw new PatchError("The received payment does not match the order.", 402, "payment");
   const charge = intent.latest_charge;
-  if (!charge || typeof charge === "string" || !charge.paid || charge.refunded || charge.amount_refunded > 0 || charge.disputed)
+  if (!charge || typeof charge === "string" || !charge.paid || charge.status !== "succeeded" || charge.refunded || charge.amount_refunded > 0 || charge.disputed)
     throw new PatchError("The payment is unconfirmed, refunded or disputed.", 402, "payment");
   return quote;
 }

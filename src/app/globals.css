@@ -696,3 +696,10 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .local-why { margin-top: 12px; padding-left: 12px; border-left: 2px solid var(--line); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
 .local-why strong { margin-right: 5px; }
 @media (max-width: 760px) { .fix-first, .since-last { padding: 14px 16px; } }
+
+.patch-recovery { margin: 1rem 0; padding: 1rem; border: 1px solid var(--line, #344139); border-radius: .5rem; }
+.patch-recovery summary { cursor: pointer; font-weight: 600; }
+.patch-key, .patch-restore input { display: block; width: 100%; min-width: 0; margin: .4rem 0 1rem; padding: .65rem; color: inherit; background: transparent; border: 1px solid var(--line, #344139); border-radius: .35rem; }
+.patch-key { font-family: monospace; font-size: .85rem; }
+.patch-recovery code { overflow-wrap: anywhere; }
+.patch-restore label { display: block; }

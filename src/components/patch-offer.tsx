@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useT } from "@/components/lang";
 import type { MessageKey } from "@/lib/i18n";
 import { isStripeCheckoutUrl } from "@/lib/scan-checkout";
+import { PatchRecoveryKey } from "@/components/patch-recovery-key";
 
 type Fix = { file: string; line: number; from: string; to: string };
 type Skipped = { file: string; line: number; specifier: string; reason: string };
 type Offer =
-  | { eligible: true; fixes: Fix[]; skipped: Skipped[]; files: string[]; commitSha: string; amountMinor: number; quoteToken: string }
+  | { eligible: true; fixes: Fix[]; skipped: Skipped[]; files: string[]; commitSha: string; amountMinor: number; quoteToken: string; recoveryKey: string }
   | { eligible: false; reason: string; skipped: Skipped[] };
 
 const reasonKey = (reason: string) => `patch.reason.${reason}` as MessageKey;
@@ -62,11 +63,13 @@ export function PatchOffer({ reportId }: { reportId: string }) {
       </>}
       {offer?.eligible === false && <p>{t(`patch.none.${offer.reason}` as MessageKey)}</p>}
       {offer?.eligible && <>
+        <p>{t("patch.flow")}</p>
         <p><strong>{t("patch.ready", { fixes: offer.fixes.length, files: offer.files.length, commit: offer.commitSha.slice(0, 7) })}</strong></p>
         <ul className="evidence-list">
           {offer.fixes.map((fix) => <li key={`${fix.file}:${fix.line}`}>↳ {fix.file}:{fix.line} <code>{fix.from}</code> → <code>{fix.to}</code></li>)}
         </ul>
         <p>{t("patch.price")}</p>
+        <PatchRecoveryKey recoveryKey={offer.recoveryKey} />
         <label className="patch-consent">
           <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /> {t("patch.consent")}
         </label>

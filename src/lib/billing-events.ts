@@ -1,5 +1,7 @@
 import "server-only";
 import type Stripe from "stripe";
+import { handlePatchEvent } from "@/lib/patch/webhook";
+import { signingSecret } from "@/lib/session-token";
 import { orderContext } from "@/lib/checkout-guard";
 import { rpc } from "@/lib/db";
 import { objectId, scanPlanForPrice, stripeClient } from "@/lib/stripe";
@@ -7,6 +9,8 @@ import { isPlan, isScanPlan, plans } from "@/lib/plans";
 
 export async function handleBillingEvent(event: Stripe.Event) {
   const stripe = stripeClient();
+  if (await handlePatchEvent(event, signingSecret(), /^(?:sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY ?? ""),
+    id => stripe.checkout.sessions.retrieve(id, { expand: ["payment_intent.latest_charge"] }))) return;
   let entitlement: Record<string, unknown> | null = null;
   let order: Record<string, unknown> | null = null;
 

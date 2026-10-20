@@ -19,3 +19,10 @@ export function mailRules(recipient: string): BudgetRule[] {
   return [{ key: `watch:mail:${recipient}:cooldown`, limit: 1, seconds: 900 },
     { key: `watch:mail:${recipient}:day`, limit: 3, seconds: 86400 }, { key: "watch:mail:site", limit: 100, seconds: 86400 }];
 }
+
+/** Shared across instances, unlike the previous in-memory patch limiter. */
+export function patchRules(identity: string, stage: "prepare" | "checkout" | "restore" | "delivery"): BudgetRule[] {
+  const limits = { prepare: [6, 60], checkout: [6, 60], restore: [5, 30], delivery: [30, 120] } as const;
+  return [{ key: `patch:${stage}:${identity}`, limit: limits[stage][0], seconds: 60 },
+    { key: `patch:${stage}:site`, limit: limits[stage][1], seconds: 60 }];
+}

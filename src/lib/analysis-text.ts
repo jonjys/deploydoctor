@@ -16,6 +16,7 @@ export type AnalysisText = {
     noRouteEvidence: string; routeFound: string; found: string; notNext: string;
   };
   imports: {
+    ambiguous: (spec: string) => string; review: string;
     problem: (spec: string) => string; fix: (target: string, line: number) => string;
     caseProblem: (spec: string, actual: string) => string; caseFix: (exact: string, line: number) => string;
     summary: (n: number, cases: number) => string; ok: string; read: (n: number) => string;
@@ -113,6 +114,8 @@ const en: AnalysisText = {
     notNext: "The root package.json does not declare Next.js, so this Next.js-specific failure does not apply.",
   },
   imports: {
+    ambiguous: spec => `imports ${spec}, but more than one tracked file matches its letter case`,
+    review: "Choose the intended target file and update the import manually. No automatic patch is offered.",
     problem: (spec) => `imports ${spec} which doesn't exist in the repository`,
     fix: (target, line) => `Add ${target} if the file exists locally, or change the import on line ${line} to the file's real location.`,
     caseProblem: (spec, actual) => `imports ${spec}, but the file is ${actual}; the letter case differs, which works on Mac and Windows but fails on Linux (Vercel)`,
@@ -316,6 +319,8 @@ const sv: AnalysisText = {
     notNext: "Rotens package.json deklarerar inte Next.js, så det här Next.js-felet gäller inte.",
   },
   imports: {
+    ambiguous: spec => `importerar ${spec}, men flera spårade filer matchar om man bortser från stora och små bokstäver`,
+    review: "Välj rätt målfil och uppdatera importen manuellt. Ingen automatisk patch erbjuds.",
     problem: (spec) => `importerar ${spec}, som inte finns i repot`,
     fix: (target, line) => `Lägg till ${target} om filen finns lokalt, eller ändra importen på rad ${line} till filens riktiga plats.`,
     caseProblem: (spec, actual) => `importerar ${spec}, men filen heter ${actual}; stora och små bokstäver skiljer sig, vilket fungerar på Mac och Windows men kraschar på Linux (Vercel)`,
