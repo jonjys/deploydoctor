@@ -4,7 +4,7 @@
 
 Scans a pull request for the mistakes that break a Vercel deploy, before Vercel builds it. Static analysis through the GitHub API; nothing is cloned, installed or executed.
 
-**Free on public repositories**: no account, no token, 3 scans a day per repository.
+**Free on public repositories**: no account, no token, 1 scan a day per repository.
 
 ```yaml
 name: DeployDoctor

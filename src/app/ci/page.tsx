@@ -40,7 +40,7 @@ export default function CiPage() {
   const schema = { "@context": "https://schema.org", "@type": "SoftwareApplication", name: "DeployDoctor GitHub Action",
     applicationCategory: "DeveloperApplication", operatingSystem: "GitHub Actions", url: `${SITE_URL}/ci`,
     description: "Scans a pull request for the mistakes that break a Vercel deploy, before Vercel builds it.",
-    offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free on public repositories, 3 scans a day per repository. Unlimited and private repositories with any DeployDoctor pass." } };
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free on public repositories, 1 scan a day per repository. Unlimited and private repositories with any DeployDoctor pass." } };
   return (
     <main className="site-shell">
       <SiteNav current="ci" />
@@ -59,7 +59,7 @@ export default function CiPage() {
           <p>
             Save this as <code>.github/workflows/deploydoctor.yml</code>. No account, no token, no secret: the <code>id-token: write</code> permission lets
             GitHub sign a short-lived proof of which repository is asking, and DeployDoctor only scans that repository. Each public repository gets
-            3 free scans a day; when they are used, the job warns and passes instead of blocking the pull request.
+            1 free scan a day; when it is used, the job warns and passes instead of blocking the pull request.
           </p>
           <pre><code>{WORKFLOW}</code></pre>
           <p className="ci-copy"><CopyTextButton text={WORKFLOW} label="Copy workflow" copiedLabel="Copied" /></p>
@@ -67,7 +67,7 @@ export default function CiPage() {
         </section>
 
         <section>
-          <h2>2. Private repository or more than 3 scans a day</h2>
+          <h2>2. Private repository or more than 1 scan a day</h2>
           <p>
             Open <Link href="/account">My scans</Link> in the browser you paid in and click Create API token. Tokens work while a pass is
             active, which is any pass: {plans.day.usd} for 24 hours, {plans.week.usd} for 7 days or {plans.public.usd} a month, and are never
@@ -120,11 +120,11 @@ export default function CiPage() {
         <aside className="guide-cta">
           <div>
             <h2>Try it on a public repository first</h2>
-            <p>One free scan a day on the website and 3 a day for each public repository in the Action, no account. A {plans.day.usd} pass removes the limit for 24 hours and adds private repositories.</p>
+            <p>One free scan a day on the website and 1 a day for each public repository in the Action, no account. A {plans.day.usd} pass removes the limit for 24 hours and adds private repositories.</p>
           </div>
           <Link className="cta-button" href="/">Scan a repository →</Link>
         </aside>
-        <p className="guide-updated">Updated 2026-10-09 · <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a> · <a href="https://github.com/jonjys/deploydoctor-action">Action source</a></p>
+        <p className="guide-updated">Updated 2026-10-21 · <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a> · <a href="https://github.com/jonjys/deploydoctor-action">Action source</a></p>
       </article>
     </main>
   );

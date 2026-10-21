@@ -12,10 +12,10 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 const sourceFiles = (dir: string): string[] => readdirSync(join(root, dir), { withFileTypes: true }).flatMap((entry) =>
   entry.isDirectory() ? sourceFiles(join(dir, entry.name)) : /\.tsx?$/.test(entry.name) ? [join(dir, entry.name)] : []);
 
-test("free allowance: one website scan and one AI diagnosis per visitor, three Action scans per repository", () => {
+test("free allowance: one website scan and one AI diagnosis per visitor, one Action scan per repository", () => {
   assert.equal(FREE_SCANS_PER_DAY, 1);
   assert.equal(FREE_DIAGNOSES_PER_DAY, 1);
-  assert.equal(FREE_ACTION_SCANS_PER_DAY, 3);
+  assert.equal(FREE_ACTION_SCANS_PER_DAY, 1);
   // A website scan counts against the visitor's IP hash, which reserveScan fills in when no key is given.
   assert.deepEqual(scanAllowance(null), { limit: FREE_SCANS_PER_DAY });
   // The Action keeps the repository key it always had, so today's count carries over the deploy.
@@ -64,22 +64,20 @@ const OLD_ALLOWANCE = /\b(?:3|three|tre)\s+(?:free\s+|gratis\s+)?(?:public\s+|pu
 test("free allowance copy: no visitor copy still offers 3 free scans or 3 free diagnoses", () => {
   for (const lang of ["en", "sv"] as const) {
     for (const [key, text] of Object.entries(messages[lang])) {
-      // The Action keeps 3 per repository: its limit message fills in the number from its constant, and the pricing page lists it under Free.
-      if (key === "err.actionLimit" || key === "pricing.freeCi") continue;
       assert.doesNotMatch(text, OLD_ALLOWANCE, `${lang} ${key}`);
     }
   }
-  // Pages and docs that are not translated. The Action copy on /ci stays 3 a day per repository.
+  // Pages and docs that are not translated. The Action copy on /ci uses the same one-scan allowance.
   for (const file of ["src/app/ai-plugin/page.tsx", "src/app/guides/page.tsx", "src/app/guides/[slug]/page.tsx", "src/lib/mcp.ts",
-    "README.md", "plugins/deploydoctor/README.md", "plugins/deploydoctor/plugin.json", "public/llms.txt"]) {
+    "README.md", "action/README.md", "action/action.yml", "plugins/deploydoctor/README.md", "plugins/deploydoctor/plugin.json", "public/llms.txt"]) {
     assert.doesNotMatch(read(file), OLD_ALLOWANCE, file);
   }
   const ci = read("src/app/ci/page.tsx");
   assert.doesNotMatch(ci, /Three free scans a day on the website/);
-  assert.match(ci, /One free scan a day on the website and 3 a day for each public repository in the Action/);
-  assert.match(ci, /Each public repository gets\s+3 free scans a day/);
-  assert.equal(t("en", "err.actionLimit", { n: FREE_ACTION_SCANS_PER_DAY }).includes("today's 3 free Action scans"), true);
-  assert.equal(t("sv", "err.actionLimit", { n: FREE_ACTION_SCANS_PER_DAY }).includes("dagens 3 gratis Action-skanningar"), true);
+  assert.match(ci, /One free scan a day on the website and 1 a day for each public repository in the Action/);
+  assert.match(ci, /Each public repository gets\s+1 free scan a day/);
+  assert.equal(t("en", "err.actionLimit", { n: FREE_ACTION_SCANS_PER_DAY }).includes("today's free Action scan (1 per repository)"), true);
+  assert.equal(t("sv", "err.actionLimit", { n: FREE_ACTION_SCANS_PER_DAY }).includes("dagens gratis Action-skanning (1 per repo)"), true);
 });
 
 test("free allowance copy: the numbers match the limits and the $2 pass is the next step", () => {
