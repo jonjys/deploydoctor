@@ -37,7 +37,7 @@ export default async function GuidePage({ params }: GuideProps) {
   return (
     <main className="site-shell">
       <SiteNav current="guides" />
-      <article className="guide">
+      <article className="guide" lang="en">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema).replace(/</g, "\\u003c") }} />
         <p className="section-kicker"><Link href="/guides">GUIDES</Link> · {guide.check.toUpperCase()}</p>
         <h1>{guide.title}</h1>
@@ -51,8 +51,8 @@ export default async function GuidePage({ params }: GuideProps) {
         ))}
         <aside className="guide-cta">
           <div>
-            <h2>Check your repository for this before you push</h2>
-            <p>DeployDoctor reads a GitHub repository through the API, runs the check this guide covers together with the other checks for your stack, and names the file. One free scan a day on public repositories, nothing is cloned or executed.</p>
+            <h2>Check common deployment risks before you push</h2>
+            <p>DeployDoctor scans a GitHub repository for common deployment risks and points to relevant files when it finds them. Not every runtime issue can be found by static analysis. One free scan a day on public repositories; repository code is not executed.</p>
           </div>
           <div className="guide-cta-links">
             <Link href="/diagnose">Build already failed? Paste the log →</Link>

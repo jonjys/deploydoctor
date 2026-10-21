@@ -4,8 +4,8 @@ import { SiteNav } from "@/components/site-nav";
 import { guides } from "@/lib/guides";
 
 export const metadata: Metadata = {
-  title: "Guides: why Next.js apps fail on Vercel | DeployDoctor",
-  description: "Short, accurate guides for the deploy failures DeployDoctor checks: env variables, case sensitive imports, Edge runtime errors, lockfile drift and Prisma on Vercel.",
+  title: "Vercel deployment troubleshooting guides | DeployDoctor",
+  description: "Fix Vercel deployment issues with practical guides for Next.js, Vite, SvelteKit, pnpm, Supabase, build configuration and runtime errors.",
   alternates: { canonical: "/guides" },
 };
 

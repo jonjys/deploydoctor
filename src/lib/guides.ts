@@ -1,4 +1,6 @@
-/** Short, accurate guides for the failure classes DeployDoctor checks. English only: that is where the searches are. */
+/** Search-intent troubleshooting guides. Some checks are static, while others require live runtime validation. */
+import { seoGuides } from "./seo-guides";
+
 export type Guide = {
   slug: string;
   title: string;
@@ -283,6 +285,7 @@ export const guides: Guide[] = [
       ] },
     ],
   },
+  ...seoGuides,
 ];
 
 export function guideBySlug(slug: string): Guide | undefined {
