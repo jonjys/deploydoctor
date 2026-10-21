@@ -31,8 +31,8 @@ test("watch copy describes the real flow: a link that opens a page with a button
 
 test("the free GitHub Action allowance is stated everywhere, and only the daily limit is reported as one", () => {
   assert.match(read("src/app/pricing/page.tsx"), /t\("pricing\.freeCi"\)/);
-  for (const lang of ["en", "sv"] as const) assert.match(messages[lang]["pricing.freeCi"], /3/);
-  assert.match(read("src/app/ci/page.tsx"), /more than 3 scans a day/);
+  for (const lang of ["en", "sv"] as const) assert.match(messages[lang]["pricing.freeCi"], /1/);
+  assert.match(read("src/app/ci/page.tsx"), /more than 1 scan a day/);
   assert.match(read("README.md"), /id-token: write/);
   // A GitHub rate limit is also a 429; only the scan route's paywall answer is the day's allowance.
   assert.match(read("action/scan.mjs"), /response\.status === 429 && data\?\.paywall === true/);

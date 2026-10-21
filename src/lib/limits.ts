@@ -1,11 +1,10 @@
 /**
  * Free daily allowances without a pass, per UTC day. reserve_scan counts them in the database; any pass is unlimited.
- * The website gives each visitor one repository scan and one AI diagnosis. The GitHub Action runs on every pull request,
- * so each public repository keeps three.
+ * The website gives each visitor one repository scan and one AI diagnosis. The GitHub Action gives each public repository one scan per day.
  */
 export const FREE_SCANS_PER_DAY = 1;
 export const FREE_DIAGNOSES_PER_DAY = 1;
-export const FREE_ACTION_SCANS_PER_DAY = 3;
+export const FREE_ACTION_SCANS_PER_DAY = 1;
 
 /** What one free reservation counts against: a key (the visitor's IP hash when left out) and that key's daily limit. */
 export type Allowance = { key?: string; limit: number };
