@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import "./growth.css";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { GrowthCalculator } from "@/components/growth-calculator";
@@ -44,7 +45,7 @@ export default async function GrowthPage({
   const days = params.days === "7" ? 7 : 30;
   const report = await readGrowthReport(days);
   const guidePages = report.traffic?.pages.filter((page) => page.path.startsWith("/guides/")).sort((a, b) => b.pageviews - a.pageviews) ?? [];
-  const maxViews = Math.max(1, ...report.traffic?.days.map((row) => row.pageviews) ?? [1]);
+  const maxViews = Math.max(1, ...(report.traffic?.days.map((row) => row.pageviews) ?? []));
   const clicks = report.traffic?.events.filter((item) => /click|scan_started|checkout_started/i.test(item.name)) ?? [];
   return <main className="site-shell growth-page">
     <SiteNav />
