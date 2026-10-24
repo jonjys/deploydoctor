@@ -139,7 +139,7 @@ export const seoGuides: Guide[] = [
       {
         "heading": "Make local and Vercel installs match",
         "body": [
-          "Use Corepack and the same pinned pnpm major locally and on Vercel. Reinstall in a fresh checkout rather than trusting existing node_modules. Commit pnpm-lock.yaml and pnpm-workspace.yaml changes produced by your reviewed approval.",
+          "Use the same pinned pnpm major locally and on Vercel. Vercel picks the pnpm major from the lockfileVersion in pnpm-lock.yaml, and a 9.0 lockfile can be installed by pnpm 9 or pnpm 10, so read the install log for the version it chose. To make Vercel honor the packageManager field instead, enable Corepack by adding the environment variable ENABLE_EXPERIMENTAL_COREPACK with value 1 to the Vercel project. Reinstall in a fresh checkout rather than trusting existing node_modules. Commit pnpm-lock.yaml and pnpm-workspace.yaml changes produced by your reviewed approval.",
           "A frozen lockfile mismatch has a different fix: regenerate the lockfile. Approvals are for lifecycle scripts, not a substitute for dependency integrity."
         ]
       },
@@ -193,7 +193,7 @@ export const seoGuides: Guide[] = [
     "slug": "vercel-function-invocation-failed",
     "title": "FUNCTION_INVOCATION_FAILED on Vercel: debug the runtime crash",
     "description": "Vercel build is Ready but a serverless endpoint returns 500 FUNCTION_INVOCATION_FAILED. Find the real error in runtime logs and isolate the failing request.",
-    "check": "Runtime diagnosis",
+    "check": "Log diagnosis",
     "updated": "2026-10-21",
     "sections": [
       {
@@ -213,8 +213,9 @@ export const seoGuides: Guide[] = [
       {
         "heading": "Common triggers",
         "body": [
-          "Missing environment variables are common, especially values configured for Production but not Preview. Other causes include database connection errors, calling Node-only APIs from an Edge runtime, a missing native module, request-body parsing failures, and unhandled promise rejections.",
-          "Confirm the runtime (Node versus Edge), the environment scope, and whether the failing code path relies on network services. Avoid logging secret values, authentication tokens or personal request bodies."
+          "Missing environment variables are common, especially values configured for Production but not Preview. Other causes include database connection errors, a missing native module, request-body parsing failures, and unhandled promise rejections.",
+          "This code comes from Node.js functions. A crashing Edge function shows EDGE_FUNCTION_INVOCATION_FAILED instead, and a Node-only module imported on the Edge runtime is covered in the edge runtime guide at /guides/edge-runtime-node-module-error-vercel.",
+          "Confirm the environment scope and whether the failing code path relies on network services. Avoid logging secret values, authentication tokens or personal request bodies."
         ]
       },
       {
@@ -342,7 +343,7 @@ export const seoGuides: Guide[] = [
     "slug": "vercel-node-version-mismatch",
     "title": "Wrong Node.js version on Vercel: fix engines and build mismatches",
     "description": "Your app needs another Node.js major version. Check Vercel Project Settings, package.json engines and the runtime reported by deployment logs.",
-    "check": "Dependencies",
+    "check": "Build configuration",
     "updated": "2026-10-21",
     "sections": [
       {
