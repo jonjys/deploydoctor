@@ -49,7 +49,7 @@ export default function CiPage() {
         <p className="section-kicker">GITHUB ACTION · API</p>
         <h1>Fail the pull request before Vercel builds it.</h1>
         <p className="guide-lead">
-          The same nine checks as the website, on every pull request. Findings land as annotations on the changed files, the job summary
+          The same nine checks as the website, on a pull request before Vercel builds it. Findings land as annotations on the changed files, the job summary
           links the full report, and the check goes red on a definite problem. Static analysis through the GitHub API: nothing is cloned,
           installed or executed, so it finishes in seconds and needs no build.
         </p>
@@ -90,7 +90,6 @@ export default function CiPage() {
           </ul>
           <p>
             Inputs: <code>fail-on</code> (<code>red</code> by default, <code>yellow</code> to also fail on items that need review, <code>never</code> to only report),
-            <code>quota-exhausted</code> (<code>warn</code> by default: a used free scan warns and passes, <code>fail</code> fails the job instead),
             <code>checks</code> (comma-separated <code>next</code>, <code>vercel</code>, <code>env</code>, <code>supabase</code>, <code>prisma</code>; the detected stack decides when empty),
             <code>ref</code> and <code>repository</code> to scan something other than the pull request.
           </p>

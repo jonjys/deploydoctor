@@ -76,8 +76,16 @@ test("free allowance copy: no visitor copy still offers 3 free scans or 3 free d
   assert.doesNotMatch(ci, /Three free scans a day on the website/);
   assert.match(ci, /One free scan a day on the website and one a day for each public repository in the Action/);
   assert.doesNotMatch(ci, /and 1 a day for each public repository/, "one form, not a mix of one and 1");
-  // The free path is one scan a day per repository; only a pass scans every push, so the free copy never promises every pull request.
-  assert.doesNotMatch(ci, /scans every pull request|Scan every pull request/);
+  // The free path is one scan a day per repository; only a pass scans every push, so the free copy never promises every pull
+  // request in any phrasing. The guides end with the same offer, and the paid token copy in i18n (account.ciBody) is the one
+  // place that may say it, because a pass scans every push.
+  assert.doesNotMatch(ci, /every pull request/i);
+  assert.match(ci, /The same nine checks as the website, on a pull request before Vercel builds it\./);
+  for (const file of ["src/lib/guides.ts", "src/lib/seo-guides.ts", "src/app/guides/page.tsx", "src/app/guides/[slug]/page.tsx",
+    "README.md", "action/README.md", "action/action.yml", "plugins/deploydoctor/README.md", "public/llms.txt", "src/lib/mcp.ts"]) {
+    assert.doesNotMatch(read(file), /every pull request/i, file);
+  }
+  assert.ok((read("src/lib/guides.ts").match(/or run it on your pull requests with the GitHub Action\./g) ?? []).length >= 4);
   assert.equal((ci.match(/One free scan a day per public repository to try it, a pass scans every push/g) ?? []).length, 2);
   const readme = read("README.md");
   assert.doesNotMatch(readme, /run on every pull request/);
@@ -88,6 +96,19 @@ test("free allowance copy: no visitor copy still offers 3 free scans or 3 free d
   assert.match(ci, /Each public repository gets\s+1 free scan a day/);
   assert.equal(t("en", "err.actionLimit", { n: FREE_ACTION_SCANS_PER_DAY }).includes("today's free Action scan (1 per repository)"), true);
   assert.equal(t("sv", "err.actionLimit", { n: FREE_ACTION_SCANS_PER_DAY }).includes("dagens gratis Action-skanning (1 per repo)"), true);
+});
+
+test("free allowance copy: the quota-exhausted input stays off /ci until the published v1 Action declares it", () => {
+  // jonjys/deploydoctor-action@v1 (8c1fca2) declares only fail-on and does not write a used quota to the job summary, so a
+  // visitor who copies quota-exhausted: fail from /ci gets an Unexpected input warning and a job that still passes. The folder
+  // here keeps the input for the dogfood job (action/scan.test.mjs pins that side); /ci advertises it once the published
+  // action is synced and v1 re-tagged, which is when these assertions are turned around.
+  const ci = read("src/app/ci/page.tsx");
+  assert.doesNotMatch(ci, /quota-exhausted/);
+  assert.match(ci, /Inputs: <code>fail-on<\/code>/);
+  const actionReadme = read("action/README.md");
+  assert.match(actionReadme, /^\| `quota-exhausted` \| `warn` \| Next release, not in `v1` yet\./m);
+  assert.doesNotMatch(actionReadme, /unless you set `quota-exhausted: fail`|the job says so in the job summary/);
 });
 
 test("free allowance copy: the numbers match the limits and the $2 pass is the next step", () => {

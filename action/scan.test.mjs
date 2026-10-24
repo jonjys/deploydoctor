@@ -61,13 +61,20 @@ test("quota-exhausted: fail turns a used free scan into a failed job, and other 
   assert.match(bad.stdout, /::error::Input `quota-exhausted` must be warn or fail/);
 });
 
-test("the action declares quota-exhausted and this repository's dogfood job fails on a used free scan", () => {
+test("the action declares quota-exhausted, the README says v1 does not take it yet, and the dogfood job keeps the default warn", () => {
   const actionYml = readFileSync(new URL("./action.yml", import.meta.url), "utf8");
   assert.match(actionYml, /^  quota-exhausted:\n    description: .*\n    required: false\n    default: warn$/m);
   assert.match(actionYml, /DD_QUOTA_EXHAUSTED: \$\{\{ inputs\.quota-exhausted \}\}/);
-  assert.match(readFileSync(new URL("./README.md", import.meta.url), "utf8"), /\| `quota-exhausted` \| `warn` \|/);
+  // The published jonjys/deploydoctor-action@v1 declares only fail-on, so the README says so until that repository is synced
+  // and v1 re-tagged; a visitor who sets the input on v1 today gets an Unexpected input warning and a job that still passes.
+  assert.match(readFileSync(new URL("./README.md", import.meta.url), "utf8"), /^\| `quota-exhausted` \| `warn` \| Next release, not in `v1` yet\./m);
+  // The free allowance is one scan a day per repository, so any second run of the dogfood job in a UTC day (a later push to the
+  // same PR, a reopen or another PR) gets the used-quota answer. It keeps the default warn: fail would make the check red on most PRs.
   const workflow = readFileSync(new URL("../.github/workflows/deploydoctor.yml", import.meta.url), "utf8");
-  assert.match(workflow, /uses: \.\/action\n\s+with:\n\s+quota-exhausted: fail/);
+  assert.match(workflow, /^on:\n  pull_request:\n/m);
+  assert.match(workflow, /any second run in a UTC day/);
+  assert.match(workflow, /- uses: \.\/action\n(?!\s+with:)/);
+  assert.doesNotMatch(workflow, /quota-exhausted:\s*fail\s*(?:#|$)/m);
 });
 
 test("GitHub rate limiting and capacity failures are not mistaken for a free quota", () => {
