@@ -1,0 +1,80 @@
+name: Prune completed branches
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: [.github/workflows/prune-completed-branches.yml]
+  pull_request:
+    types: [closed]
+permissions:
+  contents: read
+concurrency:
+  group: prune-completed-branches
+  cancel-in-progress: false
+jobs:
+  prune:
+    if: github.event_name != 'pull_request' || (github.event.pull_request.merged == true && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Delete only verified completed branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          MERGED_PR: ${{ github.event.pull_request.number }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          // Reviewed branch names and tips, retained here so every removed ref can be restored.
+          const initial = [{"name":"claude/ai-build-log-diagnosis","sha":"06443d91a75d0ec1a49b84d77a2ade865e4bc773","pr":33,"ancestor":false},{"name":"claude/analyzer-playwright-devdep-and-alias-paths","sha":"f9825713016ce0a74aef3736679f70d028a79edb","pr":22,"ancestor":true},{"name":"claude/ci-action-and-api-tokens","sha":"7370a5fbc90deaa0fe2fc040a03dacc067df198f","pr":18,"ancestor":true},{"name":"claude/counter-threshold","sha":"bf08e7575f33ee62eba1bdc230fa157bbfc9bd7c","pr":28,"ancestor":true},{"name":"claude/day-pass-checkout-description","sha":"d639e7ec0979c51ae72693ec23160e9d1f546012","pr":17,"ancestor":true},{"name":"claude/docs-links-copy-issue","sha":"238756ca023a9e1364b35878040c80538a1820ba","pr":15,"ancestor":true},{"name":"claude/dogfood-action","sha":"c173c525fc63dfd390435ff5d098391de9390b22","pr":24,"ancestor":true},{"name":"claude/env-fallback-accuracy","sha":"c081cc31d678363d2e39ffee59b5715afbf61ab6","pr":45,"ancestor":false},{"name":"claude/env-platform-vars","sha":"0ac94b8b29fef2bbc78ea4ac6941281bf7ef1000","pr":26,"ancestor":true},{"name":"claude/env-template-name-and-dollar-charge","sha":"79fd373199ae6e121c77dae73dbb748167f76934","pr":20,"ancestor":true},{"name":"claude/expanse-verification","sha":"23b0cfc0b8c39db38e357fe60e51b7674fc9ebec","pr":47,"ancestor":false},{"name":"claude/fix-action-yaml","sha":"25128dac500c6c7fc62a14c7a7d4bd802b2cb52c","pr":25,"ancestor":true},{"name":"claude/fix-analyzer-accuracy","sha":"9ec2c5964659ccc724edefbfad5ba7702561b475","pr":58,"ancestor":true},{"name":"claude/fix-copy-limits-watch","sha":"07049140bfe5611296d049b0eb2e954861a6c331","pr":59,"ancestor":true},{"name":"claude/fix-report-insights","sha":"8123e9a33368fe13c7db0247b00e00eb7ae71af8","pr":55,"ancestor":true},{"name":"claude/free-action-oidc","sha":"09724bd1698f065dc788476fb23948101b348e53","pr":23,"ancestor":true},{"name":"claude/funnel-blockers","sha":"b0193c00d37ff844c1bbd2245126e85f40bd4d64","pr":40,"ancestor":false},{"name":"claude/instant-repo-links","sha":"ebbc974bf1d5b226da385e07f6b1095ee8f4f84b","pr":41,"ancestor":false},{"name":"claude/loving-wozniak-ecbwub","sha":"d4c33b79bae4787cbf1306b10a3199e1ec0ca781","pr":null,"ancestor":true},{"name":"claude/lucid-heisenberg-4o0z1i","sha":"e4d5fe97ae610bad6767559230b4c9e55f53b6e1","pr":21,"ancestor":true},{"name":"claude/mobile-nav-overflow","sha":"f84596827d5d7b733ec63c4944f9e65ce57a6b64","pr":34,"ancestor":false},{"name":"claude/more-deploy-checks","sha":"bc987d0843f870ce61916740b3a3370fef9cc49a","pr":50,"ancestor":true},{"name":"claude/npm-lockfile-linux-binaries","sha":"3c9ad5ff455090bf3564859dbf4b0c19bda40798","pr":32,"ancestor":true},{"name":"claude/npx-cli","sha":"46d4c7de96a1c3677b5a02dacfabe819d0ef6861","pr":65,"ancestor":true},{"name":"claude/one-free-per-day","sha":"d9e4b3c0222d0a933e43f634f9c6f31cf1c47328","pr":48,"ancestor":false},{"name":"claude/passes-include-private-and-guides","sha":"240609471dcb41f029d96d29ac793a2e3fec1f3c","pr":16,"ancestor":true},{"name":"claude/patchjouren-mvp","sha":"8f69651378a1183f5156599feb7ef67bf798b7dd","pr":43,"ancestor":false},{"name":"claude/pnpm-builds-and-spa-rewrites","sha":"44a6254c0e4ca3dfccbe9f8d172ad16a36a24e3b","pr":35,"ancestor":false},{"name":"claude/readme-scan-button-and-mcp-listing","sha":"2a0d10d5c04423d0cb50071aaa072e3642b767f2","pr":64,"ancestor":true},{"name":"claude/report-fix-first","sha":"db39484258d7a72ea1707148944c31792a604348","pr":49,"ancestor":false},{"name":"claude/report-sharing-polish","sha":"b4039f7b46853f3ddca6f3288ef194a7e1f9b240","pr":13,"ancestor":true},{"name":"claude/repos-scanned-counter","sha":"29b21d12693b58fb28619e6a9086e1fc42260ee9","pr":27,"ancestor":true},{"name":"claude/review-fixes-oct24","sha":"da83c639d6289ff0ed3f0783e10e5c28d6427d04","pr":63,"ancestor":true},{"name":"claude/review-followups","sha":"b80b4b1af0a3ca1a3299497618990c168bd96b12","pr":44,"ancestor":false},{"name":"claude/severity-dark-mode","sha":"f976b300a9a704bc51df82233392dc2a81e6528c","pr":14,"ancestor":true},{"name":"claude/solved-feedback","sha":"6345d2511d0a12155d8846df3b673a91317a2f20","pr":36,"ancestor":false},{"name":"claude/supabase-42501-guide","sha":"23389f76b2c14ea1c54b00c08edfb80fb22f71a7","pr":38,"ancestor":false},{"name":"claude/supabase-grants-rls","sha":"c5581cdd0f7c2c9ce4935f144581cd7b3ba7f872","pr":37,"ancestor":false},{"name":"claude/use-marketplace-action","sha":"2907ab51ef41e9b694b89df4167e288cb700460a","pr":29,"ancestor":true},{"name":"claude/value-moment-offer","sha":"0f997052a8ee65136e940f446dff4c81446b26fa","pr":42,"ancestor":false},{"name":"claude/vercel-404-framework-check","sha":"d2da8a58c23719f111ea3bfbd616d584c45aa1ca","pr":31,"ancestor":true},{"name":"claude/vercel-plan-limits","sha":"9dd4850d260fa9f249c7ed818bef85b61eae8da7","pr":46,"ancestor":false},{"name":"claude/watch-repo","sha":"9d21c9f1c764d449cb20211d65d4d75f15712c89","pr":51,"ancestor":true},{"name":"codex/repo-status-verified-pr","sha":"0318c68e947c660e7086e788befaebb5099af721","pr":66,"ancestor":false},{"name":"codex/report-clarity","sha":"24e6a7fbc1cb7f18ded4225dd981d72bac6f1136","pr":67,"ancestor":false},{"name":"cursor/direct-stripe-checkout-b80c","sha":"bd2f4c2ebe1e04ab13ab49c6f89c906705bcc000","pr":12,"ancestor":false},{"name":"dependency-checks","sha":"e46dfc64925f1da3a6a43d6ab86a3e06445b8929","pr":2,"ancestor":true},{"name":"feat/build-log-diagnosis","sha":"e930f8c775fe0083dd52be2c263baf20a0951491","pr":11,"ancestor":false},{"name":"feat/community-reviews","sha":"5ec6fdb900937f18ad203ba4ecca532e6c3ea327","pr":57,"ancestor":true},{"name":"feat/deploydoctor-mcp-plugin","sha":"e97376191881630afe9cb5489f7620fb46fdaeaf","pr":10,"ancestor":false},{"name":"feat/deployfix-integration","sha":"4ae1433d60f608f1d5bd5838f5c4716cb4ce33cc","pr":56,"ancestor":true},{"name":"feat/private-growth-hq","sha":"ccc943494d46b93621eabbb1b9fdb2682d283d98","pr":62,"ancestor":false},{"name":"feat/returning-scans-watch","sha":"c76cc984d58f49693ac585523dd45c8499cd1536","pr":52,"ancestor":true},{"name":"feat/seo-troubleshooting-guides-oct21","sha":"5b10e619dc0ff6a0d8c04470c39cc80bdfaed232","pr":60,"ancestor":false},{"name":"fix/env-commented-defaults","sha":"01eb83af2f768f5c73a8fdf42e40861eb7c5b161","pr":30,"ancestor":false},{"name":"fix/launch-reliability","sha":"f0299c467071966186eae04cdbb2a0f1ee572edc","pr":53,"ancestor":true},{"name":"fix/one-free-action-scan","sha":"d811bebc81a6ec52c9707d1f0a95ab7d6600cbb7","pr":61,"ancestor":false},{"name":"fix/scan-trust","sha":"8b1285d576abc2bac4d79bada1367f2bc5646673","pr":54,"ancestor":true},{"name":"scan-reliability","sha":"0f4d637d0512658d67a14e4c0da79bccef2d7adf","pr":1,"ancestor":true}];
+          const repo = process.env.REPOSITORY;
+          if (repo !== 'jonjys/deploydoctor') throw new Error('Unexpected repository');
+          async function api(path, method = 'GET') {
+            const response = await fetch('https://api.github.com/repos/' + repo + path, {
+              method, redirect: 'error',
+              headers: { Authorization: 'Bearer ' + process.env.GH_TOKEN, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+              signal: AbortSignal.timeout(15000),
+            });
+            if (response.status === 404) return null;
+            if (!response.ok) throw new Error('GitHub returned ' + response.status);
+            return response.status === 204 ? true : response.json();
+          }
+          const info = await api('');
+          const candidates = process.env.MERGED_PR ? [] : [...initial];
+          if (process.env.MERGED_PR) {
+            const pr = await api('/pulls/' + process.env.MERGED_PR);
+            if (pr?.merged && pr.head.repo.full_name === repo && !candidates.some(item => item.name === pr.head.ref)) {
+              candidates.push({ name: pr.head.ref, sha: pr.head.sha, pr: pr.number, ancestor: false });
+            }
+          }
+          const results = [];
+          for (const item of candidates) {
+            if (item.name === info.default_branch || item.name === 'master' || item.name === 'main') continue;
+            const refPath = '/git/ref/heads/' + encodeURIComponent(item.name);
+            const branch = await api(refPath);
+            if (!branch) continue;
+            if (branch.object.sha !== item.sha) { results.push(item.name + ': kept (tip changed)'); continue; }
+            const open = await api('/pulls?state=open&head=' + encodeURIComponent(repo.split('/')[0] + ':' + item.name));
+            if (open?.length) { results.push(item.name + ': kept (open PR)'); continue; }
+            let complete = false;
+            if (item.pr) {
+              const pr = await api('/pulls/' + item.pr);
+              complete = pr?.merged === true && pr.head.sha === item.sha && pr.head.ref === item.name && pr.base.ref === info.default_branch;
+            }
+            if (!complete) {
+              const compare = await api('/compare/' + encodeURIComponent(info.default_branch) + '...' + item.sha);
+              complete = compare && ['behind', 'identical'].includes(compare.status);
+            }
+            if (!complete) { results.push(item.name + ': kept (unmerged work)'); continue; }
+            // Re-read immediately before deletion. A moved branch is never deliberately removed.
+            const current = await api(refPath);
+            if (!current || current.object.sha !== item.sha) { results.push(item.name + ': kept (tip changed)'); continue; }
+            await api('/git/refs/heads/' + encodeURIComponent(item.name), 'DELETE');
+            results.push(item.name + ': deleted');
+          }
+          console.log(results.join('\n'));
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '# Branch cleanup\n\n' + results.map(line => '- ' + line).join('\n') + '\n');
+          NODE

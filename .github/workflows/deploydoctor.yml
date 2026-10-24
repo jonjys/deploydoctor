@@ -1,6 +1,8 @@
 name: DeployDoctor
 on:
   pull_request:
+  push:
+    branches: [master]
 permissions:
   contents: read
 jobs:
@@ -23,6 +25,7 @@ jobs:
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
   deploydoctor:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
