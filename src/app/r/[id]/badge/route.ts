@@ -1,9 +1,5 @@
 import { getReport } from "@/lib/reports";
-import { badgeStatus } from "@/lib/report-badge";
-
-function escape(text: string) {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+import { badgeStatus, badgeSvg } from "@/lib/report-badge";
 
 /** A README badge for a saved public report, in the flat style people already know from shields. */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,22 +7,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const report = await getReport(id);
   const results = report && !report.is_private ? report.results : null;
   const { label: status, color } = badgeStatus(results);
-
-  const left = "DeployDoctor";
-  const charWidth = 6.6;
-  const leftWidth = Math.round(left.length * charWidth + 20);
-  const rightWidth = Math.round(status.length * charWidth + 20);
-  const width = leftWidth + rightWidth;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="20" role="img" aria-label="${escape(left)}: ${escape(status)}">
-<title>${escape(left)}: ${escape(status)}</title>
-<linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
-<clipPath id="r"><rect width="${width}" height="20" rx="3" fill="#fff"/></clipPath>
-<g clip-path="url(#r)"><rect width="${leftWidth}" height="20" fill="#10231c"/><rect x="${leftWidth}" width="${rightWidth}" height="20" fill="${color}"/><rect width="${width}" height="20" fill="url(#s)"/></g>
-<g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
-<text x="${leftWidth / 2}" y="14" fill="#010101" fill-opacity=".3">${escape(left)}</text><text x="${leftWidth / 2}" y="13">${escape(left)}</text>
-<text x="${leftWidth + rightWidth / 2}" y="14" fill="#010101" fill-opacity=".3">${escape(status)}</text><text x="${leftWidth + rightWidth / 2}" y="13">${escape(status)}</text>
-</g></svg>`;
-  return new Response(svg, {
+  return new Response(badgeSvg({ left: "DeployDoctor", right: status, color }), {
     status: results ? 200 : 404,
     headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600, s-maxage=3600" },
   });

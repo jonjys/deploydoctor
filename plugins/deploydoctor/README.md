@@ -40,3 +40,33 @@ Use the website for paid passes. Paid repair services are currently paused.
 No new schema, cron, paid service or model API is added by this integration.
 
 Setup, limits, privacy and support: https://deploydoctor.nyttolabs.com/ai-plugin
+
+## Listing DeployDoctor in MCP directories
+
+The repository root holds server.json, the listing for the official MCP registry at
+registry.modelcontextprotocol.io. It describes the remote server above under the name
+io.github.jonjys/deploydoctor, so only the GitHub account jonjys can publish it. Nothing
+is published automatically; the owner runs these steps once per version:
+
+1. Install the publisher: brew install mcp-publisher, or the release download for your
+   platform from github.com/modelcontextprotocol/registry/releases.
+2. Log in with the GitHub account the name belongs to: mcp-publisher login github. A device
+   code is shown; enter it at github.com/login/device.
+3. From the repository root, run mcp-publisher publish. It reads ./server.json and checks it
+   against the schema named in the file.
+4. Check the listing: curl -G --data-urlencode search=io.github.jonjys/deploydoctor https://registry.modelcontextprotocol.io/v0.1/servers
+5. For a new version, raise version in server.json and plugin.json together and publish again.
+   The registry keeps every version and shows clients the newest.
+
+The test tests/mcp-registry.test.ts validates server.json against a vendored copy of the
+registry schema, so a broken edit fails in CI before a publish does.
+
+Other directories worth a submission, with the same URL and the description from plugin.json:
+
+- Smithery (smithery.ai): add the remote URL as a hosted server.
+- mcp.so: submit the server from the site, with the GitHub repository as the source link.
+- Cursor MCP directory (cursor.com/mcp): the page links its submission form; an entry needs
+  the remote URL and a short description.
+- Claude connectors directory: Anthropic takes submissions through its developer form when
+  the directory is open for them; until then anyone adds the URL as a custom connector in
+  Claude settings.

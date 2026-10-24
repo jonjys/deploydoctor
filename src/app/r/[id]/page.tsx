@@ -11,6 +11,7 @@ import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { SiteNav } from "@/components/site-nav";
 import { CopyFixesButton } from "@/components/copy-fixes-button";
 import { CopyTextButton } from "@/components/copy-text-button";
+import { ReadmeBadges } from "@/components/readme-badges";
 import { SolvedPrompt } from "@/components/solved-prompt";
 import { WatchBox } from "@/components/watch-box";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
@@ -111,7 +112,6 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
 
   const status = report.is_private ? t("report.private") : t("report.savedFree");
   const rescanHref = `/?repo=${encodeURIComponent(`${results.repository.owner}/${results.repository.name}`)}`;
-  const badgeMarkdown = `[![DeployDoctor](${SITE_URL}/r/${id}/badge)](${SITE_URL}/r/${id})`;
   // A root app on another framework the scan knows still gets real results, so it keeps the normal headline.
   const otherStack = results.nextApp === "none" ? results.stack?.framework : undefined;
   const neutral = neutralReport(results);
@@ -255,20 +255,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
       </section>
 
 
-      {!report.is_private && (
-        <section className="badge-section" aria-labelledby="badge-heading">
-          <div>
-            <h2 id="badge-heading">{t("report.badgeTitle")}</h2>
-            <p>{t("report.badgeBody")}</p>
-          </div>
-          <div className="badge-row">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/r/${id}/badge`} alt={`DeployDoctor: ${overall}`} height={20} />
-            <code>{badgeMarkdown}</code>
-            <CopyTextButton text={badgeMarkdown} label={t("report.badgeCopy")} copiedLabel={t("report.badgeCopied")} />
-          </div>
-        </section>
-      )}
+      {!report.is_private && <ReadmeBadges id={id} owner={results.repository.owner} name={results.repository.name} overall={overall} lang={lang} />}
       </IgnoreProvider>
     </main>
   );
