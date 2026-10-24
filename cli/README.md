@@ -61,7 +61,7 @@ Node 20 or newer. The package has no dependencies.
 
 ## Publishing (owner only)
 
-The package is not published yet. From the repository root:
+The package is not published yet. Until it is, the root README and the /ci page do not show the npx command: an unregistered name could be taken by someone else and run on every visitor who follows the instruction. Meanwhile the CLI runs from a checkout with `node cli/bin.mjs owner/repo`. From the repository root:
 
 ```sh
 cd cli
@@ -70,7 +70,7 @@ npm pack --dry-run
 npm publish --access public
 ```
 
-`npm pack --dry-run` lists what goes up: bin.mjs, package.json, README.md and LICENSE. For a later release, bump the version in `cli/package.json` (`npm version patch` inside `cli/`), commit, then run `npm publish --access public` again; the user-agent sent to the API follows the version automatically.
+`npm pack --dry-run` lists what goes up: bin.mjs, package.json, README.md and LICENSE. After the first publish, delete the notice at the top of this section and put the `npx deploydoctor` one-liner back in the root README and on `src/app/ci/page.tsx`; `tests/cli.test.ts` checks that the public docs and this notice agree. For a later release, bump the version in `cli/package.json` (`npm version patch` inside `cli/`), commit, then run `npm publish --access public` again; the user-agent sent to the API follows the version automatically.
 
 ## License
 

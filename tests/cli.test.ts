@@ -8,22 +8,31 @@ import { join } from "node:path";
 import test, { after, before } from "node:test";
 import { promisify } from "node:util";
 import { CLI_USER_AGENT_PREFIX, fromCli } from "../src/lib/cli-client";
+import { t } from "../src/lib/i18n";
+import { reportJson } from "../src/lib/report-json";
+import { SITE_URL } from "../src/lib/site";
+import type { CheckId, CheckResult, Finding, StoredReport } from "../src/types/report";
 
 const root = join(__dirname, "..");
 const read = (file: string) => readFileSync(join(root, file), "utf8");
 const bin = join(root, "cli", "bin.mjs");
 const pkg = JSON.parse(read("cli/package.json")) as Record<string, unknown> & { version: string };
 
-const SITE = "https://deploydoctor.nyttolabs.com";
+const SITE = SITE_URL;
 const ID = "11111111-1111-4111-8111-111111111111";
-const check = (id: string, title: string, status: string, findings: { file: string; line: number; problem: string; fix: string }[] = []) =>
-  ({ id, title, status, explanation: `${title} explained.`, fix: `${title} fix.`, evidence: [], findings, suggestedFile: null });
-const report = (repo: string, checks: ReturnType<typeof check>[]) => {
-  const count = (status: string) => checks.filter((item) => item.status === status).length;
+// The fake API answers with reportJson() on a stored report, exactly as the route does, so a renamed field fails here
+// before the real CLI prints undefined or crashes in its table.
+const check = (id: CheckId, title: string, status: CheckResult["status"], findings: Finding[] = []): CheckResult =>
+  ({ id, title, status, explanation: `${title} explained.`, fix: `${title} fix.`, evidence: [], findings });
+const report = (repo: string, checks: CheckResult[]) => {
+  const count = (status: CheckResult["status"]) => checks.filter((item) => item.status === status).length;
   const summary = { red: count("red"), yellow: count("yellow"), green: count("green") };
-  return { id: ID, href: `/r/${ID}`, url: `${SITE}/r/${ID}`, repoUrl: `https://github.com/${repo}`, ref: "main", commitSha: "0123456789abcdef0123",
-    checkedAt: "2026-10-24T10:00:00.000Z", overall: summary.red ? "red" : summary.yellow ? "yellow" : "green", summary, partial: false,
-    scan: { partial: false }, stack: null, nextApp: null, checks, isPrivate: false, limitations: "Static analysis only." };
+  const [owner, name] = repo.split("/");
+  const stored: StoredReport = { id: ID, repo_url: `https://github.com/${repo}`, created_at: "2026-10-24T10:00:00.000Z", results: {
+    repository: { owner, name, defaultBranch: "main", commitSha: "0123456789abcdef0123" }, checkedAt: "2026-10-24T10:00:00.000Z",
+    scan: { filesInTree: 40, sourceFilesRead: 12, sourceFilesFound: 12, partial: false },
+    summary, overall: summary.red ? "red" : summary.yellow ? "yellow" : "green", checks } };
+  return reportJson(stored);
 };
 const WEB = report("acme/web", [
   check("imports", "Broken imports", "red", [{ file: "src/app/page.tsx", line: 12, problem: "Case mismatch.", fix: "Rename the import." }, { file: "src/x.ts", line: 1, problem: "p", fix: "f" }]),
@@ -31,6 +40,9 @@ const WEB = report("acme/web", [
   check("server-libs", "Vercel-incompatible server code", "green"),
 ]);
 const CLEAN = report("acme/clean", [check("next-entry", "Next.js entrypoint", "green"), check("dependencies", "Dependencies", "green")]);
+// Well past the 64 KB pipe buffer, so a --json answer cut short by process.exit shows up as invalid JSON.
+const HUGE = report("acme/huge", [check("imports", "Broken imports", "red", Array.from({ length: 700 }, (_, index) =>
+  ({ file: `src/components/widget-${index}.tsx`, line: index + 1, problem: `Import ${index} only resolves on a case-insensitive file system.`, fix: "Match the file name on disk." })))]);
 
 type Seen = { headers: IncomingHttpHeaders; body: Record<string, unknown> };
 const seen: Seen[] = [];
@@ -46,9 +58,14 @@ const server = createServer((request, response) => {
       case "https://github.com/acme/web": return json(201, WEB);
       case "https://github.com/acme/clean": return json(201, CLEAN);
       case "https://github.com/acme/from-git": return json(201, CLEAN);
+      case "https://github.com/acme/huge": return json(201, HUGE);
       case "https://github.com/acme/limit": return json(429, { error: "You have used today's free scan. Get 24 hours for $2 and scan again right away.", paywall: true,
         resetsAt: "2026-10-25T00:00:00.000Z", pricingUrl: `${SITE}/pricing` });
       case "https://github.com/acme/private": return json(402, { error: "Private repos need a pass.", paywall: true, privateRepo: true });
+      // The route's two other answers the CLI can meet: a token whose pass lapsed (402, no privateRepo) and a repository GitHub
+      // cannot see without a pass (404 with privateRepo).
+      case "https://github.com/acme/lapsed": return json(402, { error: t("en", "err.tokenPlan"), paywall: true, pricingUrl: `${SITE}/pricing` });
+      case "https://github.com/acme/unseen": return json(404, { error: t("en", "gh.maybePrivate"), paywall: true, privateRepo: true });
       case "https://github.com/acme/broken": return json(500, { error: "Could not save the report." });
       case "https://github.com/acme/html": response.writeHead(502, { "content-type": "text/html" }); return response.end("<html>bad gateway</html>");
       default: return json(404, { error: "Repository not found; make sure it is public and the URL is correct." });
@@ -63,15 +80,21 @@ before(async () => {
 after(() => server.close());
 
 // Asynchronous on purpose: the fake API runs in this process, so a blocking spawn could never be answered.
-async function run(args: string[], options: { cwd?: string; env?: Record<string, string> } = {}) {
+// pipe: through a real pipe into cat, the way a shell pipeline reads the JSON. execFile's own stdio is a socket pair with a far
+// larger buffer than a pipe's 64 KB, which would hide an answer cut short by process.exit; the exit code then travels on stderr.
+async function run(args: string[], options: { cwd?: string; env?: Record<string, string>; pipe?: boolean } = {}) {
   const env: NodeJS.ProcessEnv = { ...process.env, ...options.env };
   if (!options.env?.DEPLOYDOCTOR_TOKEN) delete env.DEPLOYDOCTOR_TOKEN;
+  const [file, argv]: [string, string[]] = options.pipe
+    ? ["sh", ["-c", '{ "$0" "$@"; echo "exit=$?" >&2; } | cat', process.execPath, bin, ...args]]
+    : [process.execPath, [bin, ...args]];
+  const exitCode = (stderr: string, fallback: number | string | null) => (options.pipe ? Number(/^exit=(\d+)$/m.exec(stderr)?.[1]) : fallback);
   try {
-    const { stdout, stderr } = await promisify(execFile)(process.execPath, [bin, ...args], { cwd: options.cwd ?? root, env, encoding: "utf8", timeout: 30_000 });
-    return { code: 0, stdout, stderr };
+    const { stdout, stderr } = await promisify(execFile)(file, argv, { cwd: options.cwd ?? root, env, encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024 });
+    return { code: exitCode(stderr, 0), stdout, stderr };
   } catch (error) {
     const failed = error as { code?: number | string | null; stdout?: string; stderr?: string };
-    return { code: failed.code ?? null, stdout: failed.stdout ?? "", stderr: failed.stderr ?? "" };
+    return { code: exitCode(failed.stderr ?? "", failed.code ?? null), stdout: failed.stdout ?? "", stderr: failed.stderr ?? "" };
   }
 }
 const last = () => seen[seen.length - 1];
@@ -120,6 +143,18 @@ test("cli: --json prints the raw answer and keeps the exit code", async () => {
   assert.equal(JSON.parse(limit.stdout).paywall, true);
 });
 
+test("cli: --json through a real pipe arrives whole, also when the report is larger than the pipe buffer", { skip: process.platform === "win32" && "needs sh and cat" }, async () => {
+  // The CLI leaves the exit code to Node instead of calling process.exit after the write, which drops what did not fit the pipe.
+  assert.ok(JSON.stringify(HUGE).length > 65_536, "the fixture must exceed the 64 KB pipe buffer");
+  const huge = await run(["acme/huge", "--json", "--api", api], { pipe: true });
+  assert.equal(huge.code, 1, huge.stderr);
+  assert.deepEqual(JSON.parse(huge.stdout), HUGE);
+  // The error body in --json mode takes the same path.
+  const limit = await run(["acme/limit", "--json", "--api", api], { pipe: true });
+  assert.equal(limit.code, 2, limit.stderr);
+  assert.equal(JSON.parse(limit.stdout).paywall, true);
+});
+
 test("cli: the free daily limit names the allowance, the pricing link from the answer and the token, exit 2", async () => {
   const { code, stdout, stderr } = await run(["acme/limit", "--api", api]);
   assert.equal(code, 2);
@@ -137,6 +172,18 @@ test("cli: 402 for a private repository, API errors and a non-JSON answer all ex
   assert.match(priv.stderr, /^Private repos need a pass\./m);
   // Without a pricingUrl in the answer the link is built from the API base.
   assert.ok(priv.stderr.includes(`Private repositories need a pass: ${api}/pricing`), priv.stderr);
+  // privateRepo decides, not the status: GitHub could not see the repository and the route answered 404.
+  const unseen = await run(["acme/unseen", "--api", api]);
+  assert.equal(unseen.code, 2);
+  assert.ok(unseen.stderr.includes(`Private repositories need a pass: ${api}/pricing`), unseen.stderr);
+  // A 402 without privateRepo is a token whose pass lapsed: the private repository sentence would send the user to the wrong fix.
+  const lapsed = await run(["acme/lapsed", "--api", api], { env: { DEPLOYDOCTOR_TOKEN: "ddt_old" } });
+  assert.equal(lapsed.code, 2);
+  assert.match(lapsed.stderr, /^API tokens work while a pass is active\./m);
+  assert.doesNotMatch(lapsed.stderr, /Private repositor/);
+  assert.ok(lapsed.stderr.includes(`No active pass for DEPLOYDOCTOR_TOKEN. Get one: ${SITE}/pricing`), lapsed.stderr);
+  assert.match(lapsed.stderr, /My scans/);
+  assert.doesNotMatch(lapsed.stderr, /[–—"]/);
   const broken = await run(["acme/broken", "--api", api]);
   assert.equal(broken.code, 2);
   assert.match(broken.stderr, /DeployDoctor returned 500: Could not save the report\./);
@@ -213,8 +260,14 @@ test("cli package: zero dependencies, the published shape and matching docs", ()
   const usage = /const USAGE = `([^`]*)`/.exec(source)?.[1] ?? "";
   assert.match(usage, /^Usage: npx deploydoctor/);
   assert.doesNotMatch(usage, /["\u2013\u2014]/);
-  assert.match(read("README.md"), /npx deploydoctor/);
-  assert.match(read("src/app/ci/page.tsx"), /npx deploydoctor/);
+  // The npx one-liner enters the public docs only once the package is on npm: an unregistered name could be taken by anyone and
+  // run on every visitor who follows the instruction. The Publishing section of cli/README.md carries the notice until then.
+  const unpublished = /not published yet/.test(readme);
+  for (const file of ["README.md", "src/app/ci/page.tsx"]) {
+    if (unpublished) assert.doesNotMatch(read(file), /npx deploydoctor/, `${file} advertises npx deploydoctor before the package is on npm`);
+    else assert.match(read(file), /npx deploydoctor/, `${file} should show the published one-liner`);
+  }
+  if (unpublished) assert.match(read("README.md"), /node cli\/bin\.mjs/, "the README says how to run the CLI from a checkout meanwhile");
 });
 
 test("reports route: the CLI allowance never matches a browser and keeps the daily limit and the paywall", () => {

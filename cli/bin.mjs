@@ -113,18 +113,20 @@ async function main() {
   } catch {
     fail(`DeployDoctor returned ${response.status} with an unexpected answer. Try again in a minute.`);
   }
+  // The body is written once and the exit code is left to Node: process.exit right after a write drops whatever did not fit
+  // the pipe buffer (64 KB on Linux), which would cut a large --json report in half.
   if (options.json) console.log(text);
 
   const pricing = typeof data.pricingUrl === "string" ? data.pricingUrl : `${options.api}/pricing`;
   if (!response.ok) {
-    if (options.json) process.exit(2);
+    if (options.json) { process.exitCode = 2; return; }
     const message = typeof data.error === "string" ? data.error : `DeployDoctor returned ${response.status}.`;
     if (response.status === 429 && data.paywall === true) {
       fail(`${message}\nFree scans: 1 a day per IP, no account. Unlimited scans: ${pricing}, then create an API token under My scans and set DEPLOYDOCTOR_TOKEN.`);
     }
-    if (response.status === 402 || data.privateRepo === true) {
-      fail(`${message}\nPrivate repositories need a pass: ${pricing}`);
-    }
+    // privateRepo marks the private repository offer whatever the status; a plain 402 is a token whose pass has lapsed.
+    if (data.privateRepo === true) fail(`${message}\nPrivate repositories need a pass: ${pricing}`);
+    if (response.status === 402) fail(`${message}\nNo active pass for DEPLOYDOCTOR_TOKEN. Get one: ${pricing}, then the token works again, or create a new one under My scans in the browser you paid in.`);
     if (response.status === 401) fail(`${message}\nDEPLOYDOCTOR_TOKEN is not valid. Create a new token under My scans.`);
     fail(`DeployDoctor returned ${response.status}: ${message}`);
   }
@@ -145,7 +147,7 @@ async function main() {
     console.log(`Report: ${data.url ?? `${options.api}${data.href ?? ""}`}`);
     if (!token) console.log("Free scans: 1 a day per IP. Nothing was cloned or executed on this machine.");
   }
-  process.exit(red ? 1 : 0);
+  process.exitCode = red ? 1 : 0;
 }
 
 main().catch((error) => fail(`DeployDoctor CLI failed: ${error instanceof Error ? error.message : String(error)}`));
