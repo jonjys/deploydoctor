@@ -1,5 +1,6 @@
 import { CopyTextButton } from "@/components/copy-text-button";
 import { t, type Lang } from "@/lib/i18n";
+import { repoFromPath } from "@/lib/repo-link";
 import { SITE_URL } from "@/lib/site";
 
 /** The status badge of a saved public report, linking to the report. */
@@ -10,9 +11,12 @@ export function reportBadgeMarkdown(id: string): string {
 /**
  * The Scan with DeployDoctor button: the repository's instant scan link, which starts a scan of whatever the
  * repository holds when it is clicked. Meant for templates and starters, whose forks keep the README.
+ * An owner the instant link reserves (GitHub allows logins such as r, ci or stats) gets the home page link
+ * instead, the one the rescan link uses, which starts the same scan on arrival.
  */
 export function scanButtonMarkdown(owner: string, name: string): string {
-  return `[![Scan with DeployDoctor](${SITE_URL}/badge.svg)](${SITE_URL}/${owner}/${name})`;
+  const target = repoFromPath([owner, name]) ? `${SITE_URL}/${owner}/${name}` : `${SITE_URL}/?repo=${owner}/${name}`;
+  return `[![Scan with DeployDoctor](${SITE_URL}/badge.svg)](${target})`;
 }
 
 /** The README snippets a public report offers: its own status badge, and below it the scan button of its repository. */

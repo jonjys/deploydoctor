@@ -7,6 +7,7 @@ import { GET } from "../src/app/badge.svg/route";
 import { ReadmeBadges, reportBadgeMarkdown, scanButtonMarkdown } from "../src/components/readme-badges";
 import { messages } from "../src/lib/i18n";
 import { BADGE_COLORS, BADGE_INK, badgeSvg } from "../src/lib/report-badge";
+import { repoUrlFromParam } from "../src/lib/repo-input";
 import { repoFromPath } from "../src/lib/repo-link";
 
 const read = (file: string) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
@@ -58,7 +59,7 @@ test("a public report offers both README snippets: its own badge and, below it, 
   assert.ok(html.includes(`<img src="/r/${id}/badge" alt="DeployDoctor: Ready to deploy" height="20"/>`), html);
   assert.ok(html.indexOf('id="badge-heading"') < html.indexOf('id="scan-button-heading"'), "the badge comes first");
   assert.match(html, /Scan button for your README/);
-  assert.match(html, /For templates and starters, so people who fork it can check their copy before the first deploy\./);
+  assert.match(html, /For templates and starters\. The link points at this repository, so someone who forks it changes the owner\/repo in the link to scan their own copy before the first deploy\./);
   assert.equal(html.match(/>Copy markdown</g)?.length, 2);
   const sv = renderToStaticMarkup(createElement(ReadmeBadges, { id, owner: "acme", name: "shop", overall: "Klar att driftsätta", lang: "sv" }));
   assert.match(sv, /Skanningsknapp till din README/);
@@ -78,9 +79,30 @@ test("the scan button copy exists in both languages without dashes or quotation 
       assert.doesNotMatch(messages[lang][key], /[–—"“”]/, `${lang} ${key}`);
     }
     assert.match(messages[lang]["report.scanButtonTitle"], /README/);
-    // Forks keep the README, so the copy says what to change.
+    // GitHub copies the README verbatim on fork and on Use this template, so nothing swaps the link for a fork:
+    // the copy says the fork changes the owner/repo in the link itself and never reads as if that happened by itself.
     assert.match(messages[lang]["report.scanButtonBody"], /owner\/repo/);
+    assert.doesNotMatch(messages[lang]["report.scanButtonBody"], /swaps in|byter till sitt eget/);
   }
+  assert.match(messages.en["report.scanButtonBody"], /someone who forks it changes the owner\/repo in the link to scan their own copy/);
+  assert.match(messages.sv["report.scanButtonBody"], /den som forkar byter owner\/repo i länken för att skanna sin egen kopia/);
   const ci = read("src/app/ci/page.tsx");
-  assert.match(ci, /<p>Maintaining a template or starter\? Every public report also offers a Scan with DeployDoctor button for its README, so people who fork it can check their copy before the first deploy\.<\/p>/);
+  assert.match(ci, /<p>Maintaining a template or starter\? Every public report also offers a Scan with DeployDoctor button for its README\. Forks keep the README text, so a fork changes the owner\/repo in the link to scan its own copy before the first deploy\.<\/p>/);
+  assert.doesNotMatch(ci, /so people who fork it can check their copy/);
+});
+
+test("a repository whose owner is a reserved first path segment still gets a working scan button: the home page link", () => {
+  // GitHub allows logins such as r, ci and stats, but the instant link route sends those paths to the not-found page.
+  for (const owner of ["r", "ci", "stats", "watch", "patch", "social", "api"]) {
+    assert.equal(repoFromPath([owner, "demo"]), null, owner);
+    assert.equal(scanButtonMarkdown(owner, "demo"), `[![Scan with DeployDoctor](${site}/badge.svg)](${site}/?repo=${owner}/demo)`, owner);
+    // The home page starts the scan from ?repo= on arrival, the way the rescan link on the report page does.
+    assert.equal(repoUrlFromParam(`${owner}/demo`), `https://github.com/${owner}/demo`, owner);
+  }
+  const html = renderToStaticMarkup(createElement(ReadmeBadges, { id, owner: "stats", name: "demo", overall: "Ready to deploy", lang: "en" }));
+  assert.ok(html.includes(`<code>[![Scan with DeployDoctor](${site}/badge.svg)](${site}/?repo=stats/demo)</code>`), html);
+  assert.ok(!html.includes(`](${site}/stats/demo)`), "no dead instant link");
+  assert.ok(html.includes(`<code>${reportBadgeMarkdown(id)}</code>`), html);
+  // An ordinary owner keeps the short instant link.
+  assert.equal(scanButtonMarkdown("vercel", "commerce"), `[![Scan with DeployDoctor](${site}/badge.svg)](${site}/vercel/commerce)`);
 });

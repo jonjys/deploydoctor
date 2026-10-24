@@ -64,7 +64,7 @@ export default function CiPage() {
           <pre><code>{WORKFLOW}</code></pre>
           <p className="ci-copy"><CopyTextButton text={WORKFLOW} label="Copy workflow" copiedLabel="Copied" /></p>
           <p>Also listed on the <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a>.</p>
-          <p>Maintaining a template or starter? Every public report also offers a Scan with DeployDoctor button for its README, so people who fork it can check their copy before the first deploy.</p>
+          <p>Maintaining a template or starter? Every public report also offers a Scan with DeployDoctor button for its README. Forks keep the README text, so a fork changes the owner/repo in the link to scan its own copy before the first deploy.</p>
         </section>
 
         <section>
