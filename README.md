@@ -21,10 +21,10 @@ DeployDoctor scans a public GitHub repository for the mistakes that most often b
 
 ## CI: GitHub Action and API
 
-The same checks run on every pull request before Vercel builds it. A public repository
-gets 1 scan a day for free, with no account and no secret: the `id-token: write` permission
-lets GitHub prove which repository is asking, and when the day's allowance is used the job
-warns and passes instead of blocking the pull request.
+The same checks run on a pull request before Vercel builds it. A public repository
+gets one free scan a day to try it, with no account and no secret: the `id-token: write` permission
+lets GitHub prove which repository is asking, and when the day's free scan is used the job
+warns and passes instead of blocking the pull request. With a pass the Action scans every push.
 
 ```yaml
 name: DeployDoctor

@@ -30,4 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # This repository dogfoods the Action from its own source, so a change to it is tested on the PR that makes it.
+      # The free allowance is one scan a day per repository, so any second run in a UTC day (a later push to the same PR,
+      # a reopen or another PR) gets the used-quota answer: the step writes it to the job summary, warns and passes.
+      # Do not set quota-exhausted: fail here; it would make this check red on most pull requests.
       - uses: ./action

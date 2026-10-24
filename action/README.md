@@ -20,7 +20,7 @@ jobs:
       - uses: jonjys/deploydoctor-action@v1
 ```
 
-When the free scans for the day are used, the job prints a warning and passes; it never blocks a pull request for that. Pull requests from forks and from Dependabot are skipped the same way, because GitHub does not give them an OIDC token.
+When the free scan for the day is used, the job prints a warning and passes; it never blocks a pull request for that. Pull requests from forks and from Dependabot are skipped the same way, because GitHub does not give them an OIDC token.
 
 Private repository or unlimited scans: create an API token under My scans while a pass is active and pass it as `token`. For a private repository, also add `github-token: ${{ github.token }}` so the scan can read it.
 
@@ -31,6 +31,7 @@ Private repository or unlimited scans: create an API token under My scans while 
 | `ref` | the pull request head, or the pushed commit | Branch, tag or commit to scan. |
 | `github-token` | empty | Read token for private repositories, usually `${{ github.token }}`. Forwarded for this scan, never stored. |
 | `fail-on` | `red` | `red`, `yellow` or `never`. |
+| `quota-exhausted` | `warn` | Next release, not in `v1` yet. `warn` passes with a warning when the day's free scan is used and says so in the job summary, `fail` fails the job instead. Free path only. |
 | `checks` | stack-detected | Comma-separated: `next`, `vercel`, `env`, `supabase`, `prisma`. |
 
 Outputs: `overall` (red, yellow, green), `report-url`, `red`, `yellow`. Findings are annotated on the changed files and listed in the job summary with a link to the full report.
