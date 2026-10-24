@@ -64,6 +64,11 @@ export default function CiPage() {
           <pre><code>{WORKFLOW}</code></pre>
           <p className="ci-copy"><CopyTextButton text={WORKFLOW} label="Copy workflow" copiedLabel="Copied" /></p>
           <p>Also listed on the <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a>.</p>
+          <p>
+            Local one-liner, no workflow: <code>npx deploydoctor owner/repo</code> runs the same scan from the terminal, prints one row per check
+            with the file and line, and exits 1 on a red check. Inside a checkout the argument is optional. It uses the website&apos;s free scan a day;
+            with a pass, set <code>DEPLOYDOCTOR_TOKEN</code> to an API token for unlimited scans.
+          </p>
         </section>
 
         <section>
@@ -124,7 +129,7 @@ export default function CiPage() {
           </div>
           <Link className="cta-button" href="/">Scan a repository →</Link>
         </aside>
-        <p className="guide-updated">Updated 2026-10-21 · <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a> · <a href="https://github.com/jonjys/deploydoctor-action">Action source</a></p>
+        <p className="guide-updated">Updated 2026-10-24 · <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a> · <a href="https://github.com/jonjys/deploydoctor-action">Action source</a></p>
       </article>
     </main>
   );

@@ -1,0 +1,39 @@
+{
+  "name": "deploydoctor",
+  "version": "0.1.0",
+  "description": "Scan a public GitHub repository for the mistakes that break a Vercel deploy, from the terminal. Static analysis on DeployDoctor's server: nothing is cloned or executed on your machine.",
+  "type": "module",
+  "bin": {
+    "deploydoctor": "./bin.mjs"
+  },
+  "files": [
+    "bin.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "BUSL-1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jonjys/deploydoctor.git",
+    "directory": "cli"
+  },
+  "homepage": "https://deploydoctor.nyttolabs.com/ci",
+  "bugs": {
+    "url": "https://github.com/jonjys/deploydoctor/issues"
+  },
+  "keywords": [
+    "vercel",
+    "nextjs",
+    "deploy",
+    "deployment",
+    "build",
+    "lint",
+    "env",
+    "prisma",
+    "supabase",
+    "cli"
+  ]
+}
