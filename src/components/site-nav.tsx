@@ -34,8 +34,8 @@ export async function SiteNav({ current, note }: { current?: NavPage; note?: Rea
         <Link href="/ai-plugin">AI plugin</Link>
         <Link href="/account" {...active("account")}>{t("nav.myScans")}</Link>
         <Link href="/stats" {...active("stats")}>{t("nav.stats")}</Link>
-        <LangSwitch />
       </div>
+      <div className="nav-language"><LangSwitch /></div>
     </nav>
   );
 }
