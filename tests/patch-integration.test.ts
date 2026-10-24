@@ -209,3 +209,22 @@ test("GitHub scans and patch offers use the same immutable commit despite a movi
     for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
 });
+
+test("draft PR creation rechecks the actual paid-order gate and never contacts GitHub for unauthorized, unpaid, refunded or disputed orders", async () => {
+  const { openPaidPatchPullRequest } = await import("../src/lib/patch/pull-request");
+  const { retrievePaidPatch } = await import("../src/lib/patch/service");
+  const { quote, session } = paymentFixture();
+  const charge = (session.payment_intent as Stripe.PaymentIntent).latest_charge as Stripe.Charge;
+  let githubCalls = 0;
+  const api = async <T,>() => { githubCalls++; throw new Error("GitHub should never be reached") as T; };
+  const loadOrder = (id: string, keys: string[]) => retrievePaidPatch(id, keys, { loadSession: async () => session, reserve: async () => null, secret, live: false });
+  for (const keys of [[], ["0".repeat(64)]]) await assert.rejects(() => openPaidPatchPullRequest(sessionId, keys, "f".repeat(24), loadOrder, api));
+  session.payment_status = "unpaid";
+  await assert.rejects(() => openPaidPatchPullRequest(sessionId, [quote.accessKey], "f".repeat(24), loadOrder, api));
+  session.payment_status = "paid";
+  for (const state of [{ refunded: true }, { refunded: false, disputed: true }]) {
+    Object.assign(charge, state);
+    await assert.rejects(() => openPaidPatchPullRequest(sessionId, [quote.accessKey], "f".repeat(24), loadOrder, api));
+  }
+  assert.equal(githubCalls, 0);
+});

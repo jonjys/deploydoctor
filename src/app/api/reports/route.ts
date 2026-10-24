@@ -93,9 +93,11 @@ export async function POST(request: Request) {
       }
       reservation = quota.id;
     }
+    console.log("dd-funnel", JSON.stringify({ step: "scan_started", source: viaCi ? "ci" : viaCli ? "cli" : "web", paid: Boolean(plan) }));
     const { canonicalUrl, results, isPrivate } = await analyzeGitHubRepository(body.repoUrl, { privateToken, checks, lang, ref });
     const report = await saveReport(canonicalUrl, results, customer?.customerId, isPrivate);
     saved = true;
+    console.log("dd-funnel", JSON.stringify({ step: "scan_completed", source: viaCi ? "ci" : viaCli ? "cli" : "web", partial: results.scan.partial }));
     if (viaCi || viaCli) return Response.json(reportJson(report), { status: 201, headers: { "Cache-Control": "no-store" } });
     return Response.json({ id: report.id, href: `/r/${report.id}` }, { status: 201 });
   } catch (error) {

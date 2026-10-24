@@ -1,6 +1,7 @@
 import { CopyTextButton } from "@/components/copy-text-button";
 import { t, type Lang } from "@/lib/i18n";
 import { repoFromPath } from "@/lib/repo-link";
+import { liveBadgeMarkdown } from "@/lib/repo-status";
 import { SITE_URL } from "@/lib/site";
 
 /** The status badge of a saved public report, linking to the report. */
@@ -37,6 +38,10 @@ export function ReadmeBadges({ id, owner, name, overall, lang }: { id: string; o
           <CopyTextButton text={badge} label={t(lang, "report.badgeCopy")} copiedLabel={t(lang, "report.badgeCopied")} />
         </div>
       </section>
+      <section className="badge-section" aria-labelledby="live-badge-heading">
+        <div><h2 id="live-badge-heading">{lang === "sv" ? "Senaste repo-status i din README" : "Latest repo status in your README"}</h2><p>{lang === "sv" ? "Samma länk visar senaste publika skanningen av standardgrenen, med datum och commit. Visningar startar inga skanningar." : "One link follows the latest public scan of the default branch, with its date and commit. Views never start scans."}</p></div>
+        <p><LinkStatus owner={owner} name={name} lang={lang} /></p>
+      </section>
       <section className="badge-section" aria-labelledby="scan-button-heading">
         <div>
           <h2 id="scan-button-heading">{t(lang, "report.scanButtonTitle")}</h2>
@@ -51,4 +56,9 @@ export function ReadmeBadges({ id, owner, name, overall, lang }: { id: string; o
       </section>
     </>
   );
+}
+
+function LinkStatus({ owner, name, lang }: { owner: string; name: string; lang: Lang }) {
+  const markdown = liveBadgeMarkdown(owner, name, SITE_URL);
+  return <><a href={`/score/${owner}/${name}`}>{lang === "sv" ? "Öppna repo-status" : "Open repo status"} →</a><code className="live-badge-code">{markdown}</code><CopyTextButton text={markdown} label={lang === "sv" ? "Kopiera statusbadge" : "Copy status badge"} copiedLabel={lang === "sv" ? "Kopierat" : "Copied"} /></>;
 }
