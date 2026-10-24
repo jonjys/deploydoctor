@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteNav } from "@/components/site-nav";
 import { GuideText } from "@/components/guide-text";
-import { guideBySlug, guides } from "@/lib/guides";
+import { guideBySlug, guides, relatedGuides } from "@/lib/guides";
 import { SITE_URL } from "@/lib/site";
 
 export function generateStaticParams() {
@@ -33,7 +33,7 @@ export default async function GuidePage({ params }: GuideProps) {
     dateModified: guide.updated, url: `${SITE_URL}/guides/${guide.slug}`,
     author: { "@type": "Organization", name: "DeployDoctor" }, publisher: { "@type": "Organization", name: "Nytto Labs" },
   };
-  const others = guides.filter((other) => other.slug !== guide.slug).slice(0, 3);
+  const others = relatedGuides(guide);
   return (
     <main className="site-shell">
       <SiteNav current="guides" />

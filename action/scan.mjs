@@ -9,6 +9,7 @@ const repository = env("DD_REPOSITORY");
 const ref = env("DD_REF");
 const githubToken = env("DD_GITHUB_TOKEN");
 const failOn = env("DD_FAIL_ON", "red").toLowerCase();
+const quotaExhausted = env("DD_QUOTA_EXHAUSTED", "warn").toLowerCase();
 const checks = env("DD_CHECKS").split(",").map((item) => item.trim()).filter(Boolean);
 const apiUrl = env("DD_API_URL", "https://deploydoctor.nyttolabs.com").replace(/\/+$/, "");
 
@@ -55,6 +56,7 @@ async function githubOidcToken() {
 }
 if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) fail(`Input \`repository\` must be owner/name, got "${repository}".`);
 if (!["red", "yellow", "never"].includes(failOn)) fail(`Input \`fail-on\` must be red, yellow or never, got "${failOn}".`);
+if (!["warn", "fail"].includes(quotaExhausted)) fail(`Input \`quota-exhausted\` must be warn or fail, got "${quotaExhausted}".`);
 
 const body = { repoUrl: `https://github.com/${repository}` };
 if (ref) body.ref = ref;
@@ -79,9 +81,13 @@ try {
 }
 
 if (free && response.status === 429 && data?.paywall === true) {
-  // The free daily quota for this repository is used up: report it, never block the pull request.
+  // The free daily quota for this repository is used up: say so in the job summary too, so the common free outcome
+  // is not an empty summary. By default this warns and never blocks the pull request; `quota-exhausted: fail` fails
+  // the job instead, for a workflow that must notice a scan that did not run.
   // Any other 429, such as a GitHub API rate limit, is a failed scan and is reported as one below.
-  warn(`DeployDoctor: today's free scan for ${repository} is used (${data?.error ?? "daily limit"}). Unlimited scans: ${apiUrl}/pricing`);
+  const message = `DeployDoctor: today's free scan for ${repository} is used (${data?.error ?? "daily limit"}). Unlimited scans: ${apiUrl}/pricing`;
+  summary(message);
+  (quotaExhausted === "fail" ? fail : warn)(message);
 }
 if (!response.ok) {
   const hint = response.status === 402 ? ` A pass is needed: ${apiUrl}/pricing` : response.status === 401 ? " Create a new token under My scans." : "";

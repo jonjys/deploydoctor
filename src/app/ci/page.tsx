@@ -7,10 +7,10 @@ import { plans } from "@/lib/plans";
 
 export const metadata: Metadata = {
   title: "DeployDoctor in CI: fail a pull request before Vercel builds it",
-  description: "A GitHub Action that scans every pull request for the mistakes that break a Vercel deploy. Case-sensitive imports, missing env variables, undeclared packages, Prisma and Edge runtime mistakes, annotated on the changed files.",
+  description: "A GitHub Action that scans a pull request for the mistakes that break a Vercel deploy: case-sensitive imports, missing env variables, undeclared packages, Prisma and Edge runtime mistakes, annotated on the changed files. One free scan a day per public repository to try it, a pass scans every push.",
   alternates: { canonical: "/ci" },
   openGraph: { type: "article", siteName: "DeployDoctor", url: "/ci", title: "DeployDoctor in CI: fail a pull request before Vercel builds it",
-    description: "Scan every pull request before Vercel builds it. Findings annotated on the changed files, a report link in the job summary." },
+    description: "Scan a pull request before Vercel builds it. One free scan a day per public repository to try it, a pass scans every push. Findings annotated on the changed files, a report link in the job summary." },
 };
 
 const WORKFLOW = `name: DeployDoctor
@@ -49,7 +49,7 @@ export default function CiPage() {
         <p className="section-kicker">GITHUB ACTION · API</p>
         <h1>Fail the pull request before Vercel builds it.</h1>
         <p className="guide-lead">
-          The same nine checks as the website, on every pull request. Findings land as annotations on the changed files, the job summary
+          The same nine checks as the website, on a pull request before Vercel builds it. Findings land as annotations on the changed files, the job summary
           links the full report, and the check goes red on a definite problem. Static analysis through the GitHub API: nothing is cloned,
           installed or executed, so it finishes in seconds and needs no build.
         </p>
@@ -121,7 +121,7 @@ export default function CiPage() {
         <aside className="guide-cta">
           <div>
             <h2>Try it on a public repository first</h2>
-            <p>One free scan a day on the website and 1 a day for each public repository in the Action, no account. A {plans.day.usd} pass removes the limit for 24 hours and adds private repositories.</p>
+            <p>One free scan a day on the website and one a day for each public repository in the Action, no account. A {plans.day.usd} pass removes the limit for 24 hours and adds private repositories.</p>
           </div>
           <Link className="cta-button" href="/">Scan a repository →</Link>
         </aside>

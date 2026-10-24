@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { notFound } from "next/navigation";
 import "./growth.css";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
@@ -12,6 +13,8 @@ export const metadata = {
   robots: { index: false, follow: false, noarchive: true },
 };
 
+const KICKER = "PRIVATE • DEPLOYDOCTOR";
+
 function num(value: number) { return value.toLocaleString("en-US"); }
 function money(currency: string, minorUnits: number) {
   try { return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(minorUnits / 100); }
@@ -24,22 +27,25 @@ export default async function GrowthPage({
   const params = await searchParams;
   const password = process.env.GROWTH_DASHBOARD_PASSWORD;
   const configured = usableGrowthPassword(password);
+  if (!configured) {
+    // Visitors get the ordinary 404; the setup hint belongs in the server log, not on a public page.
+    console.warn("Growth HQ is not configured: set GROWTH_DASHBOARD_PASSWORD (at least 24 characters) in Vercel Production, then redeploy.");
+    notFound();
+  }
   const cookie = (await cookies()).get(GROWTH_COOKIE)?.value;
   const authorized = verifyGrowthSession(cookie, password);
   if (!authorized) return <main className="site-shell">
     <SiteNav />
     <section className="growth-entrance">
-      <p className="section-kicker">PRIVATE • NYTTOLABS</p>
+      <p className="section-kicker">{KICKER}</p>
       <h1>Growth HQ</h1>
-      {!configured ? <p>This owner-only analytics dashboard is not configured. Add a strong (at least 24 characters) GROWTH_DASHBOARD_PASSWORD environment variable to Vercel Production, then redeploy.</p> : <>
-        <p>Owner-only traffic, sales and SEO measurements. This page is not visible to ordinary customers.</p>
-        <form action="/growth/session" method="post" className="growth-login">
-          <label htmlFor="growth-password">Dashboard password</label>
-          <input id="growth-password" name="password" type="password" minLength={24} required autoComplete="current-password" />
-          <button className="cta-button" type="submit">Unlock dashboard →</button>
-          {params.error === "1" && <p role="alert">Incorrect password.</p>}
-        </form>
-      </>}
+      <p>Owner-only traffic, sales and SEO measurements. This page is not visible to ordinary customers.</p>
+      <form action="/growth/session" method="post" className="growth-login">
+        <label htmlFor="growth-password">Dashboard password</label>
+        <input id="growth-password" name="password" type="password" minLength={24} required autoComplete="current-password" />
+        <button className="cta-button" type="submit">Unlock dashboard →</button>
+        {params.error === "1" && <p role="alert">Incorrect password.</p>}
+      </form>
     </section>
   </main>;
   const days = params.days === "7" ? 7 : 30;
@@ -50,7 +56,7 @@ export default async function GrowthPage({
   return <main className="site-shell growth-page">
     <SiteNav />
     <header className="growth-header">
-      <div><p className="section-kicker">PRIVATE • DEPLOYDOCTOR</p><h1>Growth HQ</h1><p>Traffic, SEO discovery, checkout sales and a what-if revenue simulator.</p></div>
+      <div><p className="section-kicker">{KICKER}</p><h1>Growth HQ</h1><p>Traffic, SEO discovery, checkout sales and a what-if revenue simulator.</p></div>
       <div className="growth-actions">
         <Link href="/growth?days=7" aria-current={days === 7 ? "page" : undefined}>7 days</Link>
         <Link href="/growth?days=30" aria-current={days === 30 ? "page" : undefined}>30 days</Link>
@@ -59,10 +65,10 @@ export default async function GrowthPage({
     </header>
     <p className="growth-note">Period: {report.started.slice(0,10)} to {report.ended.slice(0,10)} UTC. Metrics are fetched when you refresh this page, not streamed.</p>
     <section className="growth-metrics" aria-label="Growth metrics">
-      <article><span>Unique visitors</span><strong>{report.traffic ? num(report.traffic.visitors) : "—"}</strong><small>Vercel Web Analytics</small></article>
-      <article><span>Pageviews</span><strong>{report.traffic ? num(report.traffic.pageviews) : "—"}</strong><small>All routes</small></article>
-      <article><span>Paid checkouts</span><strong>{report.payments ? num(report.payments.paidCheckouts) : "—"}</strong><small>Stripe Checkout sessions</small></article>
-      <article><span>Checkout / visitor ratio</span><strong>{report.traffic && report.payments && report.traffic.visitors > 0 ? (100 * report.payments.paidCheckouts / report.traffic.visitors).toFixed(1) + "%" : "—"}</strong><small>Not a user-attributed conversion rate</small></article>
+      <article><span>Unique visitors</span><strong>{report.traffic ? num(report.traffic.visitors) : "n/a"}</strong><small>Vercel Web Analytics</small></article>
+      <article><span>Pageviews</span><strong>{report.traffic ? num(report.traffic.pageviews) : "n/a"}</strong><small>All routes</small></article>
+      <article><span>Paid checkouts</span><strong>{report.payments ? num(report.payments.paidCheckouts) : "n/a"}</strong><small>Stripe Checkout sessions</small></article>
+      <article><span>Checkout / visitor ratio</span><strong>{report.traffic && report.payments && report.traffic.visitors > 0 ? (100 * report.payments.paidCheckouts / report.traffic.visitors).toFixed(1) + "%" : "n/a"}</strong><small>Not a user-attributed conversion rate</small></article>
     </section>
     {report.trafficStatus && <p className="growth-warning" role="status">{report.trafficStatus}</p>}
     {report.paymentStatus && <p className="growth-warning" role="status">{report.paymentStatus}</p>}
@@ -96,7 +102,7 @@ export default async function GrowthPage({
     <section className="growth-card">
       <h2>CTA clicks and events</h2>
       {clicks.length ? <div className="growth-guide-list">{clicks.map((item) => <div key={item.name} className="growth-guide-row"><span>{item.name}</span><strong>{num(item.count)}</strong></div>)}</div> :
-        <p>Not measured yet. Custom CTA events must be instrumented and supported by your Vercel plan before this can show real clicks. A dash is not zero.</p>}
+        <p>Not measured yet. Custom CTA events must be instrumented and supported by your Vercel plan before this can show real clicks. n/a is not zero.</p>}
       <p className="growth-note">Custom event tracking is plan-dependent. This dashboard never fabricates historic clicks or attributes a Stripe payment to a particular SEO guide without evidence.</p>
     </section>
     <GrowthCalculator observedVisitors={report.traffic?.visitors ?? null} />
