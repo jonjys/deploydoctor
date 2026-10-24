@@ -25,6 +25,10 @@ inputs:
     description: Which result fails the job. `red` (default) fails on definite problems, `yellow` also fails on items that need review, `never` only reports.
     required: false
     default: red
+  quota-exhausted:
+    description: What happens when the day's free scan for this repository is already used. `warn` (default) writes it to the job summary, prints a warning and passes, so a pull request is never blocked for that. `fail` fails the job instead, so a scan that did not run is visible. Only applies to the free path without a token.
+    required: false
+    default: warn
   checks:
     description: Comma-separated categories to scan. Any of next, vercel, env, supabase, prisma. Leave empty to let the detected stack decide.
     required: false
@@ -57,6 +61,7 @@ runs:
         DD_REF: ${{ inputs.ref }}
         DD_GITHUB_TOKEN: ${{ inputs.github-token }}
         DD_FAIL_ON: ${{ inputs.fail-on }}
+        DD_QUOTA_EXHAUSTED: ${{ inputs.quota-exhausted }}
         DD_CHECKS: ${{ inputs.checks }}
         DD_API_URL: ${{ inputs.api-url }}
       run: node "${{ github.action_path }}/scan.mjs"

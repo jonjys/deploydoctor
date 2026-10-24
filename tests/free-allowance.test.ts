@@ -74,7 +74,17 @@ test("free allowance copy: no visitor copy still offers 3 free scans or 3 free d
   }
   const ci = read("src/app/ci/page.tsx");
   assert.doesNotMatch(ci, /Three free scans a day on the website/);
-  assert.match(ci, /One free scan a day on the website and 1 a day for each public repository in the Action/);
+  assert.match(ci, /One free scan a day on the website and one a day for each public repository in the Action/);
+  assert.doesNotMatch(ci, /and 1 a day for each public repository/, "one form, not a mix of one and 1");
+  // The free path is one scan a day per repository; only a pass scans every push, so the free copy never promises every pull request.
+  assert.doesNotMatch(ci, /scans every pull request|Scan every pull request/);
+  assert.equal((ci.match(/One free scan a day per public repository to try it, a pass scans every push/g) ?? []).length, 2);
+  const readme = read("README.md");
+  assert.doesNotMatch(readme, /run on every pull request/);
+  assert.match(readme, /gets one free scan a day to try it/);
+  assert.match(readme, /With a pass the Action scans every push/);
+  assert.match(read("action/README.md"), /When the free scan for the day is used/);
+  assert.doesNotMatch(read("action/README.md"), /free scans for the day/);
   assert.match(ci, /Each public repository gets\s+1 free scan a day/);
   assert.equal(t("en", "err.actionLimit", { n: FREE_ACTION_SCANS_PER_DAY }).includes("today's free Action scan (1 per repository)"), true);
   assert.equal(t("sv", "err.actionLimit", { n: FREE_ACTION_SCANS_PER_DAY }).includes("dagens gratis Action-skanning (1 per repo)"), true);

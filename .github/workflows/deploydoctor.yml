@@ -31,3 +31,5 @@ jobs:
       - uses: actions/checkout@v4
       # This repository dogfoods the Action from its own source, so a change to it is tested on the PR that makes it.
       - uses: ./action
+        with:
+          quota-exhausted: fail # a used free scan must fail here, not pass as if it had run

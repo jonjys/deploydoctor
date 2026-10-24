@@ -291,3 +291,11 @@ export const guides: Guide[] = [
 export function guideBySlug(slug: string): Guide | undefined {
   return guides.find((guide) => guide.slug === slug);
 }
+
+/** Up to `count` other guides for the More guides list: the same check first, then the rest, both in catalog order. */
+export function relatedGuides(guide: Guide, all: Guide[] = guides, count = 3): Guide[] {
+  const others = all.filter((other) => other.slug !== guide.slug);
+  const sameCheck = others.filter((other) => other.check === guide.check);
+  const rest = others.filter((other) => other.check !== guide.check);
+  return [...sameCheck, ...rest].slice(0, count);
+}
