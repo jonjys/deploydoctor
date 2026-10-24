@@ -25,7 +25,7 @@ export function ReadmeBadges({ id, owner, name, overall, lang }: { id: string; o
   const badge = reportBadgeMarkdown(id);
   const button = scanButtonMarkdown(owner, name);
   return (
-    <>
+    <details className="report-secondary report-sharing"><summary>{t(lang, "report.shareDetails")}</summary>
       <section className="badge-section" aria-labelledby="badge-heading">
         <div>
           <h2 id="badge-heading">{t(lang, "report.badgeTitle")}</h2>
@@ -54,7 +54,7 @@ export function ReadmeBadges({ id, owner, name, overall, lang }: { id: string; o
           <CopyTextButton text={button} label={t(lang, "report.badgeCopy")} copiedLabel={t(lang, "report.badgeCopied")} />
         </div>
       </section>
-    </>
+    </details>
   );
 }
 

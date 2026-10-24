@@ -39,15 +39,18 @@ export function IgnoreProvider({ reportId, children }: { reportId: string; child
   return <IgnoreContext value={value}>{children}</IgnoreContext>;
 }
 
-export function ScoreCard({ checks, notNext = false }: { checks: Array<{ id: string; status: CheckStatus }>; notNext?: boolean }) {
+export function ScoreCard({ checks, notNext = false, partial = false }: { checks: Array<{ id: string; status: CheckStatus; coverageOnly?: boolean }>; notNext?: boolean; partial?: boolean }) {
   const { ignored } = useContext(IgnoreContext);
   const lang = useLang();
   const t = useT();
-  const summary = countStatuses(checks.filter((check) => !ignored.has(check.id)));
+  const summary = countStatuses(checks.filter((check) => !ignored.has(check.id) && !check.coverageOnly));
+  const incompleteOnly = partial && !summary.red && !summary.yellow;
+  const coverage = checks.filter(check => check.coverageOnly).length;
   return (
-    <div className={`score-card is-${notNext ? "neutral" : overallOf(summary)}`}>
+    <div className={`score-card is-${notNext || incompleteOnly ? "neutral" : overallOf(summary)}`}>
       <span>{t("report.overall")}</span>
-      <strong>{overallLabel(summary, lang, { notNext })}</strong>
+      <strong>{incompleteOnly && !notNext ? t("report.noFindingsPartial") : overallLabel(summary, lang, { notNext })}</strong>
+      {coverage > 0 && <small>{t("report.coverageCount", { n: coverage })}</small>}
     </div>
   );
 }
@@ -98,7 +101,7 @@ export function FixFirst({ items, limit = 5 }: { items: FixFirstItem[]; limit?: 
   if (!open.length) return null;
   return (
     <nav className={`fix-first is-${open[0].status}`} aria-label={t("report.fixFirst")}>
-      <strong>{t("report.fixFirst")}</strong>
+      <strong>{t(open.some(item => item.status === "red") ? "report.fixFirst" : "report.reviewFirst")}</strong>
       <ol>
         {open.slice(0, limit).map((item, index) => (
           <li key={`${item.checkId}-${index}`} className={`is-${item.status}`}>
@@ -107,7 +110,7 @@ export function FixFirst({ items, limit = 5 }: { items: FixFirstItem[]; limit?: 
             </a>
             {item.file && <span className="fix-first-check">{item.title}</span>}
             <span className="fix-first-fix">{item.completeFile ? t("report.fixFirstFile", { path: item.completeFile }) : item.fix}</span>
-            {item.command && (
+            {item.command && !item.completeFile && (
               <span className="fix-first-command">
                 <code><Breakable text={item.command} /></code>
                 <CopyTextButton text={item.command} label={t("report.copyCommand")} copiedLabel={t("report.copied")} />

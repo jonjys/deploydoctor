@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { CopyFixes, FixFirst, IgnoreProvider, IssueCard, ScoreCard, WhenOpenRed } from "@/components/report-ignore";
 import { getPreviousReport, getReport } from "@/lib/reports";
 import type { Category, CheckId, CheckStatus, ReportResults, StoredReport } from "@/types/report";
-import { diffReports, fixFirstItems, severityOf, showsLocalWhy, type ReportDiff } from "@/lib/report-insights";
+import { diffReports, fixFirstItems, isPartialPlaceholder, severityOf, showsLocalWhy, type ReportDiff } from "@/lib/report-insights";
 import { SinceLastScan } from "@/components/report-since";
 import { freeFixParts } from "@/lib/fix-instructions";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
@@ -20,7 +20,7 @@ import { SITE_URL } from "@/lib/site";
 import { getT } from "@/lib/lang";
 import { FIX_SERVICE_ENABLED } from "@/lib/fix-service";
 import { dateLocale, type MessageKey } from "@/lib/i18n";
-import { neutralReport, overallLabel } from "@/lib/report-summary";
+import { neutralReport, reportLabel } from "@/lib/report-summary";
 import { activePlan, customerSession } from "@/lib/access";
 import { frameworkName } from "@/lib/stack";
 
@@ -104,7 +104,9 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const { results } = report;
   const repoName = `${results.repository.owner}/${results.repository.name}`;
   const parts = freeFixParts(report, lang);
-  const checkStates = results.checks.map(({ id, status }) => ({ id, status }));
+  const checkStates = results.checks.map(check => ({ id: check.id, status: check.status, coverageOnly: isPartialPlaceholder(check) }));
+  const actionable = results.checks.filter(check => check.status !== "green" && !isPartialPlaceholder(check));
+  const supporting = results.checks.filter(check => check.status === "green" || isPartialPlaceholder(check));
   // Reports saved before category filtering have no scope: everything they contain was scanned.
   const present = new Set<Category>(results.checks.map(categoryOf));
   const scanned = results.scope?.scanned ?? CATEGORIES.filter((category) => present.has(category));
@@ -115,7 +117,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   // A root app on another framework the scan knows still gets real results, so it keeps the normal headline.
   const otherStack = results.nextApp === "none" ? results.stack?.framework : undefined;
   const neutral = neutralReport(results);
-  const overall = overallLabel(results.summary, lang, { notNext: neutral });
+  const overall = reportLabel(results, lang);
   const fixFirst = neutral ? [] : fixFirstItems(results.checks);
   const since = sinceDiff(previous, results);
   return (
@@ -142,7 +144,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
             <p className="section-kicker">{t("report.kicker")}</p>
             <h1>{repoName}</h1>
           </div>
-          <ScoreCard checks={checkStates} notNext={neutral} />
+          <ScoreCard checks={checkStates} notNext={neutral} partial={results.scan.partial} />
         </div>
         {previous && since && <SinceLastScan diff={since} previous={previous} lang={lang} />}
         <FixFirst items={fixFirst} />
@@ -173,11 +175,11 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         )}
       </header>
 
-      <WatchBox reportId={id} repo={repoName} isPrivate={report.is_private} />
 
       <section className="results-list" id="checks" aria-label="Deployment checks">
+        {!actionable.length && <p className="report-no-findings">{t("report.noFindings")}</p>}
         {scanned.map((category) => {
-          const group = results.checks.filter((check) => categoryOf(check) === category);
+          const group = actionable.filter((check) => categoryOf(check) === category);
           if (!group.length) return null;
           return (
             <div className="check-group" key={category}>
@@ -194,27 +196,27 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                     <div className="local-why"><strong>{t("report.localWhy")}</strong> {t(`report.localWhy.${check.id}`)}</div>
                   )}
                   {check.evidence.length ? (
-                    <ul className="evidence-list" aria-label={t("report.evidence")}>
+                    <details className="report-evidence"><summary>{t("report.evidenceDetails")} ({check.evidence.length})</summary><ul className="evidence-list" aria-label={t("report.evidence")}>
                       {check.evidence.map((item) => (
                         <li key={item}>↳ {item}</li>
                       ))}
-                    </ul>
+                    </ul></details>
                   ) : null}
                   <div className="fix-box">
                     <strong>{t("report.suggested")}</strong> {check.fix}
                   </div>
                   {check.suggestedFile?.content ? (
-                    <div className="suggested-file">
+                    <details className="suggested-file"><summary>{t("report.fileDetails", { path: check.suggestedFile.path })}</summary>
                       <div className="suggested-file-head">
                         <strong>{t("report.completeFile", { path: check.suggestedFile.path })}</strong>
                         <CopyFixesButton instructions={check.suggestedFile.content} file />
                       </div>
                       <pre><code>{check.suggestedFile.content}</code></pre>
-                    </div>
+                    </details>
                   ) : null}
                   {check.status !== "green" && (
                     <div className="card-links">
-                      {docsFor[check.id] && <a href={docsFor[check.id]} target="_blank" rel="noreferrer">{t("report.docsLink")} ↗</a>}
+                      {docsFor[check.id] && <a href={docsFor[check.id]} target="_blank" rel="noreferrer">{check.status === "yellow" ? (lang === "sv" ? "Dokumentation" : "Documentation") : t("report.docsLink")} ↗</a>}
                       {check.status === "red" && (
                         <CopyTextButton
                           text={issueMarkdown(check.title, check.explanation, check.evidence, check.fix, `${SITE_URL}/r/${id}#check-${check.id}`)}
@@ -236,24 +238,33 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         })}
       </section>
 
+      {supporting.length > 0 && <details className="report-supporting">
+        <summary>{t("report.coverageDetails")} ({supporting.length})</summary>
+        {results.scan.partial && <p>{t("report.coverageExplain")}</p>}
+        <ul>{supporting.map(check => <li key={check.id} id={`check-${check.id}`}>
+          <span aria-hidden="true">{isPartialPlaceholder(check) ? "○" : "✓"}</span><div><strong>{check.title}</strong><span>{t(isPartialPlaceholder(check) ? "report.coverageOnly" : "report.pass")}</span><p>{check.explanation}</p></div>
+        </li>)}</ul>
+      </details>}
+
       <SolvedPrompt kind="report" target={id} repo={report.repo_url} />
 
-      <section className="report-actions" aria-labelledby="action-heading">
+      {actionable.length > 0 && <section className="report-actions" aria-labelledby="action-heading">
         <div>
           <h2 id="action-heading">{t("report.actionsTitle")}</h2>
           <p>{FIX_SERVICE_ENABLED ? t("report.actionsBody") : t("report.actionsBodyFree")}</p>
         </div>
         <div className="action-buttons">
           <CopyFixes parts={parts} />
-          {!plan && <ScanCheckoutButton plan="day" style={{ background: "transparent" }} context={report.repo_url}>{t("report.dayCta")}</ScanCheckoutButton>}
+          {!plan && results.checks.some(check => check.status === "red") && <ScanCheckoutButton plan="day" style={{ background: "transparent" }} context={report.repo_url}>{t("report.dayCta")}</ScanCheckoutButton>}
           {FIX_SERVICE_ENABLED && <WhenOpenRed checks={checkStates}>
             <Link className="cta-button" href={`/checkout?plan=fix-all&report=${id}`}>
               {t("report.fixAll")}
             </Link>
           </WhenOpenRed>}
         </div>
-      </section>
+      </section>}
 
+      <WatchBox reportId={id} repo={repoName} isPrivate={report.is_private} summary={t("report.watchDetails")} />
 
       {!report.is_private && <ReadmeBadges id={id} owner={results.repository.owner} name={results.repository.name} overall={overall} lang={lang} />}
       </IgnoreProvider>

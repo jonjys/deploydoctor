@@ -69,6 +69,8 @@ const NEXT_ONLY_WHY = new Set<CheckId>(["next-entry", "env"]);
  * and a note about Next.js is left off a report of another stack. Older reports have no nextApp and keep every note.
  */
 export function showsLocalWhy(check: CheckResult, nextApp?: ReportResults["nextApp"]): boolean {
+  // Missing template documentation does not prove the hosting environment lacks a value.
+  if (check.id === "env" && check.status === "yellow") return false;
   if ((nextApp === "none" || nextApp === "nested") && NEXT_ONLY_WHY.has(check.id)) return false;
   return check.id in severityOf && (check.status === "red" || (check.status === "yellow" && !!check.findings?.length));
 }

@@ -1,5 +1,5 @@
 import type { ReportResults } from "@/types/report";
-import { neutralReport, overallLabel, overallOf } from "@/lib/report-summary";
+import { findingSummary, neutralReport, reportLabel, overallOf } from "@/lib/report-summary";
 
 export const BADGE_COLORS = { red: "#d6453d", yellow: "#c99a07", green: "#2f8f52", neutral: "#6b7a74" } as const;
 /** The site's ink: the left half of the report badge and the brand half of the scan button. */
@@ -9,9 +9,10 @@ export const BADGE_INK = "#10231c";
 export function badgeStatus(results: ReportResults | null): { label: string; color: string } {
   if (!results) return { label: "report not found", color: BADGE_COLORS.neutral };
   const neutral = neutralReport(results);
+  const summary = results.checks.length ? findingSummary(results.checks) : results.summary;
   return {
-    label: overallLabel(results.summary, "en", { notNext: neutral }),
-    color: neutral ? BADGE_COLORS.neutral : BADGE_COLORS[overallOf(results.summary)],
+    label: reportLabel(results),
+    color: neutral || (results.scan.partial && !summary.red && !summary.yellow) ? BADGE_COLORS.neutral : BADGE_COLORS[overallOf(summary)],
   };
 }
 

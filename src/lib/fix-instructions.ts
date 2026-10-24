@@ -1,5 +1,6 @@
 import type { CheckResult, StoredReport } from "@/types/report";
 import { t, type Lang } from "@/lib/i18n";
+import { isPartialPlaceholder } from "@/lib/report-insights";
 
 function checkText(check: CheckResult, lang: Lang) {
   const file = check.suggestedFile;
@@ -18,8 +19,8 @@ function checkText(check: CheckResult, lang: Lang) {
 export function freeFixParts(report: StoredReport, lang: Lang = "en") {
   return {
     head: t(lang, "fix.head", { url: report.repo_url }),
-    items: report.results.checks.filter((check) => check.status !== "green").map((check) => ({ id: check.id, text: checkText(check, lang) })),
-    allPassed: t(lang, "fix.allPassed"),
+    items: report.results.checks.filter((check) => check.status !== "green" && !isPartialPlaceholder(check)).map((check) => ({ id: check.id, text: checkText(check, lang) })),
+    allPassed: t(lang, report.results.scan.partial ? "report.noFindingsPartial" : "fix.allPassed"),
   };
 }
 

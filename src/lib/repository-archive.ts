@@ -3,7 +3,7 @@ import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import { extract } from "tar-stream";
 
-export const ARCHIVE_LIMITS = { compressed: 20_000_000, expanded: 100_000_000, entries: 30_000, buffered: 24_000_000 } as const;
+export const ARCHIVE_LIMITS = { compressed: 20_000_000, expanded: 100_000_000, entries: 30_000, buffered: 24_000_000, files: 400 } as const;
 type Entry = { path: string; type: "blob" | "tree"; size?: number };
 export type ArchiveSnapshot = { entries: Entry[]; contents: Map<string, string>; truncated: boolean };
 
@@ -43,7 +43,7 @@ export async function readRepositoryArchive(body: ReadableStream<Uint8Array>, se
         const data = Buffer.concat(chunks);
         contents.set(path, data.toString("utf8"));
         buffered += data.length;
-        while (contents.size > 180 || buffered > ARCHIVE_LIMITS.buffered) {
+        while (contents.size > ARCHIVE_LIMITS.files || buffered > ARCHIVE_LIMITS.buffered) {
           const worst = [...contents.keys()].sort((a, b) => priority(b) - priority(a) || b.localeCompare(a))[0];
           buffered -= Buffer.byteLength(contents.get(worst)!);
           contents.delete(worst); truncated = true;
