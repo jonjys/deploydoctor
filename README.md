@@ -54,6 +54,22 @@ job fails on a red check. The action is a thin client over `POST /api/reports` w
 full report as JSON; `GET /api/reports/<id>` reads a saved one. See [action/](action/README.md)
 and the public [/ci](https://deploydoctor.nyttolabs.com/ci) page.
 
+### Terminal CLI
+
+The same scan from the terminal, without a workflow, lives in [cli/](cli/README.md): one file,
+no dependencies. It is not on npm yet, so run it from a checkout of this repository:
+
+```sh
+node cli/bin.mjs vercel/commerce
+```
+
+Inside a checkout of your own project the argument is optional; the CLI reads that folder's
+GitHub origin. It prints one row per check with the first file and line, links the saved report
+and exits 1 on a red check, so it works as a pre-push gate. Free scans count against the
+website's allowance of 1 scan a day per IP; with a pass, set `DEPLOYDOCTOR_TOKEN` to an API
+token for unlimited scans. Nothing is cloned or executed locally. The npx one-liner arrives with
+the first npm release; see Publishing in [cli/README.md](cli/README.md).
+
 ## What a scan does
 
 1. Detects the stack from `package.json`, the lockfile, `vercel.json` and `.env.example`.

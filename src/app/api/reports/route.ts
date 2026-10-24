@@ -7,6 +7,7 @@ import { scanAllowance } from "@/lib/limits";
 import { maybePrivateRepo, needsTokenPrompt, tokenPromptKey } from "@/lib/github-status";
 import { OIDC_HEADER, verifyGitHubOidc } from "@/lib/github-oidc";
 import { sameOrigin } from "@/lib/stripe";
+import { fromCli } from "@/lib/cli-client";
 import { parseChecks } from "@/lib/categories";
 import { allowsPrivate } from "@/lib/plans";
 import { langFromRequest, t } from "@/lib/i18n";
@@ -24,6 +25,8 @@ export const maxDuration = 60;
  * is never subject to the free daily limit, so a GitHub Actions runner's shared IP does not matter.
  * Free CI: the GitHub Action sends a GitHub OIDC token in `x-github-oidc-token` instead. It only scans
  * the public repository the workflow runs in, against that repository's own free daily quota.
+ * Terminal: `npx deploydoctor` (user-agent deploydoctor-cli/<version>, no Origin header) is answered with the full
+ * report as JSON and counts against the visitor's free daily scan exactly like the website form.
  */
 export async function POST(request: Request) {
   const lang = langFromRequest(request);
@@ -41,7 +44,9 @@ export async function POST(request: Request) {
     oidcRepo = claims.repository;
   }
   const viaCi = viaToken || oidcRepo !== null;
-  if (!viaCi && !sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });
+  // The CLI cannot send a browser origin; fromCli never matches a browser, and the daily limit below still applies.
+  const viaCli = !viaCi && fromCli(request);
+  if (!viaCi && !viaCli && !sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });
   let reservation: string | undefined;
   let saved = false;
   // Outside the try so a GitHub error can tell a possibly private repo from a plain typo.
@@ -84,14 +89,14 @@ export async function POST(request: Request) {
         console.log("dd-funnel", JSON.stringify({ step: "paywall", plan: null, reason: "limit" }));
         // A free Action scan counts per repository, so it names that allowance instead of the visitor's daily scan.
         return Response.json({ error: oidcRepo ? t(lang, "err.actionLimit", { n: allowance.limit }) : t(lang, "err.dailyLimit"),
-          paywall: true, resetsAt: quota.resetsAt }, { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((Date.parse(quota.resetsAt) - Date.now()) / 1000))) } });
+          paywall: true, resetsAt: quota.resetsAt, pricingUrl: `${SITE_URL}/pricing` }, { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((Date.parse(quota.resetsAt) - Date.now()) / 1000))) } });
       }
       reservation = quota.id;
     }
     const { canonicalUrl, results, isPrivate } = await analyzeGitHubRepository(body.repoUrl, { privateToken, checks, lang, ref });
     const report = await saveReport(canonicalUrl, results, customer?.customerId, isPrivate);
     saved = true;
-    if (viaCi) return Response.json(reportJson(report), { status: 201, headers: { "Cache-Control": "no-store" } });
+    if (viaCi || viaCli) return Response.json(reportJson(report), { status: 201, headers: { "Cache-Control": "no-store" } });
     return Response.json({ id: report.id, href: `/r/${report.id}` }, { status: 201 });
   } catch (error) {
     const limited = workLimitResponse(error, lang);
