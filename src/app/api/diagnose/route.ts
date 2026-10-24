@@ -47,9 +47,11 @@ export async function POST(request: Request) {
     const identity = plan && customer ? customer.customerId : hashRequestIp(request);
     accountLease = await acquireWork([], `ai:${identity}`, 1, 90);
     globalLease = await acquireWork(diagnosisRules(identity, Boolean(plan)), "ai:site", 3, 90);
+    console.log("dd-funnel", JSON.stringify({ step: "diagnosis_started", paid: Boolean(plan) }));
     const { diagnosis, usage } = await diagnoseWithClaude(log, lang);
     console.log("dd-diagnose-usage", JSON.stringify({ ...usage, paid: Boolean(plan), verdict: diagnosis.verdict }));
     done = true;
+    console.log("dd-funnel", JSON.stringify({ step: "diagnosis_completed", paid: Boolean(plan) }));
     return Response.json({ diagnosis }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const limited = workLimitResponse(error, lang);

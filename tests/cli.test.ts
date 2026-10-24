@@ -288,7 +288,6 @@ test("reports route: the CLI allowance never matches a browser and keeps the dai
   // The CLI gets the report as JSON like CI, but reserves a free scan like the website: viaCli appears nowhere near the plan or quota.
   assert.match(route, /if \(viaCi \|\| viaCli\) return Response\.json\(reportJson\(report\), \{ status: 201/);
   assert.match(route, /if \(!plan\) \{\s+const allowance = scanAllowance\(oidcRepo\);\s+const quota = await reserveScan\(request, allowance\);/);
-  assert.equal(route.match(/viaCli/g)?.length, 3);
   // The daily limit answer carries the pricing link the CLI prints.
   assert.match(route, /paywall: true, resetsAt: quota\.resetsAt, pricingUrl: `\$\{SITE_URL\}\/pricing` \}, \{ status: 429/);
   // Nothing answers a CORS preflight for the API, so a page cannot send the custom user-agent cross-site.

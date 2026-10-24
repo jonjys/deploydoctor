@@ -17,7 +17,7 @@ const RESERVED = new Set([
   // The page the Watch this repo email links land on.
   "watch",
   // Public folders, so a path below one of their files never starts a scan.
-  "rescue-kit", "stats", "growth",
+  "rescue-kit", "stats", "growth", "badge", "score",
 ]);
 
 /** Where a path that names no repository is sent: one segment matches no route, so it renders the app's not-found page. */

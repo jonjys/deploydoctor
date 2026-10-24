@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { SiteNav } from "@/components/site-nav";
+import { PatchPullRequest } from "@/components/patch-pull-request";
 import { PatchRecoveryKey } from "@/components/patch-recovery-key";
 import { downloadToken } from "@/lib/patch/delivery";
 import { signingSecret } from "@/lib/session-token";
@@ -47,6 +48,7 @@ export default async function PatchSuccess({ searchParams }: { searchParams: Pro
       <p><a className="cta-button" href={`/api/patch/download?session_id=${encodeURIComponent(sessionId!)}&token=${encodeURIComponent(downloadToken(sessionId!, order.accessHash, signingSecret()))}`}>{t("patch.download")}</a></p>
       <p>{t("patch.linkLifetime")}</p>
       <PatchRecoveryKey recoveryKey={keys.find(key => tokenHash(key) === order.accessHash)!} sessionId={sessionId} />
+      <PatchPullRequest sessionId={sessionId!} repoUrl={order.repoUrl} />
       <p>{t("patch.apply", { commit: order.commitSha.slice(0, 7) })}</p>
       <pre className="patch-file"><code>{applyCommands(order.commitSha)}</code></pre>
       <p>{t("patch.after")}</p>

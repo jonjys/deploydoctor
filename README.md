@@ -113,6 +113,32 @@ npm run dev
 
 Open `http://localhost:3000` and paste a public GitHub repository URL.
 
+## Latest repository status and verified fixes
+
+Every public report offers a permanent repository badge and status page:
+
+```md
+[![DeployDoctor repo status](https://deploydoctor.nyttolabs.com/badge/OWNER/REPO.svg)](https://deploydoctor.nyttolabs.com/score/OWNER/REPO)
+```
+
+The status uses the latest saved public scan of the default branch. It shows its date and commit,
+marks partial scans and results older than seven days, and never starts a scan on a page or badge view.
+Private reports and PR-head scans are excluded. A passed check is not a deployment guarantee.
+
+A purchased, verified import patch can also be opened as a **draft pull request** from its order page.
+The buyer supplies a temporary fine-grained token scoped to the public repository, with Contents and
+Pull requests write permissions. The token is used for that request, never stored or logged. This is
+an explicit action, not an installed GitHub App or unattended repair service.
+
+The server rechecks owner access and Stripe payment (including refunds and disputes), requires the
+scanned commit to remain the default-branch head, verifies original source hashes, applies the exact
+paid diff, and creates a new branch without overwriting another branch. Repeated requests reuse the
+same PR. Review the diff and run your tests/build before merging. Environment documentation and other
+suggested changes remain manual. Existing scan prices, free quotas and the Gumroad Rescue Kit stay as is.
+
+Operational funnel logs record scan/diagnosis starts and completions and draft PR creation without
+repository names, source, logs or credentials. Counts represent attempts, not unique people or payment attribution.
+
 ## Verification
 
 ```sh
