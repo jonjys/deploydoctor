@@ -51,6 +51,8 @@ const BUILT_IN_ENV = new Set([
   "VERCEL_BRANCH_URL",
   "VERCEL_PROJECT_PRODUCTION_URL",
   "CI",
+  // Node/terminal preferences, not deployment credentials or app configuration.
+  "NO_COLOR", "FORCE_COLOR", "TERM", "COLORTERM",
 ]);
 // Vercel's system env vars (VERCEL_URL, VERCEL_GIT_COMMIT_SHA, NEXT_PUBLIC_VERCEL_ENV, ...) are set by the platform.
 const VERCEL_SYSTEM_ENV = /^(?:NEXT_PUBLIC_)?VERCEL(?:_[A-Z0-9_]+)?$/;

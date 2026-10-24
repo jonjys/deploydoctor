@@ -3,7 +3,7 @@ import test from "node:test";
 import { Readable } from "node:stream";
 import { gzipSync } from "node:zlib";
 import { pack } from "tar-stream";
-import { readRepositoryArchive } from "../src/lib/repository-archive";
+import { ARCHIVE_LIMITS, readRepositoryArchive } from "../src/lib/repository-archive";
 
 async function archive(items: Array<{ name: string; text?: string; type?: "file" | "symlink" }>) {
   const tar = pack();
@@ -36,12 +36,12 @@ test("path traversal and mixed archive roots are rejected", async () => {
   }
   await assert.rejects(parse(await archive([{ name: "root/a", text: "a" }, { name: "other/b", text: "b" }])), /Unsafe/);
 });
-test("more than 180 interesting files keeps high-priority configuration and marks the scan partial", async () => {
-  const items = Array.from({ length: 181 }, (_, i) => ({ name: `root/src/file${i}.ts`, text: "export {}" }));
+test("more than the file budget keeps high-priority configuration and marks the scan partial", async () => {
+  const items = Array.from({ length: ARCHIVE_LIMITS.files + 1 }, (_, i) => ({ name: `root/src/file${i}.ts`, text: "export {}" }));
   items.push({ name: "root/package.json", text: "{}" });
   const read = await parse(await archive(items));
-  assert.equal(read.entries.length, 182);
-  assert.equal(read.contents.size, 180);
+  assert.equal(read.entries.length, ARCHIVE_LIMITS.files + 2);
+  assert.equal(read.contents.size, ARCHIVE_LIMITS.files);
   assert.equal(read.contents.get("package.json"), "{}");
   assert.equal(read.truncated, true);
 });
@@ -49,4 +49,20 @@ test("malformed gzip and cancelled downloads fail rather than producing a clean 
   await assert.rejects(parse(Buffer.from("not gzip")));
   const signal = AbortSignal.abort();
   await assert.rejects(readRepositoryArchive(Readable.toWeb(Readable.from([await archive([{ name: "root/a", text: "a" }])])) as ReadableStream<Uint8Array>, () => true, () => 0, signal));
+});
+
+test("a 197-source-file application fits the file budget without dropping source", async () => {
+  const items = Array.from({ length: 197 }, (_, i) => ({ name: `root/src/file${i}.ts`, text: "export {}" }));
+  items.push({ name: "root/package.json", text: "{}" });
+  const read = await parse(await archive(items));
+  assert.equal(read.contents.size, 198);
+  assert.equal(read.truncated, false);
+});
+
+test("the larger file allowance still enforces the original byte budget", async () => {
+  const items = Array.from({ length: 205 }, (_, i) => ({ name: `root/src/file${i}.ts`, text: "x".repeat(120000) }));
+  const read = await parse(await archive(items));
+  assert.equal(read.truncated, true);
+  assert.ok([...read.contents.values()].reduce((n, text) => n + Buffer.byteLength(text), 0) <= ARCHIVE_LIMITS.buffered);
+  assert.ok(read.contents.size < items.length);
 });

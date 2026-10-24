@@ -1,5 +1,19 @@
 import type { CheckStatus, ReportResults } from "@/types/report";
 import { t, type Lang } from "@/lib/i18n";
+import { isPartialPlaceholder } from "@/lib/report-insights";
+import type { CheckResult } from "@/types/report";
+
+/** Coverage gaps are not code findings. Kept separate for old saved reports too. */
+export function findingSummary(checks: CheckResult[]) {
+  return countStatuses(checks.filter(check => !isPartialPlaceholder(check)));
+}
+
+export function reportLabel(results: ReportResults, lang: Lang = "en") {
+  const summary = results.checks.length ? findingSummary(results.checks) : results.summary;
+  if (neutralReport(results)) return overallLabel(summary, lang, { notNext: true });
+  if (results.scan.partial && !summary.red && !summary.yellow) return t(lang, "report.noFindingsPartial");
+  return overallLabel(summary, lang);
+}
 
 export function countStatuses(checks: Array<{ status: CheckStatus }>): Record<CheckStatus, number> {
   return checks.reduce<Record<CheckStatus, number>>(

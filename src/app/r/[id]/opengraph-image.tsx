@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { getReport } from "@/lib/reports";
-import { overallLabel, overallOf } from "@/lib/report-summary";
+import { findingSummary, neutralReport, reportLabel, overallOf } from "@/lib/report-summary";
+import { isPartialPlaceholder } from "@/lib/report-insights";
 
 export const alt = "DeployDoctor report";
 export const size = { width: 1200, height: 630 };
@@ -13,8 +14,10 @@ export default async function Image({ params }: { params: Promise<{ id: string }
   const { id } = await params;
   const report = await getReport(id);
   const results = report && !report.is_private ? report.results : null;
-  const overall = results ? overallOf(results.summary) : "neutral";
-  const headline = results ? overallLabel(results.summary) : "Saved report";
+  const summary = results ? findingSummary(results.checks) : { red: 0, yellow: 0, green: 0 };
+  const overall = results && !neutralReport(results) && !(results.scan.partial && !summary.red && !summary.yellow) ? overallOf(summary) : "neutral";
+  const headline = results ? reportLabel(results) : "Saved report";
+  const coverage = results?.checks.filter(isPartialPlaceholder).length ?? 0;
   const repo = results ? `${results.repository.owner}/${results.repository.name}` : "DeployDoctor";
   const total = results ? results.checks.length : 0;
 
@@ -41,10 +44,10 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           <div style={{ display: "flex", gap: 14 }}>
             {results ? (
               <>
-                <Pill color={colors.red} label={`${results.summary.red} fail`} />
-                <Pill color={colors.yellow} label={`${results.summary.yellow} review`} />
-                <Pill color={colors.green} label={`${results.summary.green} pass`} />
-                <Pill color="#b7c2bd" label={`${total} checks`} />
+                <Pill color={colors.red} label={`${summary.red} fail`} />
+                <Pill color={colors.yellow} label={`${summary.yellow} review`} />
+                <Pill color={colors.green} label={`${summary.green} pass`} />
+                <Pill color="#b7c2bd" label={coverage ? `${coverage} unverified` : `${total} checks`} />
               </>
             ) : (
               <Pill color="#b7c2bd" label="Open the link to view the report" />

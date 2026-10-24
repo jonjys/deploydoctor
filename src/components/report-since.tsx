@@ -33,7 +33,7 @@ export function SinceLastScan({ diff, previous, lang }: { diff: ReportDiff; prev
         <h2 id="since-heading">{t(lang, "report.sinceTitle")}</h2>
         <Link href={`/r/${previous.id}`}>{t(lang, "report.sinceLink", { date: `${date} UTC` })}</Link>
       </div>
-      {!changed && <p className="since-last-same">{t(lang, diff.notCompared.length ? "report.sinceSameShared" : "report.sinceSame")}</p>}
+      {!changed && <p className="since-last-same">{t(lang, diff.partial ? "report.sinceSamePartial" : diff.notCompared.length ? "report.sinceSameShared" : "report.sinceSame")}</p>}
       {diff.statusChanges.length > 0 && (
         <ul className="since-last-status" aria-label={t(lang, "report.sinceStatusAria")}>
           {diff.statusChanges.map((change) => (
