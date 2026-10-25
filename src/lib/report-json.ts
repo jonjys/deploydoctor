@@ -1,3 +1,4 @@
+import { launchReadiness } from "@/lib/launch-readiness";
 import type { StoredReport } from "@/types/report";
 import { SITE_URL } from "@/lib/site";
 
@@ -21,7 +22,9 @@ export function reportJson(report: StoredReport) {
     checks: results.checks.map((check) => ({
       id: check.id, title: check.title, status: check.status, explanation: check.explanation, fix: check.fix,
       evidence: check.evidence, findings: check.findings ?? [], suggestedFile: check.suggestedFile ?? null,
+      evaluatedRules: check.evaluatedRules ?? null, coverageOnly: check.coverageOnly ?? false,
     })),
+    launchReadiness: launchReadiness(results, report.id),
     isPrivate: Boolean(report.is_private),
     limitations: "Static analysis only. Nothing is cloned, installed, built or executed. Review findings against the current code.",
   };

@@ -6,6 +6,7 @@ export type ScanInsights = {
   days: { day: string; count: number }[]; activity: { at: string }[];
 };
 const labels: Record<CheckId, [string, string]> = {
+  "production-safety": ["Payment and production safety", "Betalning och produktionsrisker"],
   "next-entry": ["Next.js entrypoint", "Next.js-startpunkt"], imports: ["Import paths", "Importsökvägar"],
   "server-libs": ["Server / Edge compatibility", "Server / Edge-kompatibilitet"], env: ["Environment variables", "Miljövariabler"],
   supabase: ["Supabase", "Supabase"], prisma: ["Prisma / database", "Prisma / databas"],

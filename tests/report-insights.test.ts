@@ -369,7 +369,7 @@ test("new report copy exists in both languages, explains every check and has no 
       assert.doesNotMatch(messages[lang][key], /[–—"“”„]/, `${lang} ${key}`);
     }
   }
-  assert.equal(CHECK_IDS.length, 9);
+  assert.equal(CHECK_IDS.length, 10);
   assert.match(t("en", "report.localWhy.imports"), /macOS and Windows ignore letter case.*Linux/);
   assert.match(t("sv", "report.localWhy.imports"), /Linux/);
   // Two clauses joined by a conjunction, not a comma splice.

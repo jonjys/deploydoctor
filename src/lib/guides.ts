@@ -17,7 +17,7 @@ export const guides: Guide[] = [
     title: "Next.js works locally but fails on Vercel: the five usual causes",
     description: "A passing local build proves less than you think. The five reasons a Next.js app works on your machine and fails on Vercel, with the fix for each.",
     updated: "2026-10-05",
-    check: "all nine checks",
+    check: "all applicable checks",
     sections: [
       { heading: "Why local success means little", body: [
         "npm run dev on your laptop uses your .env.local, a case insensitive file system on macOS and Windows, your globally installed tools and whatever is in node_modules right now. Vercel builds from a clean clone on Linux, installs from the lockfile, and only sees the environment variables you added in the project settings. Each of those differences is a way for a green local build to turn into a red deploy.",

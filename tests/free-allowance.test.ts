@@ -80,7 +80,7 @@ test("free allowance copy: no visitor copy still offers 3 free scans or 3 free d
   // request in any phrasing. The guides end with the same offer, and the paid token copy in i18n (account.ciBody) is the one
   // place that may say it, because a pass scans every push.
   assert.doesNotMatch(ci, /every pull request/i);
-  assert.match(ci, /The same nine checks as the website, on a pull request before Vercel builds it\./);
+  assert.match(ci, /The same static analysis as the website, on a pull request before Vercel builds it\./);
   for (const file of ["src/lib/guides.ts", "src/lib/seo-guides.ts", "src/app/guides/page.tsx", "src/app/guides/[slug]/page.tsx",
     "README.md", "action/README.md", "action/action.yml", "plugins/deploydoctor/README.md", "public/llms.txt", "src/lib/mcp.ts"]) {
     assert.doesNotMatch(read(file), /every pull request/i, file);

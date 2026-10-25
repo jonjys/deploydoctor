@@ -43,6 +43,8 @@ test("scan preserves trusted quota IP, strips credentials and returns saved evid
   assert.equal(calls, 1);
   assert.equal(result.data.result.structuredContent.reportUrl, `${base}/r/${id}`);
   assert.equal(result.data.result.isError, false);
+  assert.ok(result.data.result.structuredContent.launchReadiness);
+  assert.equal(result.data.result.structuredContent.commitSha, null);
 });
 test("rejects arbitrary URLs and embedded secrets before a scan", async () => {
   for (const repoUrl of ["http://github.com/a/b", "https://evil.test/a/b", "https://token@github.com/a/b", "https://github.com/a/b?token=secret", "https://github.com/a/b/tree/main"]) {

@@ -1,3 +1,4 @@
+import { checkProductionSafety } from "@/lib/production-safety";
 import path from "node:path";
 import type { Category, CheckResult, CheckStatus, ReportResults, Finding } from "@/types/report";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
@@ -277,7 +278,7 @@ function checkImports(snapshot: RepositorySnapshot, x: AnalysisText): CheckResul
   const problems = importProblems(snapshot);
   const caseMismatches = problems.filter((problem) => problem.kind === "case").length;
   const missing: Finding[] = problems.map((problem) => problem.kind === "case"
-    ? { file: problem.file, line: problem.line, problem: x.imports.caseProblem(problem.specifier, problem.actual), fix: x.imports.caseFix(problem.exact, problem.line) }
+    ? { repairable: true, file: problem.file, line: problem.line, problem: x.imports.caseProblem(problem.specifier, problem.actual), fix: x.imports.caseFix(problem.exact, problem.line) }
     : problem.ambiguous
       ? { file: problem.file, line: problem.line, problem: x.imports.ambiguous(problem.specifier), fix: x.imports.review }
       : { file: problem.file, line: problem.line, problem: x.imports.problem(problem.specifier), fix: x.imports.fix(problem.target, problem.line),
@@ -1336,7 +1337,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
   const chosen = new Set(options.checks ?? defaultChecks(stack));
   const runners: Record<Category, Array<(snapshot: RepositorySnapshot, x: AnalysisText) => CheckResult>> = {
     next: [checkNextEntrypoint, checkImports],
-    vercel: [checkServerLibraries, checkBuildConfig, checkDependencies],
+    vercel: [checkServerLibraries, checkBuildConfig, checkDependencies, checkProductionSafety],
     env: [checkEnvironment, checkSecrets],
     supabase: [checkSupabase],
     prisma: [checkPrisma],

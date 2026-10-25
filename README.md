@@ -156,3 +156,14 @@ Add the variables from `.env.example` to the Vercel project (Production and Prev
 ## License
 
 DeployDoctor is source-available under the [Business Source License 1.1](LICENSE). You may read, fork, run it locally for private use and contribute. You may not offer it as a commercial hosted service that competes with [deploydoctor.nyttolabs.com](https://deploydoctor.nyttolabs.com). On 2029-09-27 the license changes to MIT.
+
+
+### Launch Readiness and production safety
+
+The existing snapshot scanner now includes eight additional AST-based rule families: Stripe raw-body verification inputs, visible webhook event verification, Pages API body parsing, loopback checkout redirects, Next.js client/server boundaries, invalid route runtime literals, personalized force-static handlers and explicitly disabled HTTPS certificate verification. Uncertain risks require review; only direct Next.js configuration/boundary errors are red. No additional AI calls or GitHub file requests.
+
+Saved reports include Launch Readiness: blockers, review findings, evidence, next steps and separate manual verification. Checkout, runtime, deployed environment values and traffic capacity are not tested. Existing pricing, private access, Watch opt-in and verified import repair flow apply.
+
+- [Before/after detection inventory and primary references](docs/launch-readiness-audit.md)
+- [MakeItReal server integration contract](docs/integrations/holiday-launch-readiness.md)
+- [Launch entry point](https://deploydoctor.nyttolabs.com/launch-readiness)

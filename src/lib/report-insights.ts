@@ -6,7 +6,7 @@ import { LANGS } from "@/lib/i18n";
 export const severityOf: Record<CheckId, "build" | "runtime" | "security"> = {
   "next-entry": "build", imports: "build", dependencies: "build", "build-config": "build",
   env: "runtime", "server-libs": "runtime", supabase: "runtime", prisma: "runtime",
-  secrets: "security",
+  secrets: "security", "production-safety": "security",
 };
 
 const STATUS_RANK: Record<CheckStatus, number> = { red: 0, yellow: 1, green: 2 };
@@ -31,7 +31,7 @@ const PARTIAL_FIXES = new Set(LANGS.flatMap((lang) => [analysisText(lang).partia
 
 /** A check that found nothing and is yellow only because the scan was partial. Its fix is about the scan, not about the code. */
 export function isPartialPlaceholder(check: CheckResult): boolean {
-  return check.status === "yellow" && !check.findings?.length && PARTIAL_FIXES.has(check.fix);
+  return check.status === "yellow" && !check.findings?.length && (check.coverageOnly === true || PARTIAL_FIXES.has(check.fix));
 }
 
 /**
@@ -55,7 +55,7 @@ export function fixFirstItems(checks: CheckResult[]): FixFirstItem[] {
         fileShown = true;
         continue;
       }
-      items.push({ ...base, file: finding.file, line: finding.line, fix: finding.fix, ...(finding.command ? { command: finding.command } : {}) });
+      items.push({ ...base, status: finding.status ?? base.status, file: finding.file, line: finding.line, fix: finding.fix, ...(finding.command ? { command: finding.command } : {}) });
     }
     return items;
   });
@@ -70,6 +70,7 @@ const NEXT_ONLY_WHY = new Set<CheckId>(["next-entry", "env"]);
  */
 export function showsLocalWhy(check: CheckResult, nextApp?: ReportResults["nextApp"]): boolean {
   // Missing template documentation does not prove the hosting environment lacks a value.
+  if (check.id === "production-safety") return false;
   if (check.id === "env" && check.status === "yellow") return false;
   if ((nextApp === "none" || nextApp === "nested") && NEXT_ONLY_WHY.has(check.id)) return false;
   return check.id in severityOf && (check.status === "red" || (check.status === "yellow" && !!check.findings?.length));
