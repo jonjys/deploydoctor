@@ -115,7 +115,6 @@ export default async function Home() {
         </section>
       )}
 
-      <p className="plugin-line"><Link href="/launch-readiness">{lang === "sv" ? "Ska du lansera? Se din tekniska checklista inför trafiken →" : "Launching a campaign? Check your deployment before the traffic arrives →"}</Link></p>
       <section className="checks-panel" aria-label="Developer tools">
         <div><h2>{lang === "sv" ? "Använd där du bygger" : "Use it where you build"}</h2></div>
         <div>

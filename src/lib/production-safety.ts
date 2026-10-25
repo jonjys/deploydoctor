@@ -7,8 +7,8 @@ export { PRODUCTION_RULES } from "@/lib/production-rules";
 type Rule = typeof PRODUCTION_RULES[number];
 const SOURCE = /\.[cm]?[jt]sx?$/;
 const EXCLUDED = /(?:^|\/)(?:tests?|__tests__|__mocks__|fixtures|spec|examples?|scripts|cli|action)\/|\.(?:test|spec|stories)\.[cm]?[jt]sx?$|\.d\.[cm]?ts$/;
-const ROUTE = /(?:^|\/)(?:src\/)?app\/(?:.*\/)?route\.[cm]?[jt]s$/;
-const PAGES_API = /(?:^|\/)(?:src\/)?pages\/api\/.*\.[cm]?[jt]s$/;
+const ROUTE = /^(?:src\/)?app\/(?:.*\/)?route\.[cm]?[jt]s$/;
+const PAGES_API = /^(?:src\/)?pages\/api\/.*\.[cm]?[jt]s$/;
 const unwrap = (n: ts.Node): ts.Node => ts.isAwaitExpression(n) || ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n) ? unwrap(n.expression) : n;
 const prop = (n: ts.Node) => ts.isPropertyAccessExpression(n) ? n.name.text : "";
 const literal = (n: ts.Node | undefined) => n && ts.isStringLiteralLike(n) ? n.text : undefined;
@@ -109,15 +109,32 @@ export function checkProductionSafety(snapshot: RepositorySnapshot): CheckResult
     }
     if (client && hasNext) {
       evaluated.add("next-client-boundary");
+      // TypeScript/SWC removes unused and type-position-only imports. Their source text alone is not a build error.
+      const runtimeUses = new Set<string>();
+      const valueReferences = (node: ts.Node) => {
+        if (ts.isImportDeclaration(node) || ts.isTypeNode(node)) return;
+        if (ts.isIdentifier(node)) {
+          const parent = node.parent;
+          const keyOnly = (ts.isPropertyAccessExpression(parent) && parent.name === node)
+            || ((parent as ts.NamedDeclaration).name === node && !ts.isShorthandPropertyAssignment(parent));
+          if (!keyOnly) runtimeUses.add(node.text);
+        }
+        ts.forEachChild(node, valueReferences);
+      };
+      valueReferences(sf);
       for (const n of imports) {
         const clause = n.importClause;
         const onlyTypes = clause?.namedBindings && ts.isNamedImports(clause.namedBindings) && !clause.name && clause.namedBindings.elements.every(e => e.isTypeOnly);
-        if (!onlyTypes && ["server-only", "next/headers"].includes(literal(n.moduleSpecifier) ?? "")) add("next-client-boundary", n, "red", "A use-client module directly imports a server-only module.", "Move the server-only operation into a Server Component or authenticated Route Handler; pass serializable data to the client component.");
+        const bindings = [...(clause?.name ? [clause.name.text] : []), ...(clause?.namedBindings && ts.isNamedImports(clause.namedBindings) ? clause.namedBindings.elements.filter(e => !e.isTypeOnly).map(e => e.name.text) : []), ...(clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings) ? [clause.namedBindings.name.text] : [])];
+        // With shadowed names we cannot establish which declaration a reference uses, so leave this case to the build.
+        const used = bindings.some(binding => runtimeUses.has(binding) && !nodes.some(node => (ts.isVariableDeclaration(node) || ts.isBindingElement(node) || ts.isParameter(node) || ts.isFunctionDeclaration(node)) && node.name && name(node.name) === binding));
+        const sideEffectMarker = !clause && literal(n.moduleSpecifier) === "server-only";
+        if (!onlyTypes && (used || sideEffectMarker) && ["server-only", "next/headers"].includes(literal(n.moduleSpecifier) ?? "")) add("next-client-boundary", n, "red", "A use-client module directly imports a server-only module.", "Move the server-only operation into a Server Component or authenticated Route Handler; pass serializable data to the client component.");
       }
       for (const n of sf.statements) if (exported(n)) {
         const metadata = ts.isVariableStatement(n) && n.declarationList.declarations.some(d => ["metadata", "generateMetadata"].includes(name(d.name)));
         const generator = ts.isFunctionDeclaration(n) && n.name?.text === "generateMetadata";
-        if ((metadata || generator) && /(?:^|\/)(?:src\/)?app\/(?:.*\/)?(?:page|layout)\.[jt]sx?$/.test(file)) add("next-client-boundary", n, "red", "A use-client module exports server-only Next.js metadata.", "Keep page/layout metadata in a Server Component and move the interactive UI into a separate use-client component.");
+        if ((metadata || generator) && /^(?:src\/)?app\/(?:.*\/)?(?:page|layout)\.[jt]sx?$/.test(file)) add("next-client-boundary", n, "red", "A use-client module exports server-only Next.js metadata.", "Keep page/layout metadata in a Server Component and move the interactive UI into a separate use-client component.");
       }
     }
     if (modules.some(m => m === "node:https" || m === "https")) {

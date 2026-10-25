@@ -6,6 +6,8 @@ export const metadata = {
   title: "Black Friday deployment checklist | Launch Readiness | DeployDoctor",
   description: "Check your GitHub repository for Vercel build, Stripe webhook and production configuration risks before launch. Static preflight with source evidence and next steps.",
   alternates: { canonical: "/launch-readiness" },
+  openGraph: { title: "Check your deployment before the traffic arrives", description: "Source-backed build, payment integration and production configuration risks. Static preflight, with clear limits.", url: "/launch-readiness", type: "website" },
+  twitter: { card: "summary_large_image", title: "Check your deployment before the traffic arrives", description: "Source-backed deployment risks, evidence and next steps before launch." },
 };
 export default function LaunchPage() {
   return <main className="site-shell">

@@ -2,8 +2,8 @@ import Link from "next/link";
 import type { ReportResults } from "@/types/report";
 import { launchReadiness } from "@/lib/launch-readiness";
 
-export function LaunchReadiness({ results, reportId }: { results: ReportResults; reportId: string }) {
-  const launch = launchReadiness(results, reportId);
+export function LaunchReadiness({ results, reportId, isPrivate = false }: { results: ReportResults; reportId: string; isPrivate?: boolean }) {
+  const launch = launchReadiness(results, reportId, isPrivate);
   return <section className="launch-readiness" aria-labelledby="launch-readiness-title">
     <p className="section-kicker">LAUNCH READINESS · STATIC PREFLIGHT</p>
     <h2 id="launch-readiness-title">Before you send the traffic</h2>
