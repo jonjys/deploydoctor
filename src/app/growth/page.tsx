@@ -105,6 +105,14 @@ export default async function GrowthPage({
         <p>Not measured yet. Custom CTA events must be instrumented and supported by your Vercel plan before this can show real clicks. n/a is not zero.</p>}
       <p className="growth-note">Custom event tracking is plan-dependent. This dashboard never fabricates historic clicks or attributes a Stripe payment to a particular SEO guide without evidence.</p>
     </section>
+    <section className="growth-card">
+      <h2>Launch Campaign Performance</h2>
+      <p>Observed page traffic in the selected {days}-day window. These are DeployDoctor visits, not merchant sales or Google organic clicks.</p>
+      {report.traffic ? <ul>{report.traffic.pages.filter(page => page.path === "/launch-readiness" || page.path === "/diagnose" || page.path.startsWith("/guides/")).map(page => <li key={page.path}><Link href={page.path}>{page.path}</Link>: {num(page.visitors)} visitors · {num(page.pageviews)} pageviews</li>)}</ul> : <p>Launch page traffic: n/a. Analytics is unavailable.</p>}
+      {report.traffic && !report.traffic.pages.some(page => page.path === "/launch-readiness") && <p>No launch-page row returned in the available analytics window. This does not establish zero visits.</p>}
+      <p>Launch CTA clicks and campaign-attributed reports: not measured. Paid checkout totals above are recorded for DeployDoctor only and are not attributed to this campaign.</p>
+      <p className="growth-note">Use the existing 7/30-day selector to inspect each window. The simulator below is hypothetical gross revenue, never verified merchant revenue.</p>
+    </section>
     <GrowthCalculator observedVisitors={report.traffic?.visitors ?? null} />
   </main>;
 }

@@ -21,7 +21,7 @@ export default async function Home() {
   // The same titles the analyzer prints, in report order. Supabase and Prisma only run when the stack uses them.
   const checks: Array<{ title: string; whenUsed?: boolean; note?: string }> = [
     { title: titles.nextEntry }, { title: titles.imports }, { title: titles.serverLibs }, { title: titles.buildConfig, note: t("home.checkStacks") },
-    { title: titles.dependencies }, { title: titles.env }, { title: titles.secrets },
+    { title: titles.dependencies }, { title: lang === "sv" ? "Betalning och produktionsrisker" : "Payment and production safety" }, { title: titles.env }, { title: titles.secrets },
     { title: titles.supabase, whenUsed: true }, { title: titles.prisma, whenUsed: true },
   ];
   return (
@@ -81,6 +81,7 @@ export default async function Home() {
       </section>
 
 
+      <p className="plugin-line"><Link href="/launch-readiness">{lang === "sv" ? "Ska du lansera? Se din tekniska checklista inför trafiken →" : "Launching a campaign? Check your deployment before the traffic arrives →"}</Link></p>
       <section className="checks-panel" aria-labelledby="checks-heading">
         <div>
           <p className="section-kicker">{t("home.preflight")}</p>
@@ -114,6 +115,7 @@ export default async function Home() {
         </section>
       )}
 
+      <p className="plugin-line"><Link href="/launch-readiness">{lang === "sv" ? "Ska du lansera? Se din tekniska checklista inför trafiken →" : "Launching a campaign? Check your deployment before the traffic arrives →"}</Link></p>
       <section className="checks-panel" aria-label="Developer tools">
         <div><h2>{lang === "sv" ? "Använd där du bygger" : "Use it where you build"}</h2></div>
         <div>

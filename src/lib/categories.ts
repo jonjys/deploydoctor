@@ -12,6 +12,7 @@ const CATEGORY_OF_CHECK: Record<CheckId, Category> = {
   "build-config": "vercel",
   secrets: "env",
   dependencies: "vercel",
+  "production-safety": "vercel",
 };
 
 export function categoryOf(check: Pick<CheckResult, "id" | "category">): Category {

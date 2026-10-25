@@ -49,7 +49,7 @@ export default function CiPage() {
         <p className="section-kicker">GITHUB ACTION · API</p>
         <h1>Fail the pull request before Vercel builds it.</h1>
         <p className="guide-lead">
-          The same nine checks as the website, on a pull request before Vercel builds it. Findings land as annotations on the changed files, the job summary
+          The same static analysis as the website, on a pull request before Vercel builds it. Findings land as annotations on the changed files, the job summary
           links the full report, and the check goes red on a definite problem. Static analysis through the GitHub API: nothing is cloned,
           installed or executed, so it finishes in seconds and needs no build.
         </p>
@@ -114,7 +114,7 @@ export default function CiPage() {
           <h2>What it does not do</h2>
           <p>
             It does not run your build, so it cannot catch type errors or failing tests; your existing jobs do that. It reads the repository through GitHub&apos;s API with a file and
-            time budget, and marks a scan partial when it hits one. A green check means the nine static checks passed, not that the deploy will succeed.
+            time budget, and marks a scan partial when it hits one. A green check means the applicable static checks passed, not that the deploy will succeed.
           </p>
         </section>
 

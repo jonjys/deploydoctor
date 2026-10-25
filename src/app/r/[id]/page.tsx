@@ -1,3 +1,4 @@
+import { LaunchReadiness } from "@/components/launch-readiness";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -40,6 +41,7 @@ const docsFor: Record<CheckId, string> = {
   env: "https://vercel.com/docs/environment-variables",
   secrets: "https://vercel.com/docs/environment-variables/sensitive-environment-variables",
   supabase: "https://supabase.com/docs/guides/auth/server-side/nextjs",
+  "production-safety": "https://docs.stripe.com/webhooks",
   prisma: "https://www.prisma.io/docs/orm/prisma-client/deployment/serverless/deploy-to-vercel",
 };
 const partialReasonKeys = ["truncated_tree", "file_limit", "file_size", "time_limit", "rate_limit", "read_error"] as const;
@@ -176,6 +178,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
       </header>
 
 
+      <LaunchReadiness results={results} reportId={id} />
+
       <section className="results-list" id="checks" aria-label="Deployment checks">
         {!actionable.length && <p className="report-no-findings">{t("report.noFindings")}</p>}
         {scanned.map((category) => {
@@ -202,6 +206,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                       ))}
                     </ul></details>
                   ) : null}
+                  {check.id === "production-safety" && check.findings?.map((finding, index) => <div className="fix-box" key={`${finding.ruleId}-${index}`}><strong>{finding.status === "red" ? "Confirmed code issue" : "Review"} · {finding.ruleId}</strong><p>{finding.problem}</p><code>{finding.file}:{finding.line}</code><p>{finding.fix}</p></div>)}
                   <div className="fix-box">
                     <strong>{t("report.suggested")}</strong> {check.fix}
                   </div>

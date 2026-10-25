@@ -770,3 +770,9 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .report-evidence { margin: 16px 0; }.suggested-file > summary { padding: 14px; }.report-no-findings { padding: 20px; border: 1px solid var(--line); border-radius: 10px; }.score-card > small { display: block; color: var(--muted); font-size: 12px; margin-top: 8px; }.report-sharing .badge-section { border: 0; }.report-supporting li { scroll-margin-top: 20px; }
 
 .fix-first-where { display: block; }.fix-first-check { display: block; margin: 4px 0; }
+
+.launch-readiness { margin-block: 24px; padding: clamp(16px, 4vw, 30px); border: 1px solid var(--line, #cad1ba); border-radius: 16px; overflow-wrap: anywhere; }
+.launch-readiness h2 { font-size: clamp(24px, 4vw, 34px); margin-block: 12px; }
+.launch-counts { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-block: 18px; }
+.launch-readiness details summary { cursor: pointer; padding-block: 12px; }
+.launch-readiness li { margin-block: 12px; }

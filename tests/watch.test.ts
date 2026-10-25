@@ -20,7 +20,7 @@ const ENV = { RESEND_API_KEY: "re_test", WATCH_FROM_EMAIL: "DeployDoctor <watch@
 function check(id: CheckResult["id"], status: CheckStatus, findings?: Array<Partial<Finding>>, lang: "en" | "sv" = "en"): CheckResult {
   const titles = analysisText(lang).titles;
   const title = { "next-entry": titles.nextEntry, imports: titles.imports, "server-libs": titles.serverLibs, env: titles.env, supabase: titles.supabase,
-    prisma: titles.prisma, "build-config": titles.buildConfig, secrets: titles.secrets, dependencies: titles.dependencies }[id];
+    prisma: titles.prisma, "build-config": titles.buildConfig, secrets: titles.secrets, dependencies: titles.dependencies, "production-safety": "Payment and production safety" }[id];
   return { id, title, status, explanation: `${id} is ${status}`, fix: "fix it", evidence: [],
     ...(findings ? { findings: findings.map((item) => ({ file: "src/app/page.tsx", line: 1, problem: "problem", fix: "fix", ...item })) } : {}) };
 }

@@ -153,7 +153,7 @@ test("without a choice, a Next.js repo without Supabase never gets a Supabase ch
   const results = analyzeSnapshot(snapshot(nextEntries, {
     "package.json": JSON.stringify({ dependencies: { next: "14.2.0", tailwindcss: "^3" } }), ...page,
   }));
-  assert.deepEqual(ids(results), ["next-entry", "imports", "server-libs", "build-config", "dependencies", "env", "secrets"]);
+  assert.deepEqual(ids(results), ["next-entry", "imports", "server-libs", "build-config", "dependencies", "production-safety", "env", "secrets"]);
   assert.deepEqual(results.scope, { scanned: ["next", "vercel", "env"], ignored: ["supabase", "prisma"] });
   assert.equal(results.stack?.hasSupabase, false);
   assert.equal(results.stack?.hasTailwind, true);
@@ -178,10 +178,10 @@ test("explicit checks run only the selected categories and record what was ignor
     "package.json": JSON.stringify({ dependencies: { next: "16.3.6", "@supabase/ssr": "1" } }),
     "app/page.tsx": 'import { createBrowserClient } from "@supabase/ssr"; export default function Page() { return null }',
   }), { checks: ["vercel", "env"] });
-  assert.deepEqual(ids(results), ["server-libs", "build-config", "dependencies", "env", "secrets"]);
+  assert.deepEqual(ids(results), ["server-libs", "build-config", "dependencies", "production-safety", "env", "secrets"]);
   assert.deepEqual(results.scope?.ignored, ["next", "supabase", "prisma"]);
   assert.equal(results.checks.every((check) => check.category), true);
-  assert.equal(results.summary.red + results.summary.yellow + results.summary.green, 5);
+  assert.equal(results.summary.red + results.summary.yellow + results.summary.green, 6);
 });
 
 test("Prisma check flags a missing generate step and SQLite, and is skipped when unselected", () => {
