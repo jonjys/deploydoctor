@@ -21,8 +21,8 @@ Eight additional rule families in one production-safety group, enabled with the 
 | stripe-event-verification | Stripe-importing webhook route directly parses request JSON and reads event.type without a visible verifier | Review only: authorization may exist in imported middleware |
 | stripe-pages-body-parser | Pages API webhook calls Stripe verifier without explicit bodyParser:false | Review only: request parsing might be customized elsewhere |
 | checkout-local-redirect | Literal localhost/loopback success_url or cancel_url in checkout.sessions.create | Review: may be intentional development-only code; dynamic URLs not guessed |
-| next-client-boundary | use-client module imports server-only/next/headers or exports metadata/generateMetadata | Error for direct, executable imports/exports; type-only imports excluded |
-| next-runtime-value | Literal route runtime outside nodejs/edge (experimental-edge reviewed) | Error only for known invalid literal; expression values left for manual checking |
+| next-client-boundary | use-client module imports server-only/next/headers or exports metadata/generateMetadata | Error for direct runtime-used imports/exports; unused, type-position-only and shadowed imports excluded |
+| next-runtime-value | Literal route runtime outside nodejs/edge (experimental-edge reviewed) | Error only for known invalid literal in a root Next route; expression values left for manual checking |
 | personalized-static-cache | GET route force-static plus direct request header/cookie access | Review: statically forcing personalized data is risky, no data leak asserted |
 | tls-verification-disabled | Node HTTPS Agent explicitly sets rejectUnauthorized:false | Review: TLS verification disabled; no global vulnerability claim |
 
@@ -51,7 +51,7 @@ Runtime checkout, durable idempotency, transaction correctness, live traffic/loa
 
 ## Verification record
 
-- 326 tests passed, including positive/safe-negative fixtures for every new rule, comments/prose, type-only imports, framework gating, arrow handlers, malformed syntax, mixed severity and additive JSON/MCP output.
+- 328 tests passed, including positive/safe-negative fixtures for every new rule, comments/prose, type-only imports, framework gating, arrow handlers, malformed syntax, mixed severity and additive JSON/MCP output.
 - Lint, generated Next.js route types, TypeScript, production build and production dependency audit passed (zero vulnerabilities reported).
 - Trusted local repository snapshot: 203 source files at the first run, no production-safety findings; the complete analysis took about 716 ms locally. A 400-small-route-file check of the new module took about 18 ms. These are local processing checks, not a service load test.
 - Production-build HTTP smoke with a local database fixture: public JSON/report 200, private report anonymous 404, unrelated owner 404, owner bearer 200 with private no-store, invalid bearer 401, no paid API entitlement 402. Growth HQ remained a login screen to anonymous visitors. Landing page and sitemap returned 200.
@@ -67,3 +67,9 @@ Runtime checkout, durable idempotency, transaction correctness, live traffic/loa
 - Canonical landing page, sitemap, pricing, CI page, stats and legacy report JSON returned 200; invalid API bearer returned 401. Anonymous Growth HQ returned its login screen without campaign analytics. No error/fatal runtime logs in the five-minute release window.
 - Published Action PR #4 merged as d41146f53fd33eec20da5de36e4746963b47484e; its test/release workflow succeeded and v1 points to this commit.
 - Physical iPhone rendering, real payment completion, real paid repair PR creation and MakeItReal connection were not verified. The preview report and production report were checked against their saved JSON.
+
+- Additional compiler check: a minimal Next.js 16.4.2 production build with an unused next/headers import in a client page succeeded. The detector now requires a runtime reference (or an explicit server-only side-effect marker), skips type-position-only and shadowed imports, and has a regression fixture for each. It does not turn an eliminated import into a red finding.
+
+- The corresponding client page that actually called cookies() failed the Next.js 16.4.2 build with the documented server/client boundary error. Both the passing and failing compiler examples were checked, rather than inferring failure from AST shape alone.
+
+- Launch repair hints are absent on private reports; existing import repair availability still requires server-side eligibility/payment verification.

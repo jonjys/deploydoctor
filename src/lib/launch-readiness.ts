@@ -7,7 +7,7 @@ export const LAUNCH_LIMITATIONS = [
   "Runtime behavior, live availability, traffic capacity, inventory and checkout were not tested.",
   "Hosting environment values, webhook delivery, payment fulfillment and database transactions were not verified.",
 ];
-export function launchReadiness(results: ReportResults, reportId: string) {
+export function launchReadiness(results: ReportResults, reportId: string, isPrivate = false) {
   const excluded = (results.scope?.ignored ?? []).filter(category => !results.stack || defaultChecks(results.stack).includes(category));
   const base = `/r/${reportId}`;
   const findings = results.checks.filter(c => c.status !== "green" && !isPartialPlaceholder(c)).flatMap(check => {
@@ -17,7 +17,7 @@ export function launchReadiness(results: ReportResults, reportId: string) {
       status: f.status ?? check.status, severity: (f.status ?? check.status) === "red" ? "blocker" : "review",
       problem: f.problem, evidence: f.file ? [`${f.file}:${f.line}`] : check.evidence,
       file: f.file, line: f.line, fix: f.fix, href: `${base}#check-${check.id}`,
-      repair: check.id === "imports" && f.repairable === true && results.repository.commitSha ? { kind: "verified-import-patch", href: `${base}#check-imports`, requiresEligibility: true } : null,
+      repair: !isPrivate && check.id === "imports" && f.repairable === true && results.repository.commitSha ? { kind: "verified-import-patch", href: `${base}#check-imports`, requiresEligibility: true } : null,
     }));
   });
   const criticalBlockers = findings.filter(f => f.status === "red");

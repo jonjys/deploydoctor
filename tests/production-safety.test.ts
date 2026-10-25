@@ -15,7 +15,7 @@ const fixtures = [
   {rule:"stripe-event-verification", file:"app/api/stripe/webhook/route.ts", bad:stripe+`export async function POST(req: Request) { const event = await req.json(); return Response.json({type: event.type}); }`, good:stripe+`export async function POST(req: Request) { const event = await verifyStripeWebhook(req); return Response.json({type: event.type}); }`},
   {rule:"stripe-pages-body-parser", file:"pages/api/stripe-webhook.ts", bad:stripe+`export default async function handler(req, res) { const event = stripe.webhooks.constructEvent(req.body, 'sig','secret'); res.json(event); }`, good:stripe+`export const config = { api: { bodyParser: false } }; export default async function handler(req, res) { const event = stripe.webhooks.constructEvent(await buffer(req), 'sig','secret'); res.json(event); }`},
   {rule:"checkout-local-redirect", file:"app/api/checkout/route.ts", bad:stripe+`export async function POST(){ return stripe.checkout.sessions.create({success_url:'http://localhost:3000/success', cancel_url:'https://shop.example/cancel'}); }`, good:stripe+`export async function POST(){ return stripe.checkout.sessions.create({success_url:'https://shop.example/success', cancel_url:process.env.CANCEL_URL}); }`},
-  {rule:"next-client-boundary", file:"app/page.tsx", bad:`'use client'; import { cookies } from 'next/headers'; export default function Page(){return null}`, good:`'use client'; import type { ReadonlyHeaders } from 'next/headers'; export default function Page(){return null}`},
+  {rule:"next-client-boundary", file:"app/page.tsx", bad:`'use client'; import { cookies } from 'next/headers'; export default function Page(){const store=cookies(); return null}`, good:`'use client'; import type { ReadonlyHeaders } from 'next/headers'; export default function Page(){return null}`},
   {rule:"next-runtime-value", file:"src/app/api/orders/route.ts", bad:`export const runtime = 'node'; export function GET(){return Response.json({ok:true})}`, good:`export const runtime = 'nodejs'; export function GET(){return Response.json({ok:true})}`},
   {rule:"personalized-static-cache", file:"app/api/account/route.ts", bad:`export const dynamic = 'force-static'; export function GET(req: Request){ return Response.json({token: req.headers.get('authorization')}); }`, good:`export const dynamic = 'force-dynamic'; export function GET(req: Request){ return Response.json({ok: !!req.headers.get('authorization')}, { headers: { 'Cache-Control': 'private, no-store' } }); }`},
   {rule:"tls-verification-disabled", file:"src/lib/payments.ts", bad:`import https from 'node:https'; const agent = new https.Agent({ rejectUnauthorized: false });`, good:`import {Agent} from 'node:https'; const agent = new Agent({ rejectUnauthorized: true });`},
@@ -70,7 +70,7 @@ test("old and partial reports never claim that new checks or checkout were teste
 
  test("Next-specific findings require an actual Next dependency; client utility metadata is allowed", () => {
    assert.equal(checkProductionSafety(snapshot({"package.json":'{"dependencies":{"react":"19"}}',"src/widget.tsx": "'use client'; export const metadata = {};", "app/api/x/route.ts":"export const runtime = 'node';"})).findings?.length,0);
-   assert.equal(checkProductionSafety(snapshot({"src/widget.tsx":"'use client'; export const metadata = {};"})).findings?.length,0);
+   assert.equal(checkProductionSafety(snapshot({"src/widget.tsx":"'use client'; export const metadata = {};", "packages/legacy/app/api/x/route.ts":"export const runtime = 'node';"})).findings?.length,0);
  });
 test("production-only launch summary handles coverage and applicable category exclusions honestly", () => {
   const r = analyzeSnapshot(snapshot({"app/page.tsx":"export default function Page(){return null}","package.json":'{"dependencies":{"next":"16.4.2"},"scripts":{"build":"next build"},"engines":{"node":"24.x"}}',"package-lock.json":'{"lockfileVersion":3,"packages":{"":{"dependencies":{"next":"16.4.2"}}}}'}));
@@ -90,4 +90,20 @@ test("invalid syntax is incomplete coverage, never a fabricated clean safety che
 test("arrow route handlers and directive prologues retain production evidence", () => {
   const result=checkProductionSafety(snapshot({"app/api/webhook/route.ts":stripe+"export const POST = async (request: Request) => { const payload=await request.json(); return stripe.webhooks.constructEvent(payload,'sig','secret') }", "app/layout.tsx":"'use strict'; 'use client'; export const metadata={title:'Shop'};"}));
   assert.ok(result.findings?.some(f=>f.ruleId==="stripe-raw-body"));assert.ok(result.findings?.some(f=>f.ruleId==="next-client-boundary"));
+});
+
+test("unused, implicit type-only and locally shadowed server imports are not red", () => {
+  for (const code of ["'use client'; import {cookies} from 'next/headers'; export default function Page(){const unrelated={cookies:1, cookiesMethod(){return null}}; return null}", "'use client'; import {cookies} from 'next/headers'; export default function Page(){return null}", "'use client'; import {cookies} from 'next/headers'; type C = ReturnType<typeof cookies>; export default function Page(){return null}", "'use client'; import {cookies} from 'next/headers'; export default function Page(){const cookies=()=>null; return cookies()}"]) {
+    assert.equal(checkProductionSafety(snapshot({"app/page.tsx":code})).findings?.length,0);
+  }
+  assert.equal(checkProductionSafety(snapshot({"app/page.tsx":"'use client'; import 'server-only'; export default function Page(){return null}"})).status,"red");
+});
+
+test("launch repair hints require proven eligible imports and never advertise private patch support", () => {
+  const r=analyzeSnapshot(snapshot({"package.json":'{"dependencies":{"next":"16.4.2"}}',"app/page.tsx":"import Widget from './widget'; export default Widget;","app/Widget.tsx":"export default function Widget(){return null}"}));
+  r.repository.commitSha="a".repeat(40);
+  assert.ok(launchReadiness(r,"r").criticalBlockers.find(f=>f.checkId==="imports")?.repair);
+  assert.equal(launchReadiness(r,"r",true).criticalBlockers.find(f=>f.checkId==="imports")?.repair,null);
+  const json=reportJson({id:"r",repo_url:"https://github.com/owner/private",created_at:r.checkedAt,results:r,is_private:true});
+  assert.ok(json.launchReadiness.criticalBlockers.every(f=>f.repair===null));
 });

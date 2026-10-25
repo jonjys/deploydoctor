@@ -24,7 +24,7 @@ export function reportJson(report: StoredReport) {
       evidence: check.evidence, findings: check.findings ?? [], suggestedFile: check.suggestedFile ?? null,
       evaluatedRules: check.evaluatedRules ?? null, coverageOnly: check.coverageOnly ?? false,
     })),
-    launchReadiness: launchReadiness(results, report.id),
+    launchReadiness: launchReadiness(results, report.id, Boolean(report.is_private)),
     isPrivate: Boolean(report.is_private),
     limitations: "Static analysis only. Nothing is cloned, installed, built or executed. Review findings against the current code.",
   };

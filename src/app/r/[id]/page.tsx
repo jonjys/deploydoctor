@@ -178,7 +178,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
       </header>
 
 
-      <LaunchReadiness results={results} reportId={id} />
+      <LaunchReadiness results={results} reportId={id} isPrivate={report.is_private} />
 
       <section className="results-list" id="checks" aria-label="Deployment checks">
         {!actionable.length && <p className="report-no-findings">{t("report.noFindings")}</p>}
