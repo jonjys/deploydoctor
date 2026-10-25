@@ -58,3 +58,12 @@ Runtime checkout, durable idempotency, transaction correctness, live traffic/loa
 - Existing payment, refund/dispute, draft-PR ownership, quota, CLI, MCP, Watch and badge tests remain in the full suite. No actual purchase or paid repair PR was created during this release.
 - The separately published GitHub Action receives a minimal annotation update to preserve each finding's review/error classification; existing group-level fail-on behavior stays intact.
 - MakeItReal is not connected by this release. The contract describes owner-authorized server integration; no cross-project entitlement or secret sharing is introduced.
+
+
+### Production verification (2026-10-25)
+
+- PR #69 merged as 191e60ddd766a923dc70886f41ff1cbb74f68944; Vercel dpl_Dkdg654FHQEupipz1sQyxbLM8odA READY on the canonical domain. Master validation and Supabase checks succeeded.
+- Actual authorized public scan: https://deploydoctor.nyttolabs.com/r/9929ef92-cf12-4c1b-8641-1beee4c14e7d. Commit 191e60d; 204/204 source files read, complete, 0 red, 0 review, 9 applicable check groups passed. The production safety group recorded five applicable rule families; this is not a claim all eight payment/runtime cases were exercised on this repository.
+- Canonical landing page, sitemap, pricing, CI page, stats and legacy report JSON returned 200; invalid API bearer returned 401. Anonymous Growth HQ returned its login screen without campaign analytics. No error/fatal runtime logs in the five-minute release window.
+- Published Action PR #4 merged as d41146f53fd33eec20da5de36e4746963b47484e; its test/release workflow succeeded and v1 points to this commit.
+- Physical iPhone rendering, real payment completion, real paid repair PR creation and MakeItReal connection were not verified. The preview report and production report were checked against their saved JSON.
