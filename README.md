@@ -1,5 +1,11 @@
 # DeployDoctor
 
+**Find what will break your Vercel deploy before Vercel does.**
+
+DeployDoctor scans a public GitHub repository for the mistakes that most often break a Vercel deploy and saves a shareable report. It reads the repository through the GitHub REST API. It does not clone, install, build, or execute the code it scans.
+
+License: BSL 1.1 · Live: [deploydoctor.nyttolabs.com](https://deploydoctor.nyttolabs.com)
+
 ## Vercel Deployment Rescue Kit
 
 Works locally but fails on Vercel? The [Vercel Deployment Rescue Kit](https://fieldworkstudio.gumroad.com/l/vercel-deployment-rescue-kit) is a **$19 one-time download**: a 14-page Next.js/Vercel debugging playbook, a 42-point editable release checklist and 5 reusable AI diagnosis prompts (PDF + CSV + Markdown in one ZIP).
@@ -14,10 +20,6 @@ clients. No private tokens, code execution or automatic payment. The free
 allowance of one scan/day per source IP applies; website paid sessions do not
 transfer to MCP. See [plugin documentation](plugins/deploydoctor/README.md) and
 the public `/ai-plugin` setup page.
-
-License: BSL 1.1 · Live: [deploydoctor.nyttolabs.com](https://deploydoctor.nyttolabs.com)
-
-DeployDoctor scans a public GitHub repository for the mistakes that most often break a Vercel deploy and saves a shareable report. It reads the repository through the GitHub REST API. It does not clone, install, build, or execute the code it scans.
 
 ## CI: GitHub Action and API
 
@@ -156,7 +158,6 @@ Add the variables from `.env.example` to the Vercel project (Production and Prev
 ## License
 
 DeployDoctor is source-available under the [Business Source License 1.1](LICENSE). You may read, fork, run it locally for private use and contribute. You may not offer it as a commercial hosted service that competes with [deploydoctor.nyttolabs.com](https://deploydoctor.nyttolabs.com). On 2029-09-27 the license changes to MIT.
-
 
 ### Launch Readiness and production safety
 
