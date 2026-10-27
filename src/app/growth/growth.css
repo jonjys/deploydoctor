@@ -44,3 +44,10 @@
 .growth-projection strong { color: #18391e; font-size: clamp(26px, 4vw, 38px); letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }
 @media (max-width: 780px) { .growth-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .growth-columns, .growth-sliders { grid-template-columns: 1fr; } }
 @media (max-width: 480px) { .growth-metrics { gap: 8px; } .growth-metrics article { padding: 14px; gap: 8px; } .growth-guide-row { flex-direction: column; } .growth-entrance { margin: 28px auto; padding: 23px; } .growth-projection { grid-template-columns: 1fr; } }
+
+.growth-section-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+.growth-section-nav a { padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; color: var(--ink); text-underline-offset: 3px; }
+.growth-metrics strong { overflow-wrap: anywhere; }
+.growth-page [id^="growth-"] { scroll-margin-top: 24px; }
+
+.growth-card > summary { cursor: pointer; font-weight: 650; font-size: 18px; }

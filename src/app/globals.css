@@ -776,3 +776,16 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .launch-counts { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-block: 18px; }
 .launch-readiness details summary { cursor: pointer; padding-block: 12px; }
 .launch-readiness li { margin-block: 12px; }
+
+/* One finding list shared by public statistics and the authenticated owner dashboard. */
+.finding-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+.finding-stat { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 20px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); min-width: 0; }
+.finding-stat > div:first-child { display: grid; gap: 6px; }
+.finding-stat span, .finding-stat a { font-size: 13px; color: var(--muted); }
+.finding-stat-counts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; align-items: start; }
+.finding-stat meter { width: 100%; grid-column: 1 / -1; height: 12px; accent-color: var(--green); }
+.finding-stat a { grid-column: 1 / -1; text-underline-offset: 3px; }
+.launch-readiness > summary { cursor: pointer; font-weight: 650; }
+.scan-days { margin-top: 18px; }
+@media (max-width: 780px) { .finding-stats { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .finding-stat { grid-template-columns: minmax(0, 1fr); padding: 16px; } .finding-stat-counts { justify-content: flex-start; } }
