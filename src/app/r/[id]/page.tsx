@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { CopyFixes, FixFirst, IgnoreProvider, IssueCard, ScoreCard, WhenOpenRed } from "@/components/report-ignore";
 import { getPreviousReport, getReport } from "@/lib/reports";
 import type { Category, CheckId, CheckStatus, ReportResults, StoredReport } from "@/types/report";
-import { diffReports, fixFirstItems, isPartialPlaceholder, severityOf, showsLocalWhy, type ReportDiff } from "@/lib/report-insights";
+import { diffReports, hasChanges, fixFirstItems, isPartialPlaceholder, severityOf, showsLocalWhy, type ReportDiff } from "@/lib/report-insights";
 import { SinceLastScan } from "@/components/report-since";
 import { freeFixParts } from "@/lib/fix-instructions";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
@@ -148,8 +148,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           </div>
           <ScoreCard checks={checkStates} notNext={neutral} partial={results.scan.partial} />
         </div>
-        {previous && since && <SinceLastScan diff={since} previous={previous} lang={lang} />}
-        <FixFirst items={fixFirst} />
+
+        <FixFirst items={fixFirst} limit={3} />
         <div className="report-meta">
           <a className="report-repo" href={report.repo_url} target="_blank" rel="noreferrer">
             {report.repo_url} ↗
@@ -177,8 +177,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         )}
       </header>
 
-
-      <LaunchReadiness results={results} reportId={id} isPrivate={report.is_private} />
+      {previous && since && (hasChanges(since) ? <SinceLastScan diff={since} previous={previous} lang={lang} /> : <details className="report-supporting"><summary>{t("report.sinceTitle")}</summary><SinceLastScan diff={since} previous={previous} lang={lang} /></details>)}
 
       <section className="results-list" id="checks" aria-label="Deployment checks">
         {!actionable.length && <p className="report-no-findings">{t("report.noFindings")}</p>}
@@ -250,6 +249,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <span aria-hidden="true">{isPartialPlaceholder(check) ? "○" : "✓"}</span><div><strong>{check.title}</strong><span>{t(isPartialPlaceholder(check) ? "report.coverageOnly" : "report.pass")}</span><p>{check.explanation}</p></div>
         </li>)}</ul>
       </details>}
+
+      <LaunchReadiness results={results} reportId={id} isPrivate={report.is_private} />
 
       <SolvedPrompt kind="report" target={id} repo={report.repo_url} />
 

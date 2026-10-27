@@ -9,6 +9,7 @@ test("public insights deduplicate repos, exclude ignored/partial/demo/private da
   try {
     await db.exec("create role anon; create role authenticated; create role service_role bypassrls; create table public.reports(id uuid default gen_random_uuid(),repo_url text,results jsonb,created_at timestamptz default now()); create table public.private_reports (like public.reports);");
     await db.exec(readFileSync(new URL("../supabase/migrations/20261020160514_public_scan_insights.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../supabase/migrations/20261027151447_complete_scan_insights.sql", import.meta.url), "utf8"));
     const get = async () => (await db.query<{ result: { scans: number; repositories: number; categories: { id: string; red: number; yellow: number; checked: number }[]; activity: { at: string }[]; days: { day: string; count: number }[] } }>("select public.public_scan_insights() as result")).rows[0].result;
     assert.deepEqual((await get()).categories, []); assert.equal((await get()).scans, 0);
     const insert = async (repo: string, checks: unknown[], { ago = "1 hour", partial = false, ignored = [] as string[], id = crypto.randomUUID(), table = "reports" } = {}) => {
@@ -17,7 +18,7 @@ test("public insights deduplicate repos, exclude ignored/partial/demo/private da
     const check = (id: string, status: string, category = "next") => ({ id, status, category, title: "SECRET-TITLE", findings: [{ file: "SECRET-PATH" }] });
     await insert("https://github.com/Owner/Repo", [check("imports", "red")], { ago: "4 hours" });
     await insert("https://github.com/owner/repo", [check("imports", "green"), check("env", "red", "env")], { ago: "2 hours", ignored: ["env"] });
-    await insert("https://github.com/example/two", [check("imports", "yellow"), check("env", "red", "env")]);
+    await insert("https://github.com/example/two", [check("imports", "yellow"), check("env", "red", "env"), check("production-safety", "yellow", "vercel")]);
     await insert("https://github.com/example/three", [check("imports", "red")], { ago: "2 days" });
     await insert("https://github.com/example/partial", [check("imports", "red")], { partial: true });
     await insert("https://github.com/example/old", [check("imports", "red")], { ago: "31 days" });
@@ -27,6 +28,7 @@ test("public insights deduplicate repos, exclude ignored/partial/demo/private da
     assert.equal(data.scans, 4); assert.equal(data.repositories, 3);
     assert.deepEqual(data.categories.find(c => c.id === "imports"), { id: "imports", red: 1, yellow: 1, checked: 3 });
     assert.deepEqual(data.categories.find(c => c.id === "env"), { id: "env", red: 1, yellow: 0, checked: 1 });
+    assert.deepEqual(data.categories.find(c => c.id === "production-safety"), { id: "production-safety", red: 0, yellow: 1, checked: 1 });
     assert.equal(data.activity.length, 3); assert.ok(data.activity.every(item => new Date(item.at).getUTCMinutes() === 0));
     const json = JSON.stringify(data); for (const secret of ["SECRET-", "github.com", "repo_url", "findings", "Owner"]) assert.equal(json.includes(secret), false);
     assert.equal(data.days.reduce((sum, day) => sum + day.count, 0), 4);
