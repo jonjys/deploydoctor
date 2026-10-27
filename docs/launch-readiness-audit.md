@@ -13,7 +13,7 @@ Baseline: master 185cb82, 2026-10-25. This extends the existing snapshot analyze
 
 ## Before → after detection inventory
 
-Eight additional rule families in one production-safety group, enabled with the existing Vercel category:
+Ten additional rule families in one production-safety group, enabled with the existing Vercel category:
 
 | New rule | Evidence | Classification / false-positive boundary |
 |---|---|---|
@@ -24,6 +24,8 @@ Eight additional rule families in one production-safety group, enabled with the 
 | next-client-boundary | use-client module imports server-only/next/headers or exports metadata/generateMetadata | Error for direct runtime-used imports/exports; unused, type-position-only and shadowed imports excluded |
 | next-runtime-value | Literal route runtime outside nodejs/edge (experimental-edge reviewed) | Error only for known invalid literal in a root Next route; expression values left for manual checking |
 | personalized-static-cache | GET route force-static plus direct request header/cookie access | Review: statically forcing personalized data is risky, no data leak asserted |
+| stripe-event-replay | Verified event leads to a payload-derived create/insert without visible event/object ID handoff | Review only: constraints, helpers and business-key idempotency may exist elsewhere; never proof of duplicate charging |
+| stripe-memory-deduplication | Verified event ID is read/written through a visible Set/Map, with no visible external ID handoff | Review only: process memory is not durable or shared; imported stores and shadowed identifiers are excluded |
 | tls-verification-disabled | Node HTTPS Agent explicitly sets rejectUnauthorized:false | Review: TLS verification disabled; no global vulnerability claim |
 
 AST-based detection ignores comments, prose strings, declaration/test fixtures and unread files. No absence-of-helper inference becomes a confirmed vulnerability. Reports never include secret values. Limits and unchanged pricing apply.
@@ -73,3 +75,13 @@ Runtime checkout, durable idempotency, transaction correctness, live traffic/loa
 - The corresponding client page that actually called cookies() failed the Next.js 16.4.2 build with the documented server/client boundary error. Both the passing and failing compiler examples were checked, rather than inferring failure from AST shape alone.
 
 - Launch repair hints are absent on private reports; existing import repair availability still requires server-side eligibility/payment verification.
+
+## Webhook replay review extension (2026-10-27)
+
+The two replay rules reuse the parsed AST, source exclusions, snapshot file limits and existing production-safety report group. No extra GitHub/AI calls, credentials, database changes or payment behavior changes. Reports, copied fixes, Launch Readiness, JSON, Action/CLI/MCP use the existing result path. New findings are yellow and never offer an automatic patch. Existing saved reports need a rescan to run new rules.
+
+Scope is deliberately narrow: Next.js App/Pages API routes with an identifiable Stripe client and a locally initialized verified event. Imported singleton/factory modules named stripe (including aliases) are supported. Reassigned events, custom verifiers, cross-file business transactions, dynamic access and unrecognized clients are not certified. Event-ID/object-ID usage or passing the whole event to another handler suppresses missing-protection inference; an ID merely being logged is not proof of protection. Reads without writes are not flagged.
+
+A database atomic claim or business-object fulfillment transaction must handle concurrent deliveries and allow retries after failures. A simple check-then-insert can race; storing a processed flag before a failed side effect can lose delivery. These details require human review and replay/concurrency tests.
+
+Primary references: https://docs.stripe.com/webhooks#handle-duplicate-events and https://docs.stripe.com/checkout/fulfillment. Stripe documents repeated events, distinct events for the same object, and concurrent fulfillment calls. Stripe API request idempotency keys are separate from inbound webhook replay protection.
