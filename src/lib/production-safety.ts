@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { stripeReplayRisks } from "@/lib/stripe-replay";
 import type { RepositorySnapshot } from "@/lib/analyzer";
 import type { CheckResult, Finding } from "@/types/report";
 
@@ -34,6 +35,11 @@ export function checkProductionSafety(snapshot: RepositorySnapshot): CheckResult
     const modules = imports.map(n => literal(n.moduleSpecifier));
     const stripeNames = new Set(imports.filter(n => literal(n.moduleSpecifier) === "stripe").flatMap(n => n.importClause?.name ? [n.importClause.name.text] : []));
     const stripeInstances = new Set(nodes.filter(ts.isVariableDeclaration).filter(n => n.initializer && ts.isNewExpression(n.initializer) && stripeNames.has(n.initializer.expression.getText(sf))).map(n => name(n.name)));
+    // Common singleton/factory modules, without importing or executing their code.
+    const stripeClients = new Set(imports.filter(n => /(?:^|\/)stripe(?:[-.][\w-]+)?$/.test(literal(n.moduleSpecifier) ?? "") && literal(n.moduleSpecifier) !== "stripe").flatMap(n => [
+      ...(n.importClause?.name ? [n.importClause.name.text] : []),
+      ...(n.importClause?.namedBindings && ts.isNamedImports(n.importClause.namedBindings) ? n.importClause.namedBindings.elements.filter(e => !e.isTypeOnly).map(e => e.name.text) : []),
+    ]));
     const route = hasNext && ROUTE.test(file), pages = hasNext && PAGES_API.test(file);
     let client = false;
     for (const statement of sf.statements) {
@@ -64,8 +70,17 @@ export function checkProductionSafety(snapshot: RepositorySnapshot): CheckResult
       const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
       if (!findings.some(f => f.file === file && f.line === line && f.ruleId === ruleId)) findings.push({ ruleId, status, file, line, problem, fix });
     };
-    const verifiers = calls.filter(n => ["constructEvent", "constructEventAsync"].includes(prop(n.expression)) && ts.isPropertyAccessExpression(n.expression) && n.expression.expression.getText(sf).endsWith(".webhooks") && stripeInstances.has(n.expression.expression.getText(sf).split(".")[0]));
-    if (stripeNames.size) {
+    const verifiers = calls.filter(n => {
+      if (!["constructEvent", "constructEventAsync"].includes(prop(n.expression)) || !ts.isPropertyAccessExpression(n.expression) || !ts.isPropertyAccessExpression(n.expression.expression) || n.expression.expression.name.text !== "webhooks") return false;
+      const client = n.expression.expression.expression;
+      return ts.isIdentifier(client) ? stripeInstances.has(client.text) || stripeClients.has(client.text)
+        : ts.isCallExpression(client) && ts.isIdentifier(client.expression) && stripeClients.has(client.expression.text);
+    });
+    if ((route || pages) && verifiers.length) {
+      evaluated.add("stripe-event-replay"); evaluated.add("stripe-memory-deduplication");
+      for (const risk of stripeReplayRisks(sf, nodes, verifiers)) add(risk.ruleId, risk.node, "yellow", risk.problem, risk.fix);
+    }
+    if (stripeNames.size || stripeClients.size) {
       evaluated.add("stripe-raw-body"); evaluated.add("checkout-local-redirect");
       for (const call of verifiers) if (call.arguments[0] && (transformed(call.arguments[0]) || transformedNames.has(call.arguments[0].getText(sf)))) {
         add("stripe-raw-body", call, "yellow", "Stripe signature verification receives a parsed or reserialized payload.", "Pass the original unmodified request bytes/text to constructEvent before JSON parsing; test an actual signed webhook delivery.");
