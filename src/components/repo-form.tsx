@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
+import { GitHubConnect } from "@/components/github-connect";
 import { CATEGORIES } from "@/lib/categories";
 import { describeStack, type Stack } from "@/lib/stack";
 import { repoUrlFromParam } from "@/lib/repo-input";
@@ -33,6 +34,9 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
   const autoRepoUrl = repoUrlFromParam(searchParams.get("repo"));
   // Back from checkout for a private repo: the scan waits for the token instead of starting on arrival.
   const privateStart = searchParams.get("private") === "1";
+  const [privateMode, setPrivateMode] = useState(privateStart);
+  const [tokenSaved, setTokenSaved] = useState(false);
+  const [savingToken, setSavingToken] = useState(false);
   const [repoUrl, setRepoUrl] = useState(autoRepoUrl);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -46,7 +50,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
   const timer = useRef<number | undefined>(undefined);
   const controller = useRef<AbortController | null>(null);
   const tokenRef = useRef("");
-  const privateDetails = useRef<HTMLDetailsElement>(null);
+  const privateDetails = useRef<HTMLDivElement>(null);
   const tokenInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => { window.clearTimeout(timer.current); controller.current?.abort(); }, []);
@@ -90,9 +94,9 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         body: JSON.stringify({ repoUrl: url, ...(tokenRef.current ? { privateToken: tokenRef.current } : {}) }),
         signal: current.signal,
       });
-      const payload = (await response.json()) as { stack?: Stack; checks?: Category[]; privateRepo?: boolean; needsToken?: boolean; error?: string };
+      const payload = (await response.json()) as { stack?: Stack; checks?: Category[]; privateRepo?: boolean; needsToken?: boolean; needsGitHub?: boolean; error?: string };
       maybePrivate = Boolean(payload.privateRepo);
-      if (payload.needsToken) tokenPrompt = payload.error;
+      if (payload.needsToken || payload.needsGitHub) tokenPrompt = payload.error;
       if (!response.ok || !payload.stack || !payload.checks) throw new Error("detect failed");
       setSelected(new Set(payload.checks));
       setDetection({ status: "ready", stack: payload.stack });
@@ -107,8 +111,19 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
 
   /** A pass holder whose repo GitHub would not show without a token only has to paste one. */
   function openTokenField(focus: boolean) {
-    if (privateDetails.current) privateDetails.current.open = true;
-    if (focus) tokenInput.current?.focus();
+    setPrivateMode(true);
+    if (focus) privateDetails.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  async function saveToken() {
+    setSavingToken(true); setError("");
+    try {
+      const response = await fetch("/api/github/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: privateToken }) });
+      if (!response.ok) throw new Error();
+      setTokenSaved(true); setPrivateToken(""); tokenRef.current = "";
+      window.dispatchEvent(new Event("dd-github-updated"));
+    } catch { setError(lang === "sv" ? "Kunde inte spara. Kontrollera tokenens läsbehörighet och ditt aktiva pass." : "Could not save. Check the token read permission and your active pass."); }
+    finally { setSavingToken(false); }
   }
 
   function handleTokenChange(value: string) {
@@ -177,12 +192,13 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         paywall?: boolean;
         privateRepo?: boolean;
         needsToken?: boolean;
+        needsGitHub?: boolean;
       };
 
       if (!response.ok || !payload.id) {
         setPaywall(Boolean(payload.paywall));
         setPrivateRepo(Boolean(payload.privateRepo));
-        if (payload.needsToken) openTokenField(true);
+        if (payload.needsToken || payload.needsGitHub) openTokenField(true);
         throw new Error(payload.error || t("form.scanFailed"));
       }
 
@@ -209,6 +225,10 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
 
   return (
     <form className="repo-form" onSubmit={handleSubmit}>
+      <div className="repo-mode" role="group" aria-label={lang === "sv" ? "Typ av repo" : "Repository visibility"}>
+        <button type="button" aria-pressed={!privateMode} onClick={() => setPrivateMode(false)}>{lang === "sv" ? "Publikt repo" : "Public repo"}</button>
+        <button type="button" aria-pressed={privateMode} onClick={() => setPrivateMode(true)}>{lang === "sv" ? "Privat repo" : "Private repo"}<small>{privateAccess ? (lang === "sv" ? "Pass aktivt" : "Pass active") : "$2 pass"}</small></button>
+      </div>
       <div className="input-shell">
         <GitHubIcon />
         <label className="sr-only" htmlFor="repo-url">
@@ -233,9 +253,21 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         <kbd className="slash-hint" aria-hidden="true" title={t("form.shortcut")}>/</kbd>
         </div>
         <button className="scan-button" type="submit" disabled={isLoading}>
-          {isLoading ? t("form.scanning") : t("form.scan")}
+          {isLoading ? t("form.scanning") : privateMode ? (lang === "sv" ? "Skanna privat repo" : "Scan private repo") : (lang === "sv" ? "Skanna publikt repo" : "Scan public repo")}
           <span aria-hidden="true">→</span>
         </button>
+      </div>
+      {/* Shown to everyone: without a pass, a token scan answers with the $2 offer. */}
+      <div className="private-input" hidden={!privateMode} ref={privateDetails}>
+        {!privateAccess && <><p>{t("form.private.needsPass")}</p><ScanCheckoutButton plan="day" context={repoUrlFromParam(repoUrl) || undefined}>{lang === "sv" ? "Aktivera privata skanningar · 19 kr" : "Unlock private scans · $2"}</ScanCheckoutButton></>}
+        {privateAccess && <GitHubConnect repoUrl={repoUrl} onSelect={handleUrlChange} />}
+        {searchParams.get("github") === "failed" && <p role="alert">{lang === "sv" ? "GitHub-anslutningen misslyckades. Försök ansluta igen." : "GitHub connection failed. Please connect again."}</p>}
+        <details><summary>{lang === "sv" ? "Avancerat: tillfällig åtkomsttoken" : "Advanced: temporary access token"}</summary>
+        <label htmlFor="private-token">{t("form.private.label")}</label>
+        <input id="private-token" type="password" autoComplete="off" value={privateToken} ref={tokenInput} onChange={(event) => handleTokenChange(event.target.value)} />
+        <p>{t("form.private.note")} <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">{t("form.private.tokenLink")}</a></p>
+        {privateAccess && <><button type="button" disabled={!privateToken || savingToken} onClick={saveToken}>{savingToken ? (lang === "sv" ? "Sparar…" : "Saving…") : (lang === "sv" ? "Spara token säkert i denna webbläsare" : "Save token securely in this browser")}</button><p role="status">{tokenSaved ? (lang === "sv" ? "Sparad. Du behöver inte klistra in den vid nästa skanning." : "Saved. No need to paste it for the next scan.") : (lang === "sv" ? "Krypterad, högst 8 timmar och aldrig längre än passet. Du kan koppla från när som helst." : "Encrypted, at most 8 hours and never beyond your pass. Disconnect at any time.")}</p></>}
+        </details>
       </div>
       {isLoading && (
         <ol className="scan-progress" aria-live="polite">
@@ -248,7 +280,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         </ol>
       )}
       {detection && !isLoading && (
-        <fieldset className="stack-panel" disabled={isLoading}>
+        <details className="scan-options"><summary>{lang === "sv" ? "Identifierad stack och avancerade kontroller" : "Detected stack and advanced checks"}</summary><fieldset className="stack-panel" disabled={isLoading}>
           <legend className="sr-only">{t("form.whatToScan")}</legend>
           <p className="stack-summary" aria-live="polite">
             {detection.status === "loading" ? t("form.detecting")
@@ -265,15 +297,8 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
               ))}
             </div>
           )}
-        </fieldset>
+        </fieldset></details>
       )}
-      {/* Shown to everyone: without a pass, a token scan answers with the $2 offer. */}
-      <details className="private-input" open={privateStart} ref={privateDetails}><summary>{t("form.private.summary")}</summary>
-        {!privateAccess && <p>{t("form.private.needsPass")}</p>}
-        <label htmlFor="private-token">{t("form.private.label")}</label>
-        <input id="private-token" type="password" autoComplete="off" value={privateToken} ref={tokenInput} onChange={(event) => handleTokenChange(event.target.value)} />
-        <p>{t("form.private.note")} <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">{t("form.private.tokenLink")}</a></p>
-      </details>
       {error ? (
         <p className="form-error" role="alert">
           {error}

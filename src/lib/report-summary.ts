@@ -26,7 +26,8 @@ export function countStatuses(checks: Array<{ status: CheckStatus }>): Record<Ch
  * A report with no result to headline: no Next.js app at the root and no other framework the scan knows, or an app nested in a
  * subfolder. The page and the README badge both read it, so they agree. Older reports have no nextApp and keep their normal headline.
  */
-export function neutralReport(results: Pick<ReportResults, "nextApp" | "stack">): boolean {
+export function neutralReport(results: Pick<ReportResults, "nextApp" | "stack"> & { checks?: CheckResult[] }): boolean {
+  if (results.checks?.some(check => check.status !== "green" && !isPartialPlaceholder(check))) return false;
   return results.nextApp === "nested" || (results.nextApp === "none" && !results.stack?.framework);
 }
 

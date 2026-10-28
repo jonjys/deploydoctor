@@ -219,7 +219,7 @@ test("defaultChecks and describeStack follow the detected stack", () => {
   assert.deepEqual(defaultChecks(stack), ["next", "vercel", "env"]);
   assert.equal(describeStack(stack), "Next.js 14, Tailwind - No Supabase");
   assert.deepEqual(defaultChecks(detectStack({ packageJson: JSON.stringify({ dependencies: { express: "4", prisma: "6" } }) })), ["vercel", "env", "prisma"]);
-  assert.deepEqual(defaultChecks(detectStack({ packageJson: null })), ["next", "vercel", "env"]);
+  assert.deepEqual(defaultChecks(detectStack({ packageJson: null })), ["vercel", "env"]);
 });
 
 test("English is the default language and Swedish is opt-in", () => {
@@ -559,8 +559,8 @@ test("a repository without package.json is not a Next.js app", () => {
     { "README.md": "# tool" },
   ));
   assert.equal(results.nextApp, "none");
-  assert.equal(overallLabel(results.summary, "en", { notNext: true }), "Not a Next.js app");
-  assert.equal(overallLabel(results.summary, "sv", { notNext: true }), "Inte en Next.js-app");
+  assert.equal(overallLabel(results.summary, "en", { notNext: true }), "Framework coverage limited");
+  assert.equal(overallLabel(results.summary, "sv", { notNext: true }), "Begränsad stackanalys");
 });
 
 test("a Vite app with a package.json is not a Next.js app", () => {

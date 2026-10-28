@@ -1,3 +1,4 @@
+import { checkPortableBuild, portableEnvironment } from "@/lib/portable-build";
 import { checkProductionSafety } from "@/lib/production-safety";
 import path from "node:path";
 import type { Category, CheckResult, CheckStatus, ReportResults, Finding } from "@/types/report";
@@ -871,7 +872,7 @@ function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
   }
 
   const node = manifest?.engines?.node;
-  if (typeof node === "string" && nodeRangeAllowsMajor(node, SUPPORTED_NODE_MAJORS) === false) {
+  if (!snapshot.contents.has("netlify.toml") && !snapshot.contents.has("wrangler.toml") && typeof node === "string" && nodeRangeAllowsMajor(node, SUPPORTED_NODE_MAJORS) === false) {
     findings.push({ file: "package.json", line: lineOf('"engines"'), problem: x.build.engines(node), fix: x.build.enginesFix,
       command: "git add -- package.json" });
   }
@@ -1332,7 +1333,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
     if (/(?:^|\/)\.env(?:\..+)?$/.test(file)) envText.push(source);
     else if (SOURCE_EXTENSION.test(file)) sources.push(source);
   }
-  const stack = detectStack({ packageJson: snapshot.contents.get("package.json"), envText: envText.join("\n"), sources });
+  const stack = detectStack({ packageJson: snapshot.contents.get("package.json"), envText: envText.join("\n"), sources, files: snapshot.entries.map(e => e.path), cargoToml: snapshot.contents.get("Cargo.toml") });
   // Without an explicit choice, scan only what the detected stack needs.
   const chosen = new Set(options.checks ?? defaultChecks(stack));
   const runners: Record<Category, Array<(snapshot: RepositorySnapshot, x: AnalysisText) => CheckResult>> = {
@@ -1343,7 +1344,26 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
     prisma: [checkPrisma],
   };
   const scanned = CATEGORIES.filter((category) => chosen.has(category));
-  const checks = scanned.flatMap((category) => runners[category].map((run) => run(snapshot, x)));
+  let checks = scanned.flatMap((category) => runners[category].map((run) => run(snapshot, x)));
+  const portable = checkPortableBuild(snapshot, options.lang ?? "en");
+  if (chosen.has("vercel") && portable) {
+    const existing = checks.find(c => c.id === "build-config");
+    if (existing?.findings?.length) {
+      portable.findings = [...existing.findings, ...(portable.findings ?? [])];
+      portable.status = existing.status === "red" ? "red" : portable.status;
+      portable.evidence = [...existing.evidence, ...portable.evidence];
+      portable.fix = portable.findings[0].fix;
+      portable.explanation = `${portable.findings.length} configuration findings. The build was not executed.`;
+    }
+    checks = checks.filter(c => c.id !== "build-config" && (stack.hasPackageJson || !["server-libs", "dependencies"].includes(c.id)));
+    checks.push(portable);
+  }
+  if (!stack.hasPackageJson && chosen.has("env")) checks = checks.map(c => c.id === "env" ? portableEnvironment(snapshot, options.lang ?? "en") : c);
+  // Import paths are a JavaScript/TypeScript concern, not a Next.js feature. Preserve the legacy Next category
+  // while running the existing AST import analysis for other Node projects using general deployment checks.
+  if (!stack.hasNext && snapshot.entries.some(e => SOURCE_EXTENSION.test(e.path)) && chosen.has("vercel") && !chosen.has("next")) {
+    checks.unshift({ ...checkImports(snapshot, x), category: "vercel" });
+  }
   const summary = checks.reduce<Record<CheckStatus, number>>(
     (counts, check) => ({ ...counts, [check.status]: counts[check.status] + 1 }),
     { red: 0, yellow: 0, green: 0 },

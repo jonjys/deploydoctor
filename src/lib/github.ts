@@ -14,7 +14,8 @@ import { t, type Lang, type MessageKey } from "@/lib/i18n";
 import type { Category, ReportResults } from "@/types/report";
 
 const GITHUB_API = "https://api.github.com";
-const SOURCE_FILE = /\.(?:[cm]?[jt]sx?|vue|svelte)$/i;
+const SOURCE_FILE = /\.(?:[cm]?[jt]sx?|vue|svelte|rs|py|go|java|cs|rb|php|swift|kt|c|cpp|h)$/i;
+const BUILD_FILE = /(?:^|\/)(?:Cargo\.toml|Cargo\.lock|rust-toolchain(?:\.toml)?|netlify\.toml|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Dockerfile|wrangler\.toml|wrangler\.jsonc)$|^\.github\/workflows\/[^/]+\.ya?ml$/;
 const ASTRO_PAGE = /^src\/pages\/.*\.astro$/i;
 const API_ROUTE = /(?:^|\/)(?:src\/)?app\/api(?:\/.*)?\/route\.[cm]?[jt]s$|(?:^|\/)(?:src\/)?pages\/api\/.*\.[cm]?[jt]s$/i;
 const MAX_FILE_BYTES = 256_000;
@@ -131,7 +132,7 @@ export async function resolveCommitSha(repoPath: string, ref: string, token?: st
 }
 
 function priorityFor(pathname: string): number {
-  if (pathname === "package.json") return 0;
+  if (pathname === "package.json" || BUILD_FILE.test(pathname)) return 0;
   if (/(?:^|\/)\.env(?:\..+)?$/.test(pathname) || MISNAMED_ENV_TEMPLATE.test(pathname) || pathname === ".gitignore") return 1;
   if (/(?:^|\/)(?:tsconfig|jsconfig)\.json$|^vercel\.json$/.test(pathname) || /\.prisma$/.test(pathname) || ROOT_LOCKFILE.test(pathname)
     || /^(?:next|svelte|astro|vite)\.config\.[cm]?[jt]s$/.test(pathname)) return 2;
@@ -193,7 +194,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
     archive = await readRepositoryArchive(downloaded.body, (file, size) =>
       (ROOT_LOCKFILE.test(file) && size <= MAX_LOCKFILE_BYTES) || (size <= MAX_FILE_BYTES &&
       // Nested tsconfig files resolve a nested app's aliases; Astro pages can opt out of prerendering in their frontmatter.
-      (SOURCE_FILE.test(file) || /^(?:package|vercel)\.json$/.test(file) || /(?:^|\/)(?:tsconfig|jsconfig)\.json$/.test(file) || ASTRO_PAGE.test(file) || file === ".gitignore"
+      (SOURCE_FILE.test(file) || BUILD_FILE.test(file) || /^(?:package|vercel)\.json$/.test(file) || /(?:^|\/)(?:tsconfig|jsconfig)\.json$/.test(file) || ASTRO_PAGE.test(file) || file === ".gitignore"
         || /\.prisma$/.test(file) || MIGRATION_FILE.test(file) || MISNAMED_ENV_TEMPLATE.test(file) || /(?:^|\/)\.env(?:\..+)?$/.test(file))), priorityFor, signal);
   } catch (error) {
     if (error instanceof GitHubApiError) throw error;
@@ -261,5 +262,6 @@ export async function detectRepositoryStack(repoUrl: string, options: { privateT
     readRootFile(repoPath, "package.json", token),
     readRootFile(repoPath, ".env.example", token),
   ]);
-  return { canonicalUrl, stack: detectStack({ packageJson, envText }) };
+  const cargoToml = !packageJson ? await readRootFile(repoPath, "Cargo.toml", token) : null;
+  return { canonicalUrl, stack: detectStack({ packageJson, envText, cargoToml }) };
 }

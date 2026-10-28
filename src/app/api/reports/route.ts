@@ -1,10 +1,11 @@
+import { githubConnection } from "@/lib/github-connect";
 import { workLimitResponse } from "@/lib/work-budget";
 import { analyzeGitHubRepository, GitHubApiError, parseGitHubRepoUrl } from "@/lib/github";
 import { parseGitRef } from "@/lib/git-ref";
 import { saveReport } from "@/lib/reports";
 import { activePlan, bearerToken, finishScan, requestCustomer, reserveScan, type Entitlement } from "@/lib/access";
 import { scanAllowance } from "@/lib/limits";
-import { maybePrivateRepo, needsTokenPrompt, tokenPromptKey } from "@/lib/github-status";
+import { maybePrivateRepo, needsTokenPrompt } from "@/lib/github-status";
 import { OIDC_HEADER, verifyGitHubOidc } from "@/lib/github-oidc";
 import { sameOrigin } from "@/lib/stripe";
 import { fromCli } from "@/lib/cli-client";
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
   // Outside the try so a GitHub error can tell a possibly private repo from a plain typo.
   let plan: Entitlement | null = null;
   let privateToken: string | undefined;
+  let connectedCredential = false;
   try {
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 10_000) {
@@ -82,6 +84,10 @@ export async function POST(request: Request) {
       // Without a pass the form shows the private repo offer, not the daily limit text.
       return Response.json({ error: t(lang, "err.privatePlan"), paywall: true, privateRepo: !viaCi && !plan }, { status: 402 });
     }
+    if (!privateToken && !viaCi && !viaCli && allowsPrivate(plan?.plan)) {
+      const connection = await githubConnection(customer);
+      if (connection) { privateToken = connection.token; connectedCredential = true; }
+    }
     if (!plan) {
       const allowance = scanAllowance(oidcRepo);
       const quota = await reserveScan(request, allowance);
@@ -107,13 +113,14 @@ export async function POST(request: Request) {
       return Response.json({ error: t(lang, "err.invalidJson") }, { status: 400 });
     }
     if (error instanceof GitHubApiError) {
+      if (connectedCredential && [401, 403, 404].includes(error.status)) return Response.json({ error: t(lang, "gh.connectNeeded"), needsGitHub: true }, { status: error.status });
       if (!viaCi && !plan && maybePrivateRepo(error.key, privateToken)) {
         console.log("dd-funnel", JSON.stringify({ step: "paywall", plan: null, reason: "maybe_private" }));
         return Response.json({ error: t(lang, "gh.maybePrivate"), paywall: true, privateRepo: true }, { status: error.status });
       }
       // needsToken opens the private token field in the form.
       if (!viaCi && needsTokenPrompt(error.key, plan?.plan, privateToken)) {
-        return Response.json({ error: t(lang, tokenPromptKey(error.key)), needsToken: true }, { status: error.status });
+        return Response.json({ error: t(lang, "gh.connectNeeded"), needsToken: true, needsGitHub: true }, { status: error.status });
       }
       return Response.json({ error: error.localized(lang) }, { status: error.status });
     }

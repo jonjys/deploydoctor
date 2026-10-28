@@ -789,3 +789,36 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .scan-days { margin-top: 18px; }
 @media (max-width: 780px) { .finding-stats { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { .finding-stat { grid-template-columns: minmax(0, 1fr); padding: 16px; } .finding-stat-counts { justify-content: flex-start; } }
+
+.github-connect { display: grid; gap: 12px; margin: 14px 0; min-width: 0; }
+.github-connect-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.github-connect button, .github-connect select { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); max-width: 100%; }
+.github-connect label { display: grid; gap: 8px; min-width: 0; }
+.private-input > details { margin-top: 18px; }
+
+/* Compact repository entry: the primary choices stay visible on narrow screens. */
+.repo-mode { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+.repo-mode button { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px; min-height:48px; border:1px solid var(--line,#61715c); border-radius:10px; padding:10px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.repo-mode button[aria-pressed="true"] { background:#d4ff38; color:#182011; border-color:#d4ff38; font-weight:700; }
+.repo-mode small { font-size:.72rem; opacity:.8; }
+.private-input[hidden] { display:none; }
+.private-input { border:1px solid var(--line,#61715c); border-radius:10px; padding:12px; margin-top:12px; }
+.private-input p { font-size:.86rem; line-height:1.45; }
+.scan-options { margin-top:12px; font-size:.85rem; }
+.scan-options summary { cursor:pointer; padding:8px 0; }
+@media(max-width:600px) {
+  .hero { padding-top:22px; }
+  .hero h1 { font-size:clamp(2rem,9vw,3rem); line-height:1.08; }
+  .hero-copy { font-size:.95rem; line-height:1.5; margin-bottom:18px; }
+  .entry-paths { grid-template-columns:1fr 1fr; gap:8px; margin:16px 0; }
+  .entry-path { padding:12px; min-width:0; }
+  .entry-path h2 { font-size:1rem; }
+  .entry-path p,.entry-path .section-kicker { display:none; }
+  .entry-allowance { font-size:.7rem; }
+  .input-shell { flex-wrap:wrap; }
+  .repo-input-wrap { min-width:0; }
+  .scan-button { width:100%; justify-content:center; min-height:48px; }
+  .github-connect-actions { align-items:stretch; }
+  .github-connect-actions > * { width:100%; text-align:center; }
+  .private-input input,.private-input select { font-size:16px; max-width:100%; }
+}

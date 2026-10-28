@@ -1,3 +1,4 @@
+import { githubConnection } from "@/lib/github-connect";
 import { detectionRules } from "@/lib/budget-policy";
 import { hashRequestIp } from "@/lib/access";
 import { acquireWork, workLimitResponse } from "@/lib/work-budget";
@@ -5,7 +6,7 @@ import { activePlan, customerSession } from "@/lib/access";
 import { defaultChecks, describeStack } from "@/lib/stack";
 import { langFromRequest, t } from "@/lib/i18n";
 import { detectRepositoryStack, GitHubApiError } from "@/lib/github";
-import { maybePrivateRepo, needsTokenPrompt, tokenPromptKey } from "@/lib/github-status";
+import { maybePrivateRepo, needsTokenPrompt } from "@/lib/github-status";
 import { sameOrigin } from "@/lib/stripe";
 import { allowsPrivate } from "@/lib/plans";
 
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
   const lang = langFromRequest(request);
   if (!sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });
   let privateToken: string | undefined;
+  let connectedCredential = false;
   try {
     const raw = await request.text();
     if (raw.length > 10_000) return Response.json({ error: t(lang, "err.tooLarge") }, { status: 413 });
@@ -28,6 +30,11 @@ export async function POST(request: Request) {
       const plan = await activePlan(await customerSession());
       if (!allowsPrivate(plan?.plan) || privateToken.length > 300) privateToken = undefined;
     }
+    if (!privateToken) {
+      const customer = await customerSession();
+      const plan = await activePlan(customer);
+      if (allowsPrivate(plan?.plan)) { const connection = await githubConnection(customer); if (connection) { privateToken = connection.token; connectedCredential = true; } }
+    }
     await acquireWork(detectionRules(hashRequestIp(request)));
     const { stack } = await detectRepositoryStack(body.repoUrl, { privateToken });
     return Response.json({ stack, summary: describeStack(stack, lang), checks: defaultChecks(stack) });
@@ -36,13 +43,14 @@ export async function POST(request: Request) {
     if (limited) return limited;
     if (error instanceof SyntaxError) return Response.json({ error: t(lang, "err.invalidJson") }, { status: 400 });
     if (error instanceof GitHubApiError) {
+      if (connectedCredential && [401, 403, 404].includes(error.status)) return Response.json({ error: t(lang, "gh.connectNeeded"), needsGitHub: true }, { status: error.status });
       // The plan is read only on this path: without a pass the visitor gets the $2 offer, with one a prompt to paste
       // a token, and when the plan cannot be read the plain error.
       if (maybePrivateRepo(error.key, privateToken)) {
         const plan = await customerSession().then(activePlan).catch(() => undefined);
         if (plan === null) return Response.json({ error: t(lang, "gh.maybePrivate"), paywall: true, privateRepo: true }, { status: error.status });
         if (needsTokenPrompt(error.key, plan?.plan, privateToken)) {
-          return Response.json({ error: t(lang, tokenPromptKey(error.key)), needsToken: true }, { status: error.status });
+          return Response.json({ error: t(lang, "gh.connectNeeded"), needsToken: true, needsGitHub: true }, { status: error.status });
         }
       }
       return Response.json({ error: error.localized(lang) }, { status: error.status });

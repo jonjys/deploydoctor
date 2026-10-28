@@ -38,14 +38,14 @@ export default async function Home() {
         <h1>{t("home.h1")}</h1>
         <p className="hero-copy">{t("home.copy")}</p>
 
-        <div className="entry-paths" aria-label={lang === "sv" ? "Välj vad du behöver hjälp med" : "Choose what you need help with"}>
-          <a className="entry-path" href="#scan-repository"><span className="section-kicker">{lang === "sv" ? "INNAN DU PUSHAR" : "BEFORE YOU PUSH"}</span><h2>{lang === "sv" ? "Skanna ett repo" : "Scan repository"} <span aria-hidden="true">↘</span></h2><p>{lang === "sv" ? "Hitta risker i koden. Se fil, rad och nästa steg." : "Find risks in your code. See the file, line and next step."}</p></a>
-          <Link className="entry-path entry-path-log" href="/diagnose"><span className="section-kicker">{lang === "sv" ? "BYGGET HAR REDAN MISSLYCKATS" : "BUILD ALREADY FAILED"}</span><h2>{lang === "sv" ? "Fixa en misslyckad build" : "Fix a failed build"} <span aria-hidden="true">→</span></h2><p>{lang === "sv" ? "Klistra in byggloggen. Få en diagnos och föreslagna steg." : "Paste your build log. Get a diagnosis and suggested steps."}</p><span className="entry-allowance">{lang === "sv" ? "1 gratis loggdiagnos per dag" : "1 free log diagnosis a day"}</span></Link>
-        </div>
         <div id="scan-repository" className="scan-entry">
         <Suspense fallback={null}>
           <RepoForm privateAccess={allowsPrivate(plan?.plan)} />
         </Suspense>
+        </div>
+        <div className="entry-paths" aria-label={lang === "sv" ? "Välj vad du behöver hjälp med" : "Choose what you need help with"}>
+          <a className="entry-path" href="#scan-repository"><span className="section-kicker">{lang === "sv" ? "INNAN DU PUSHAR" : "BEFORE YOU PUSH"}</span><h2>{lang === "sv" ? "Skanna ett repo" : "Scan repository"} <span aria-hidden="true">↘</span></h2><p>{lang === "sv" ? "Hitta risker i koden. Se fil, rad och nästa steg." : "Find risks in your code. See the file, line and next step."}</p></a>
+          <Link className="entry-path entry-path-log" href="/diagnose"><span className="section-kicker">{lang === "sv" ? "BYGGET HAR REDAN MISSLYCKATS" : "BUILD ALREADY FAILED"}</span><h2>{lang === "sv" ? "Fixa en misslyckad build" : "Fix a failed build"} <span aria-hidden="true">→</span></h2><p>{lang === "sv" ? "Klistra in byggloggen. Få en diagnos och föreslagna steg." : "Paste your build log. Get a diagnosis and suggested steps."}</p><span className="entry-allowance">{lang === "sv" ? "1 gratis loggdiagnos per dag" : "1 free log diagnosis a day"}</span></Link>
         </div>
         <div className="example-chips" aria-label={t("home.examples")}>
           <span>{t("home.examples")}</span>
