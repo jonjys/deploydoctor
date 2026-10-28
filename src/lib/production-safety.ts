@@ -1,5 +1,8 @@
 import ts from "typescript";
 import { stripeReplayRisks } from "@/lib/stripe-replay";
+import { expressStripeWebhooks } from "@/lib/express-webhooks";
+import { SourceGraph } from "@/lib/source-graph";
+import { ConstraintIndex } from "@/lib/schema-constraints";
 import type { RepositorySnapshot } from "@/lib/analyzer";
 import type { CheckResult, Finding } from "@/types/report";
 
@@ -23,24 +26,49 @@ export function checkProductionSafety(snapshot: RepositorySnapshot): CheckResult
   let parseIncomplete = false;
   let hasNext = false;
   try { const pkg = JSON.parse(snapshot.contents.get("package.json") ?? "{}"); hasNext = Boolean(pkg.dependencies?.next || pkg.devDependencies?.next); } catch { /* Unknown framework: do not infer Next-specific errors. */ }
-  for (const [file, source] of snapshot.contents) {
-    if (!SOURCE.test(file) || EXCLUDED.test(file)) continue;
-    const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  // One parse per file, shared by every rule and by the cross-file Express and idempotency reviews.
+  const graph = new SourceGraph(snapshot);
+  const constraints = new ConstraintIndex(snapshot);
+  const sources = [...snapshot.contents.keys()].filter(file => SOURCE.test(file) && !EXCLUDED.test(file));
+  const express = expressStripeWebhooks(graph, sources);
+  if (express.evaluated) evaluated.add("stripe-express-body-parser");
+  for (const risk of express.risks) if (!findings.some(f => f.file === risk.file && f.line === risk.line && f.ruleId === "stripe-express-body-parser")) {
+    findings.push({ ruleId: "stripe-express-body-parser", status: risk.status, file: risk.file, line: risk.line, problem: risk.problem, fix: risk.fix });
+  }
+  const expressHandlerFiles = new Set(express.webhooks.map(webhook => webhook.file));
+  for (const file of sources) {
+    const sf = graph.parse(file);
     // Syntax errors require a real build; do not derive confident security claims from a recovered tree.
-    if ((sf as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics?.length) { parseIncomplete = true; continue; }
+    if (!sf) { parseIncomplete = true; continue; }
     const nodes: ts.Node[] = [];
     const walk = (n: ts.Node) => { nodes.push(n); ts.forEachChild(n, walk); };
     walk(sf);
     const imports = sf.statements.filter(ts.isImportDeclaration).filter(n => !n.importClause?.isTypeOnly);
     const modules = imports.map(n => literal(n.moduleSpecifier));
-    const stripeNames = new Set(imports.filter(n => literal(n.moduleSpecifier) === "stripe").flatMap(n => n.importClause?.name ? [n.importClause.name.text] : []));
-    const stripeInstances = new Set(nodes.filter(ts.isVariableDeclaration).filter(n => n.initializer && ts.isNewExpression(n.initializer) && stripeNames.has(n.initializer.expression.getText(sf))).map(n => name(n.name)));
+    const requireStripe = (n: ts.Node | undefined) => { const v = n && unwrap(n); return Boolean(v && ts.isCallExpression(v) && ts.isIdentifier(v.expression) && v.expression.text === "require" && literal(v.arguments[0]) === "stripe"); };
+    const stripeNames = new Set([...imports.filter(n => literal(n.moduleSpecifier) === "stripe").flatMap(n => n.importClause?.name ? [n.importClause.name.text] : []),
+      // CommonJS: const Stripe = require("stripe")
+      ...nodes.filter(ts.isVariableDeclaration).filter(n => requireStripe(n.initializer)).map(n => name(n.name))]);
+    const stripeInstances = new Set(nodes.filter(ts.isVariableDeclaration).filter(n => {
+      const init = n.initializer && unwrap(n.initializer);
+      if (!init) return false;
+      if ((ts.isNewExpression(init) || ts.isCallExpression(init)) && stripeNames.has(init.expression.getText(sf))) return true;
+      // const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY)
+      return ts.isCallExpression(init) && requireStripe(init.expression);
+    }).map(n => name(n.name)));
     // Common singleton/factory modules, without importing or executing their code.
     const stripeClients = new Set(imports.filter(n => /(?:^|\/)stripe(?:[-.][\w-]+)?$/.test(literal(n.moduleSpecifier) ?? "") && literal(n.moduleSpecifier) !== "stripe").flatMap(n => [
       ...(n.importClause?.name ? [n.importClause.name.text] : []),
       ...(n.importClause?.namedBindings && ts.isNamedImports(n.importClause.namedBindings) ? n.importClause.namedBindings.elements.filter(e => !e.isTypeOnly).map(e => e.name.text) : []),
     ]));
-    const route = hasNext && ROUTE.test(file), pages = hasNext && PAGES_API.test(file);
+    // import { stripe } from "@/utils/stripe/config": a local module binding named after Stripe is the configured client.
+    for (const n of imports) {
+      const specifier = literal(n.moduleSpecifier) ?? "";
+      if (!/^(?:\.|@\/|~\/)/.test(specifier) || !n.importClause) continue;
+      const names = [...(n.importClause.name ? [n.importClause.name.text] : []), ...(n.importClause.namedBindings && ts.isNamedImports(n.importClause.namedBindings) ? n.importClause.namedBindings.elements.filter(e => !e.isTypeOnly).map(e => e.name.text) : [])];
+      for (const local of names) if (/stripe/i.test(local)) stripeClients.add(local);
+    }
+    const route = hasNext && ROUTE.test(file), pages = hasNext && PAGES_API.test(file), expressHandler = expressHandlerFiles.has(file);
     let client = false;
     for (const statement of sf.statements) {
       if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) break;
@@ -66,19 +94,24 @@ export function checkProductionSafety(snapshot: RepositorySnapshot): CheckResult
     const declarations = nodes.filter(ts.isVariableDeclaration);
     const transformedNames = new Set(declarations.filter(n => n.initializer && transformed(n.initializer)).map(n => name(n.name)));
     const jsonEvents = new Set(declarations.filter(n => n.initializer && requestJson(n.initializer)).map(n => name(n.name)));
-    const add = (ruleId: Rule, node: ts.Node, status: "red" | "yellow", problem: string, fix: string) => {
-      const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
-      if (!findings.some(f => f.file === file && f.line === line && f.ruleId === ruleId)) findings.push({ ruleId, status, file, line, problem, fix });
+    const addAt = (ruleId: Rule, at: { file: string; line: number }, status: "red" | "yellow", problem: string, fix: string) => {
+      if (!findings.some(f => f.file === at.file && f.line === at.line && f.ruleId === ruleId)) findings.push({ ruleId, status, file: at.file, line: at.line, problem, fix });
     };
+    const add = (ruleId: Rule, node: ts.Node, status: "red" | "yellow", problem: string, fix: string) =>
+      addAt(ruleId, { file, line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1 }, status, problem, fix);
     const verifiers = calls.filter(n => {
       if (!["constructEvent", "constructEventAsync"].includes(prop(n.expression)) || !ts.isPropertyAccessExpression(n.expression) || !ts.isPropertyAccessExpression(n.expression.expression) || n.expression.expression.name.text !== "webhooks") return false;
       const client = n.expression.expression.expression;
       return ts.isIdentifier(client) ? stripeInstances.has(client.text) || stripeClients.has(client.text)
         : ts.isCallExpression(client) && ts.isIdentifier(client.expression) && stripeClients.has(client.expression.text);
     });
-    if ((route || pages) && verifiers.length) {
-      evaluated.add("stripe-event-replay"); evaluated.add("stripe-memory-deduplication");
-      for (const risk of stripeReplayRisks(sf, nodes, verifiers)) add(risk.ruleId, risk.node, "yellow", risk.problem, risk.fix);
+    if ((route || pages || expressHandler) && verifiers.length) {
+      for (const rule of ["stripe-event-replay", "stripe-memory-deduplication", "stripe-idempotency-race", "stripe-idempotency-unestablished"] as const) evaluated.add(rule);
+      const context = { graph, constraints, file, stripeNames: new Set([...stripeInstances, ...stripeClients]) };
+      for (const risk of stripeReplayRisks(sf, nodes, verifiers, context)) {
+        if (risk.file && risk.line) addAt(risk.ruleId, { file: risk.file, line: risk.line }, "yellow", risk.problem, risk.fix);
+        else if (risk.node) add(risk.ruleId, risk.node, "yellow", risk.problem, risk.fix);
+      }
     }
     if (stripeNames.size || stripeClients.size) {
       evaluated.add("stripe-raw-body"); evaluated.add("checkout-local-redirect");
