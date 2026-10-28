@@ -1,3 +1,4 @@
+import { githubApp } from "@/lib/github-connect";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import "./growth.css";
@@ -52,7 +53,7 @@ export default async function GrowthPage({
     </section>
   </main>;
   const days = params.days === "7" ? 7 : 30;
-  const [report, insights] = await Promise.all([readGrowthReport(days), scanInsights()]);
+  const [report, insights, github] = await Promise.all([readGrowthReport(days), scanInsights(), githubApp()]);
   const scans = insights ? scansInWindow(insights, report.started, report.ended) : null;
   const guidePages = report.traffic?.pages.filter((page) => page.path.startsWith("/guides/")).sort((a, b) => b.pageviews - a.pageviews) ?? [];
   const maxViews = Math.max(1, ...(report.traffic?.days.map((row) => row.pageviews) ?? []));
@@ -67,6 +68,7 @@ export default async function GrowthPage({
         <form action="/growth/logout" method="post"><button type="submit">Log out</button></form>
       </div>
     </header>
+    <section className="growth-card"><h2>GitHub private scans</h2>{github ? <p>GitHub connection is configured. Customers can connect GitHub and select repositories without creating personal access tokens.</p> : <><p>One-time owner activation is required. Register a read-only GitHub App through the guided flow. GitHub credentials are returned directly to the server and encrypted. Customers will not need to create tokens.</p><form action="/growth/github/setup" method="post"><button className="cta-button" type="submit">Activate GitHub connection →</button></form></>}</section>
     <p className="growth-note">Period: {report.started.slice(0,10)} to {report.ended.slice(0,10)} UTC. Metrics are fetched when you refresh this page, not streamed.</p>
     <nav className="growth-section-nav" aria-label="Dashboard sections"><a href="#growth-overview">Overview</a><a href="#growth-findings">Scan findings</a><a href="#growth-acquisition">Traffic and guides</a><a href="#growth-experiments">Campaigns</a><a href="#growth-projections">Simulator</a><Link href="/stats">Public stats ↗</Link></nav>
     <section id="growth-overview" className="growth-metrics" aria-label="Growth metrics">

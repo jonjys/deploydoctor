@@ -33,10 +33,10 @@ test("a report is neutral without a Next.js app at the root or another framework
 
 test("the README badge says what the report headline says", () => {
   const notNext = results({ green: 3 }, { nextApp: "none" });
-  assert.deepEqual(badgeStatus(notNext), { label: "Not a Next.js app", color: BADGE_COLORS.neutral });
+  assert.deepEqual(badgeStatus(notNext), { label: "Framework coverage limited", color: BADGE_COLORS.neutral });
   assert.equal(badgeStatus(notNext).label, overallLabel(notNext.summary, "en", { notNext: neutralReport(notNext) }));
   const nested = results({ red: 2 }, { nextApp: "nested" });
-  assert.deepEqual(badgeStatus(nested), { label: "Not a Next.js app", color: BADGE_COLORS.neutral });
+  assert.deepEqual(badgeStatus(nested), { label: "Framework coverage limited", color: BADGE_COLORS.neutral });
   // Another framework at the root gets real results, so it keeps the normal headline and color.
   const svelte = results({ red: 2 }, { nextApp: "none", stack: { hasPackageJson: true, hasNext: false, hasSupabase: false, hasPrisma: false, hasDrizzle: false, hasTailwind: false, framework: "sveltekit" } });
   assert.deepEqual(badgeStatus(svelte), { label: "2 issues to fix", color: BADGE_COLORS.red });
