@@ -16,6 +16,7 @@ import { ReadmeBadges } from "@/components/readme-badges";
 import { SolvedPrompt } from "@/components/solved-prompt";
 import { WatchBox } from "@/components/watch-box";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
+import { ScanPassCta } from "@/components/scan-pass-cta";
 import { PatchOffer } from "@/components/patch-offer";
 import { SITE_URL } from "@/lib/site";
 import { getT } from "@/lib/lang";
@@ -241,6 +242,9 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           );
         })}
       </section>
+
+      {/* The $2 pass is offered right under the findings, for every visitor without a pass, whether or not a check failed. */}
+      {!plan && <ScanPassCta t={t} repoUrl={report.repo_url} />}
 
       {supporting.length > 0 && <details className="report-supporting">
         <summary>{t("report.coverageDetails")} ({supporting.length})</summary>
