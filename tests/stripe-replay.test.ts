@@ -21,15 +21,23 @@ test("unkeyed fulfillment append is review with file/line evidence, not an asser
   assert.match(findings[0].fix,/atomic|transaction/);assert.match(findings[0].fix,/concurrent/);assert.match(findings[0].fix,/retries/);
   assert.equal(findings[0].repairable,undefined);
 });
-test("event IDs, business object IDs and delegated whole events are not declared missing protection",()=>{
+test("event IDs, business object IDs and delegated whole events are never declared missing, only not established",()=>{
+  const all=(body:string)=>checkProductionSafety(snapshot(prefix+`export async function POST(req: Request){${verified}${body}}`)).findings??[];
   for(const body of [
     `await claimEvent(event.id);${append}`,
     `await claimEvent(event['id']);${append}`,
     `await handleBillingEvent(event);${append}`,
     `if(event.type==='checkout.session.completed'){const session=event.data.object;await fulfillCheckout(session.id);}`,
     `if(event.type==='checkout.session.completed'){const session=event.data.object;await db.orders.create({data:{stripeId:session.id}});}`,
-    `if(event.type==='checkout.session.completed')console.log('received');`,
-  ]) assert.equal(risks(body).length,0,body);
+  ]){
+    assert.equal(risks(body).length,0,body);
+    // Passing an ID on, or keying a write by it without a visible unique constraint, does not prove duplicates are stopped.
+    const review=all(body).filter(f=>f.ruleId==="stripe-idempotency-unestablished");
+    assert.equal(review.length,1,body);assert.equal(review[0].status,"yellow");
+    assert.match(review[0].problem,/could not be established; this is not a confirmed vulnerability/);
+    assert.doesNotMatch(review[0].problem,/\bmissing\b|lacks/);
+  }
+  assert.equal(all(`if(event.type==='checkout.session.completed')console.log('received');`).filter(f=>f.ruleId?.startsWith("stripe-")).length,0);
 });
 test("module Set, local Map and aliased event IDs get process-memory review",()=>{
   for(const [store,body] of [

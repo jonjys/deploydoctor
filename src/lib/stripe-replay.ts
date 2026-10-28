@@ -1,4 +1,7 @@
 import ts from "typescript";
+import { idempotencyRisks } from "@/lib/stripe-idempotency";
+import { isFunctionNode, type SourceGraph } from "@/lib/source-graph";
+import type { ConstraintIndex } from "@/lib/schema-constraints";
 
 const unwrap = (node: ts.Node): ts.Node => ts.isAwaitExpression(node) || ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node) ? unwrap(node.expression) : node;
 function owner(node: ts.Node): ts.Node | undefined {
@@ -11,22 +14,28 @@ function contains(node: ts.Node, predicate: (node: ts.Node) => boolean): boolean
   return ts.forEachChild(node, child => contains(child, predicate) || undefined) === true;
 }
 
-export type ReplayRisk = { ruleId: "stripe-event-replay" | "stripe-memory-deduplication"; node: ts.Node; problem: string; fix: string };
+export type ReplayRisk = { ruleId: "stripe-event-replay" | "stripe-memory-deduplication" | "stripe-idempotency-race" | "stripe-idempotency-unestablished"; node?: ts.Node; file?: string; line?: number; problem: string; fix: string };
+export type ReplayContext = { graph: SourceGraph; constraints: ConstraintIndex; file: string; stripeNames: Set<string> };
 
 /** Narrow review heuristics, never a proof that fulfillment is or is not idempotent. Reuses the parsed source tree. */
-export function stripeReplayRisks(sf: ts.SourceFile, nodes: ts.Node[], verifiers: ts.CallExpression[]): ReplayRisk[] {
+export function stripeReplayRisks(sf: ts.SourceFile, nodes: ts.Node[], verifiers: ts.CallExpression[], context: ReplayContext): ReplayRisk[] {
   const risks: ReplayRisk[] = [];
   const declarations = nodes.filter(ts.isVariableDeclaration);
   for (const verifier of verifiers) {
     const scope = owner(verifier);
     if (!scope) continue;
-    const declaration = declarations.find(d => d.initializer && unwrap(d.initializer) === verifier && ts.isIdentifier(d.name));
-    // Assignments are intentionally excluded: reassignment and try/catch data flow need a real type/control-flow analysis.
+    const local = nodes.filter(node => owner(node) === scope);
+    let declaration: ts.VariableDeclaration | undefined = declarations.find(d => d.initializer && unwrap(d.initializer) === verifier && ts.isIdentifier(d.name));
+    let assignment: ts.BinaryExpression | undefined;
+    if (!declaration) {
+      // let event; try { event = stripe.webhooks.constructEvent(...) } catch { return ... }: one uninitialised declaration, one assignment.
+      assignment = local.find((node): node is ts.BinaryExpression => ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && unwrap(node.right) === verifier && ts.isIdentifier(node.left));
+      declaration = assignment && declarations.find(d => owner(d) === scope && !d.initializer && ts.isIdentifier(d.name) && d.name.text === assignment!.left.getText(sf));
+    }
     if (!declaration || !ts.isIdentifier(declaration.name)) continue;
     const event = declaration.name.text;
-    const local = nodes.filter(node => owner(node) === scope);
     if (local.some(node => node !== declaration && (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node)) && ts.isIdentifier(node.name) && node.name.text === event)) continue;
-    if (local.some(node => ts.isBinaryExpression(node) && node.left.getText(sf) === event && node.operatorToken.kind === ts.SyntaxKind.EqualsToken)) continue;
+    if (local.some(node => node !== assignment && ts.isBinaryExpression(node) && node.left.getText(sf) === event && node.operatorToken.kind === ts.SyntaxKind.EqualsToken)) continue;
     const eventProperty = (node: ts.Node, property: string) => (ts.isPropertyAccessExpression(node) && node.name.text === property && ts.isIdentifier(node.expression) && node.expression.text === event)
       || (ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression) && node.argumentExpression.text === property && ts.isIdentifier(node.expression) && node.expression.text === event);
     const ids = new Set(declarations.filter(d => owner(d) === scope && d.initializer && eventProperty(unwrap(d.initializer), "id") && ts.isIdentifier(d.name)).map(d => d.name.getText(sf)));
@@ -56,19 +65,9 @@ export function stripeReplayRisks(sf: ts.SourceFile, nodes: ts.Node[], verifiers
         problem: "Stripe event IDs are checked and stored in a process-memory Set or Map. This state is not shared across instances or preserved across restarts.",
         fix: "Review whether a durable guard also exists. Use an atomic database claim/unique constraint or an idempotent fulfillment transaction keyed by event ID or business object. Test duplicate and concurrent deliveries; process memory alone is insufficient on serverless deployments." });
     }
-    if (memory || !local.some(n => eventProperty(n, "type"))) continue;
-    // Even an ID passed to an opaque helper may implement a durable claim elsewhere. Do not call it missing.
-    if (local.some(n => eventProperty(n, "id"))) continue;
-    const payload = (node: ts.Node): boolean => ts.isPropertyAccessExpression(node) && node.name.text === "object" && eventProperty(node.expression, "data");
-    const aliases = new Set(declarations.filter(d => owner(d) === scope && d.initializer && payload(unwrap(d.initializer)) && ts.isIdentifier(d.name)).map(d => d.name.getText(sf)));
-    if (local.some(n => ts.isPropertyAccessExpression(n) && n.name.text === "id" && (payload(n.expression) || aliases.has(n.expression.getText(sf))))) continue;
-    const delegated = calls.some(call => call !== verifier && call.arguments.some(arg => ts.isIdentifier(unwrap(arg)) && unwrap(arg).getText(sf) === event));
-    if (delegated) continue;
-    const mutation = calls.find(call => call.pos > verifier.pos && ts.isPropertyAccessExpression(call.expression) && ["create", "insert"].includes(call.expression.name.text)
-      && call.arguments.some(arg => contains(arg, n => payload(n) || (ts.isIdentifier(n) && aliases.has(n.text)))));
-    if (mutation) risks.push({ ruleId: "stripe-event-replay", node: mutation,
-      problem: "A verified Stripe event leads to a create/insert using its payload, without a visible event-ID or object-ID handoff in this handler. Duplicate-delivery protection needs review.",
-      fix: "Inspect database constraints and imported helpers before changing code. Ensure fulfillment uses a durable atomic claim or idempotent transaction keyed by event.id, or the business object ID plus event.type where appropriate. Logging an ID is not protection. Replay the same event, including concurrent deliveries, and verify the business action happens once; retries after failures must remain possible." });
+    if (memory || !isFunctionNode(scope)) continue;
+    // Duplicate delivery: follow the handler, its helpers and the schema. Logging or passing event.id on is not protection.
+    for (const risk of idempotencyRisks(context.graph, context.constraints, context.file, sf, scope, verifier, event, context.stripeNames)) risks.push(risk);
   }
   return risks;
 }
