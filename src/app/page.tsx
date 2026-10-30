@@ -82,6 +82,7 @@ export default async function Home() {
 
 
       <p className="plugin-line"><Link href="/launch-readiness">{lang === "sv" ? "Ska du lansera? Se din tekniska checklista inför trafiken →" : "Launching a campaign? Check your deployment before the traffic arrives →"}</Link></p>
+      <p className="plugin-line"><Link href="/webhook-replay-lab">{lang === "sv" ? "Gratis demo: ett köp, fem webhook-leveranser. Vad händer? →" : "Free lab: one payment, five webhook deliveries. What breaks? →"}</Link></p>
       <section className="checks-panel" aria-labelledby="checks-heading">
         <div>
           <p className="section-kicker">{t("home.preflight")}</p>
@@ -146,3 +147,4 @@ export default async function Home() {
     </main>
   );
 }
+
