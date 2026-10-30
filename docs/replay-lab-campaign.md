@@ -78,3 +78,20 @@ Try it: https://deploydoctor.nyttolabs.com/webhook-replay-lab
 - Social posts are still NOT published. No connected social publishing tool was available and the browser failed to initialize. Metricool was suggested but its installation/connection is not confirmed. Do not report drafts as posts or repeatedly retry the failed browser.
 - Stripe live read showed no charge after the campaign baseline (2026-10-30T20:48:00Z); the latest record was an earlier own purchase, excluded from customer revenue. Do not record customer details or count own purchases as sales. The API response did not apply the bracketed date filter, so the returned latest timestamps were checked directly.
 - The existing three-run night automation remains the continuation mechanism. Do not create duplicate schedules. Prioritize a real distribution action when an authorized publishing connection becomes available; do not keep adding features or duplicating this homepage/README placement.
+
+## Metricool connection and first Threads post — 2026-10-30
+
+- Metricool is now connected. Confirmed brand: nyttolabs, blogId 6999637, Threads account @nyttolabs; also TikTok and YouTube. X and Pinterest are not connected in the returned brand settings.
+- Checked scheduled posts (30 Oct–1 Nov): empty before creating this post. Checked published Threads posts for 23–30 Oct: no replay-lab campaign duplicate.
+- Created exactly ONE Threads post: Metricool id 411721611, uuid 1533553819489354378, autoPublish true, draft false. Returned publication time: 2026-10-30 22:59 Europe/Stockholm. Provider status at creation: PENDING, so publication is not yet verified.
+- Planner: https://app.metricool.com/planner/calendar?blogId=6999637&openWithPostUuid=1533553819489354378
+- Do NOT recreate this post or publish a second version. First inspect its status and published-post analytics for the public Threads URL; update this record with actual proof.
+- Text:
+> Your Stripe webhook fires twice. Does your app grant access twice?
+> 
+> I built a free replay lab in DeployDoctor. Replay one payment, restart the worker, or crash it before access is granted.
+> 
+> Browser simulation. No Stripe keys or real payments. It doesn't test your app.
+> 
+> Try it, then scan your repo:
+> https://deploydoctor.nyttolabs.com/webhook-replay-lab?utm_source=threads&utm_medium=social&utm_campaign=break-my-checkout
