@@ -66,3 +66,15 @@ Try it: https://deploydoctor.nyttolabs.com/webhook-replay-lab
 - Production build completed with Next.js 16.4.2 and generated the lab and social image routes.
 - Independent code review found no material correctness, accessibility or purchase-claim blocker; copy-failure feedback and crash trace wording were improved.
 - Visual browser testing is not verified: the available browser could not initialize in this session.
+
+## Published distribution checkpoint — 2026-10-30
+
+- Lab production returned HTTP 200 and the expected simulation, free-scan link and $2 pass CTA in the follow-up check.
+- The public Action README already contains the lab → scan → pass links. Do not add another copy: https://github.com/jonjys/deploydoctor-action/blob/main/README.md
+- NyttoLabs homepage now promotes the lab inside the existing DeployDoctor card, preserving its free-scan CTA. English and Swedish copy, explicit simulation disclosure, and a 44px link target. Source commit: https://github.com/jonjys/NyttoLabs/commit/b422a8befc780ee05ac41f2f7301031dca392355
+- Vercel production deployment dpl_BGVLST72Y4Lzaseqac9zzPSfRqYv reached READY for that exact commit. https://www.nyttolabs.com/ returned the campaign link and disclosure after deployment.
+- Referral URL: https://deploydoctor.nyttolabs.com/webhook-replay-lab?utm_source=nyttolabs&utm_medium=portfolio&utm_campaign=break-my-checkout
+- Validation: 90 existing NyttoLabs tests passed; production build passed; generated homepage HTML contained exactly one lab campaign link and the original scanner link. Review corrected an inline-link mobile tap-target issue. Visual/interactive browser QA remains unverified.
+- Social posts are still NOT published. No connected social publishing tool was available and the browser failed to initialize. Metricool was suggested but its installation/connection is not confirmed. Do not report drafts as posts or repeatedly retry the failed browser.
+- Stripe live read showed no charge after the campaign baseline (2026-10-30T20:48:00Z); the latest record was an earlier own purchase, excluded from customer revenue. Do not record customer details or count own purchases as sales. The API response did not apply the bracketed date filter, so the returned latest timestamps were checked directly.
+- The existing three-run night automation remains the continuation mechanism. Do not create duplicate schedules. Prioritize a real distribution action when an authorized publishing connection becomes available; do not keep adding features or duplicating this homepage/README placement.
