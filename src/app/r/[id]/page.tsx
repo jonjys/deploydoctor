@@ -18,6 +18,7 @@ import { WatchBox } from "@/components/watch-box";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { ScanPassCta } from "@/components/scan-pass-cta";
 import { PatchOffer } from "@/components/patch-offer";
+import { privateNoindex } from "@/lib/indexing";
 import { SITE_URL } from "@/lib/site";
 import { getT } from "@/lib/lang";
 import { FIX_SERVICE_ENABLED } from "@/lib/fix-service";
@@ -76,15 +77,17 @@ export async function generateMetadata({ params }: PageProps<"/r/[id]">): Promis
   const { id } = await params;
   const { t } = await getT();
   const report = await getReport(id);
-  if (!report) return { title: t("report.notFoundTitle") };
+  if (!report) return { title: t("report.notFoundTitle"), robots: privateNoindex };
   const title = t("report.title", { repo: `${report.results.repository.owner}/${report.results.repository.name}` });
   const description = t("report.metaDesc", { n: report.results.summary.red });
   // The image comes from opengraph-image.tsx next to this file; the title and url must be per report too,
   // otherwise a shared link unfurls as the home page.
+  // Private reports replace the root robots tag with noindex. Public reports omit it
+  // and inherit the root tag: index on production, noindex on preview.
   return {
     title,
     description,
-    robots: { index: false, follow: false },
+    ...(report.is_private ? { robots: privateNoindex } : {}),
     openGraph: { type: "article", siteName: "DeployDoctor", url: `/r/${id}`, title, description },
     twitter: { card: "summary_large_image", title, description },
   };

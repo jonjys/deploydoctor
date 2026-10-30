@@ -3,6 +3,7 @@ import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { LangProvider } from "@/components/lang";
 import { getT } from "@/lib/lang";
+import { siteRobots } from "@/lib/indexing";
 import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
@@ -29,6 +30,9 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     openGraph: { type: "website", siteName: "DeployDoctor", url: "/", title, description, images: [image] },
     twitter: { card: "summary_large_image", title, description, images: [image.url] },
+    // Production is indexable. Preview deployments (VERCEL_ENV !== "production") are noindex.
+    // A page that sets its own robots replaces this, which is how private pages stay noindex.
+    robots: siteRobots(),
   };
 }
 

@@ -109,10 +109,17 @@ test("the sitemap lists the index and every error page once, and robots does not
   assert.equal(new Set(urls).size, urls.length, "sitemap urls are unique");
   assert.ok(urls.some((url) => url.endsWith("/errors")));
   for (const page of errorPages) assert.ok(urls.some((url) => url.endsWith(`/errors/${page.slug}`)), page.slug);
-  const rules = robots().rules;
-  const rule = Array.isArray(rules) ? rules[0] : rules;
-  const disallow = ([] as string[]).concat(rule.disallow ?? []);
-  assert.ok(!disallow.some((path) => "/errors".startsWith(path)), "robots does not disallow /errors");
+  const previous = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = "production";
+  try {
+    const rules = robots().rules;
+    const rule = Array.isArray(rules) ? rules[0] : rules;
+    const disallow = ([] as string[]).concat(rule.disallow ?? []);
+    assert.ok(!disallow.some((path) => "/errors".startsWith(path)), "robots does not disallow /errors");
+  } finally {
+    if (previous === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previous;
+  }
 });
 
 test("the call to action is the existing 24-hour pass checkout and nothing new is added to payments", () => {

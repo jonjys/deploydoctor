@@ -128,6 +128,16 @@ export default async function Home() {
       <Suspense fallback={null}><ScanActivitySection /></Suspense>
       <Suspense fallback={null}><CommunityReviews /></Suspense>
 
+      <section className="human-audit" aria-labelledby="human-audit-heading">
+        <h2 id="human-audit-heading">{lang === "sv" ? "Vill du att en människa granskar ditt repo?" : "Want a human to review your repo?"}</h2>
+        <p>
+          <a href="https://buy.stripe.com/bJe9ASculcZgcKQ52R8og2w" target="_blank" rel="noopener noreferrer">
+            {lang === "sv" ? "Mänsklig granskning av ett repo, €149" : "Human-reviewed audit of one repo, €149"}
+            <span className="sr-only"> ({lang === "sv" ? "öppnas i en ny flik" : "opens in a new tab"})</span>
+          </a>
+        </p>
+      </section>
+
       <footer className="footer">
         <span>DeployDoctor</span>
         <span>{t("home.footerNote")} <Link href="/guides">{t("nav.guides")}</Link></span>
