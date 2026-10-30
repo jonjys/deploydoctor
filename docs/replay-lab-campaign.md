@@ -10,7 +10,7 @@ Social card: https://deploydoctor.nyttolabs.com/webhook-replay-lab/opengraph-ima
 
 Your Stripe webhook fires twice. Does your app fulfil the order twice?
 
-I built a tiny replay lab in DeployDoctor so you can see the difference between a naive handler and a duplicate guard.
+I built a replay lab in DeployDoctor to show naive handling beside a duplicate guard.
 
 It runs entirely in your browser. No Stripe keys, no real payments.
 
