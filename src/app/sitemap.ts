@@ -7,6 +7,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },
     { url: `${SITE_URL}/launch-readiness`, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${SITE_URL}/webhook-replay-lab`, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/stats`, changeFrequency: "daily", priority: 0.7 },
     { url: `${SITE_URL}/pricing`, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/ai-plugin`, lastModified: "2026-10-04", changeFrequency: "monthly", priority: 0.8 },
