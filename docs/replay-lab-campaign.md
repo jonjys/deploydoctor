@@ -95,3 +95,14 @@ Try it: https://deploydoctor.nyttolabs.com/webhook-replay-lab
 > 
 > Try it, then scan your repo:
 > https://deploydoctor.nyttolabs.com/webhook-replay-lab?utm_source=threads&utm_medium=social&utm_campaign=break-my-checkout
+
+
+## Coordinated publication verification — 2026-10-30 23:01 Europe/Stockholm
+
+- Target lab was independently fetched again: HTTP 200 with the simulation, free public scan CTA and existing $2/24h pass CTA. No new checkout or payment was submitted.
+- First Threads campaign post remains Metricool id 411721611 / uuid 1533553819489354378, autoPublish true, draft false, scheduled for 22:59 Europe/Stockholm. At the 23:01 check, Threads provider status was PENDING / detailedStatus Pending. No actual publication timestamp or public permalink was returned; today's Threads analytics had no rows. This is queued distribution, NOT verified publication.
+- First planner: https://app.metricool.com/planner/calendar?blogId=6999637&openWithPostUuid=1533553819489354378
+- Cross-chat race: a second worker read an empty queue before the first post became visible and created another campaign post. That later copy (uuid 7611550354215813938) was changed to draft before its 23:00 release; readback twice confirmed draft true. Its current Metricool id is 411722163 (previously 411721789). Leave it as a draft; do not publish or recreate either copy.
+- Nytto Labs live Stripe charge search for succeeded charges created after campaign baseline 2026-10-30T20:48:00Z returned no results. Stripe Search can lag; no new customer payment or campaign attribution is verified.
+- Updated the existing night automation 6ae5036f36888191ad9844a416478515 to use Metricool, preserve the first Threads post and require a fresh queue/doc read plus an optimistic-SHA reservation before future external publishing actions. No additional automation was created. It is enabled with two remaining scheduled runs: 2026-10-31 02:00 and 05:00 Europe/Stockholm; the service returned next_run_time null, so actual future execution is not yet verified.
+- Next action: inspect the FIRST post's actual provider result and permalink, then check traffic/payment evidence. Do not add features or keep polling continuously. X and Pinterest were not connected in Metricool brand settings; browser initialization failed in this session.
