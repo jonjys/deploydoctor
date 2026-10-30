@@ -1,12 +1,11 @@
 import type { MetadataRoute } from "next";
+import { robotsPolicy } from "@/lib/indexing";
 import { SITE_URL } from "@/lib/site";
 
-// Accounts, checkout, restore and the API are never for search engines; the home page and pricing are.
-// Reports stay crawlable here on purpose: link previews on X follow robots.txt, and the report page
-// carries robots noindex in its own metadata, which is what keeps it out of search results.
+// Production allows crawling and points at the sitemap. /api stays disallowed.
+// Private reports, account, checkout and similar pages send their own noindex meta tag;
+// they stay reachable so link previews and Google can see that tag.
+// Preview deployments disallow the whole host. The root layout and X-Robots-Tag repeat noindex there.
 export default function robots(): MetadataRoute.Robots {
-  return {
-    rules: [{ userAgent: "*", allow: ["/", "/diagnose", "/pricing", "/guides", "/ci", "/ai-plugin"], disallow: ["/account", "/checkout", "/restore", "/api/", "/growth"] }],
-    sitemap: `${SITE_URL}/sitemap.xml`,
-  };
+  return robotsPolicy(SITE_URL);
 }
