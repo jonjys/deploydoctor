@@ -10,9 +10,24 @@ export type ErrorRule = {
   cause: string;
   fix: string[];
   docs?: string;
+  /** Warnings that are rarely the real failure: always listed after more specific matches. */
+  lowPriority?: boolean;
 };
 
 export const errorRules: ErrorRule[] = [
+  {
+    id: "vercel-resource-limited",
+    title: "Vercel plan limit reached (Resource is limited)",
+    pattern: /Resource is limited\s*-?\s*try again in \d+ hours?|Resource is limited|api-deployments-free-per-day|too many (?:deployments|builds)|rate limit(?:ed)?.{0,40}deployments?/i,
+    cause: "The account created more builds or deployments in a period than the Hobby plan allows. This usually comes from something triggering builds in a loop, such as CI or bot commits, or a missing Ignored Build Step.",
+    fix: [
+      "Find what is triggering the builds: look at recent deployments for CI, bot or automated commits pushing repeatedly.",
+      "Pause Git deployments for the project, or add an Ignored Build Step so commits that should not deploy are skipped.",
+      "Wait 24 hours for the limit window to reset before deploying again.",
+      "If it is still blocked after the window and usage looks normal, contact Vercel support with the project and team name.",
+    ],
+    docs: "https://vercel.com/docs/limits",
+  },
   {
     id: "next-font",
     title: "next/font could not load a font",
@@ -179,6 +194,18 @@ export const errorRules: ErrorRule[] = [
     fix: ["Rename the file with git mv so git records the case change, then fix the imports."],
   },
   {
+    id: "npm-unknown-env-config",
+    title: "npm warning: Unknown env config \"cache-dir\"",
+    pattern: /npm warn(?:ing)? Unknown env config "?cache-dir"?|npm_config_cache_dir/i,
+    cause: "This is only a warning. The build environment sets npm_config_cache_dir, which newer npm versions do not recognize. It is usually not why the build failed.",
+    fix: [
+      "Look further down the log for the first line containing Error; that is usually the real failure.",
+      "To silence the warning, prefix the commands: Install Command `unset npm_config_cache_dir && npm install` (or npm ci) and Build Command `unset npm_config_cache_dir && npm run build`.",
+    ],
+    docs: "https://docs.npmjs.com/cli/v11/using-npm/config",
+    lowPriority: true,
+  },
+  {
     id: "build-command",
     title: "The build command exited with an error",
     pattern: /Command "(?:npm|yarn|pnpm|bun) run build" exited with \d+|Build failed|exited with code 1/i,
@@ -201,7 +228,10 @@ export function explainError(input: string): Explanation[] {
     else if (rule.pattern.test(text)) found.push({ rule, line: 0, excerpt: "" });
   }
   // The generic "build failed" line is only useful when nothing more specific matched.
-  const specific = found.filter((f) => f.rule.id !== "build-command");
-  const result = specific.length ? specific : found;
-  return result.sort((a, b) => (a.line || 1e9) - (b.line || 1e9));
+  // Low-priority warnings are always kept, but ranked after every real error.
+  const byLine = (a: Explanation, b: Explanation) => (a.line || 1e9) - (b.line || 1e9);
+  const real = found.filter((f) => f.rule.id !== "build-command" && !f.rule.lowPriority).sort(byLine);
+  const warnings = found.filter((f) => f.rule.lowPriority).sort(byLine);
+  const generic = real.length ? [] : found.filter((f) => f.rule.id === "build-command");
+  return [...real, ...generic, ...warnings];
 }
