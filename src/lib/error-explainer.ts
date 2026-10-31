@@ -14,6 +14,19 @@ export type ErrorRule = {
 
 export const errorRules: ErrorRule[] = [
   {
+    id: "next-font",
+    title: "next/font could not load a font",
+    pattern: /Failed to fetch (?:font|`[^`]+`)|next\/font(?::| error)|Failed to download `[^`]+` from Google Fonts|Unknown font `?[^`\s]*`?|Can't resolve [^\n]*next\/font|fonts\.googleapis\.com|Unknown (?:subset|weight)|Missing (?:required )?subsets/i,
+    cause: "next/font downloads Google Fonts at build time. The build fails if the font server cannot be reached (network problem or an offline/locked-down build), if the font name, subset or weight is wrong, or if the Next.js version is too old for next/font.",
+    fix: [
+      "Retry the build; if it keeps failing, check that the build machine can reach fonts.googleapis.com and fonts.gstatic.com.",
+      "For offline or restricted builds, self-host the font files with next/font/local instead of next/font/google.",
+      "Check the font name (e.g. Inter, Roboto_Mono with underscores), and that the subsets and weights you request exist for that font.",
+      "If next/font cannot be resolved, update next to a version that includes it (13.2 or later) and remove the old @next/font package.",
+    ],
+    docs: "https://nextjs.org/docs/app/getting-started/fonts",
+  },
+  {
     id: "module-not-found",
     title: "An import cannot be resolved",
     pattern: /module not found|cannot find module|can't resolve|could not resolve|ERR_MODULE_NOT_FOUND/i,
