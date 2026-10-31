@@ -17,6 +17,7 @@ export default function ErrorsIndex() {
         <p className="section-kicker">VERCEL ERRORS</p>
         <h1>Common Vercel errors<br />and the documented fix.</h1>
         <p>Each page names the error, lists the steps from the official documentation and links the source. Longer troubleshooting is in the <Link href="/guides">guides</Link>.</p>
+        <p>Have a specific message? <Link href="/explain-error">Paste it into the free error explainer</Link>.</p>
       </header>
       <ul className="guide-list">
         {errorPages.map((page) => (
