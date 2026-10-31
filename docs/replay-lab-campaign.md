@@ -106,3 +106,13 @@ Try it: https://deploydoctor.nyttolabs.com/webhook-replay-lab
 - Nytto Labs live Stripe charge search for succeeded charges created after campaign baseline 2026-10-30T20:48:00Z returned no results. Stripe Search can lag; no new customer payment or campaign attribution is verified.
 - Updated the existing night automation 6ae5036f36888191ad9844a416478515 to use Metricool, preserve the first Threads post and require a fresh queue/doc read plus an optimistic-SHA reservation before future external publishing actions. No additional automation was created. It is enabled with two remaining scheduled runs: 2026-10-31 02:00 and 05:00 Europe/Stockholm; the service returned next_run_time null, so actual future execution is not yet verified.
 - Next action: inspect the FIRST post's actual provider result and permalink, then check traffic/payment evidence. Do not add features or keep polling continuously. X and Pinterest were not connected in Metricool brand settings; browser initialization failed in this session.
+
+## Verified publishing failure — 2026-10-31 05:00 Europe/Stockholm
+
+- Read the existing Metricool queue, without publishing or modifying either post. First campaign post id 411721611 / uuid 1533553819489354378 now has Threads status ERROR and detailedStatus: "You have reached your Metricool account limit." This supersedes the earlier PENDING checkpoint. It is not verified as published; no public permalink was returned.
+- Published Threads analytics (THPO02, THPO03, THPO06), queried for 30 Oct through 31 Oct 05:00 Europe/Stockholm, returned no rows. Empty analytics alone is not proof of non-publication; the provider ERROR is the concrete blocker.
+- Planner: https://app.metricool.com/planner/calendar?blogId=6999637&openWithPostUuid=1533553819489354378
+- The second post id 411722163 / uuid 7611550354215813938 remains draft=true and was not changed. No replacement, retry, new post, plan upgrade or paid action was performed.
+- Current master was 1995a2ebd030fb9272b4d99eeb371d3f51548557 when checked. PR #79 remains merged. Production lab returned HTTP 200 with the simulation and existing pass link.
+- Nytto Labs live Stripe PaymentIntents search for status succeeded and created after 2026-10-30T20:48:00Z returned no records, has_more=false. No new customer payment or attribution is verified; Search can lag.
+- Paused the existing night task after confirming this account-limit blocker and reaching its final bounded run. No new schedule was created. Next step: resolve the Metricool account limit or manually publish the existing text once on the owned Threads account, first checking for duplicates; record the actual public URL before claiming publication. Do not activate the reserve draft.
