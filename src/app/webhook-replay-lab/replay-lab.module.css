@@ -75,3 +75,8 @@
   .labTop { grid-template-columns: minmax(0, 1fr); }
   .counter { justify-self: start; }
 }
+
+.demo { margin:24px 0; }
+.demo > summary { cursor:pointer; padding:14px 0; font-weight:600; line-height:1.5; }
+
+@media(prefers-color-scheme:dark) { .page { --lab-accent:#a8c3b2; } }
