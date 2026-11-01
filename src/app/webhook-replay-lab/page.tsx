@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
+import { WebhookReviewForm } from "./webhook-review";
 import { ReplayLab } from "./replay-lab";
 import styles from "./replay-lab.module.css";
 
-const title = "One payment. Five deliveries. How many access grants?";
-const description = "A free interactive Stripe webhook replay simulation. Compare duplicate delivery, worker restarts and crash recovery, then scan your GitHub repo for payment risks.";
+const title = "Your webhook. Five failure cases. | DeployDoctor";
+const description = "Review pasted Stripe webhook code with line evidence and download a regression-test scaffold. Explore retries and crash recovery in a free simulation.";
 export const metadata = {
-  title: "Free Stripe Webhook Replay Lab | DeployDoctor",
+  title: "Stripe Webhook Code Review & Regression Tests | DeployDoctor",
   description,
   alternates: { canonical: "/webhook-replay-lab" },
   openGraph: { title, description, url: "/webhook-replay-lab", type: "website", images: [{ url: "/webhook-replay-lab/opengraph-image", width: 1200, height: 630 }] },
@@ -19,11 +20,12 @@ export default function ReplayLabPage() {
     <SiteNav />
     <header className={styles.hero}>
       <p className="section-kicker">FREE TOOL · BREAK MY CHECKOUT</p>
-      <h1>One payment.<br /><span>Five deliveries.</span></h1>
-      <p>How many times does your app grant access? Replay a sample webhook and watch three handlers react.</p>
-      <small>Browser-only simulation. No Stripe keys, live payment requests or real payments.</small>
+      <h1>Your webhook.<br /><span>Five failure cases.</span></h1>
+      <p>Find replay risks in your own webhook code. Get line evidence and a regression-test scaffold, without connecting GitHub.</p>
+      <small>No Stripe keys or real payments. Code review is static; the example lab is a browser simulation.</small>
     </header>
-    <ReplayLab />
+    <WebhookReviewForm />
+    <details className={styles.demo}><summary>Explore the original example: one payment, five deliveries</summary><ReplayLab /></details>
     <section className={styles.offer} aria-labelledby="next-step">
       <div><p className="section-kicker">NOW LOOK AT YOUR OWN CODE</p><h2 id="next-step">What does your webhook actually do?</h2><p>DeployDoctor reviews visible GitHub source for payment and deployment risks, with evidence to inspect. One free public repo scan a day. Static analysis does not execute your checkout or prove fulfillment works.</p></div>
       <div className={styles.actions}><Link className="cta-button" href="/?utm_source=replay-lab&utm_medium=tool#scan-repository">Scan your repo free →</Link><ScanCheckoutButton plan="day">Private repo? Get 24 hours · $2 →</ScanCheckoutButton><small>One-time payment. No renewal. Public and private scans; capacity and GitHub limits apply.</small><Link href="/pricing">See pass details</Link></div>

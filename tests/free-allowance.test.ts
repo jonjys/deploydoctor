@@ -33,8 +33,9 @@ test("free allowance: each route reserves with its own limit, and only those rou
   // /api/scan and the MCP plugin scan through the reports handler; stack detection never reserves.
   assert.match(read("src/app/api/scan/route.ts"), /export \{ POST \} from "\.\.\/reports\/route";/);
   assert.match(read("src/app/api/mcp/route.ts"), /import \{ POST as scan \} from "\.\.\/reports\/route";/);
+  assert.match(read("src/app/api/webhook-review/route.ts"), /reserveScan\(request,scanAllowance\(null\)\)/);
   const callers = sourceFiles("src").filter((file) => /reserveScan\(/.test(read(file)) && !file.endsWith(join("lib", "access.ts")));
-  assert.deepEqual(callers.sort(), [join("src", "app", "api", "diagnose", "route.ts"), join("src", "app", "api", "reports", "route.ts")]);
+  assert.deepEqual(callers.sort(), [join("src", "app", "api", "diagnose", "route.ts"), join("src", "app", "api", "reports", "route.ts"), join("src", "app", "api", "webhook-review", "route.ts")]);
   assert.match(read("src/lib/access.ts"), /p_id: id, p_limit: limit,/);
 });
 
