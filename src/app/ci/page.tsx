@@ -16,16 +16,20 @@ export const metadata: Metadata = {
 const WORKFLOW = `name: DeployDoctor
 on:
   pull_request:
+concurrency:
+  group: deploydoctor-\${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   deploydoctor:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write # maintains one PR conversation comment
       id-token: write # lets GitHub prove which public repo is asking; no account, no secret
     steps:
-      - uses: jonjys/deploydoctor-action@v1`;
+      - uses: jonjys/deploydoctor-action@ccd293dafc2a6692daf29fcd03fcd5738abeed6b`;
 
-const PAID_WORKFLOW = `      - uses: jonjys/deploydoctor-action@v1
+const PAID_WORKFLOW = `      - uses: jonjys/deploydoctor-action@ccd293dafc2a6692daf29fcd03fcd5738abeed6b
         with:
           token: \${{ secrets.DEPLOYDOCTOR_TOKEN }}
           # Private repository? Let the scan read it:
@@ -47,11 +51,10 @@ export default function CiPage() {
       <article className="guide ci-page">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema).replace(/</g, "\\u003c") }} />
         <p className="section-kicker">GITHUB ACTION · API</p>
-        <h1>Fail the pull request before Vercel builds it.</h1>
+        <h1>See deployment risks before you merge.</h1>
         <p className="guide-lead">
-          The same static analysis as the website, on a pull request before Vercel builds it. Findings land as annotations on the changed files, the job summary
-          links the full report, and the check goes red on a definite problem. Static analysis through the GitHub API: nothing is cloned,
-          installed or executed, so it finishes in seconds and needs no build.
+          The same static analysis as the website, on a pull request before Vercel builds it. Findings land as annotations on the changed files and one updated PR comment links the full report. The job summary remains available, and the check goes red on a definite problem. Static analysis through the GitHub API: nothing is cloned,
+          installed or executed, and no build step is needed.
         </p>
 
         <section>
@@ -63,6 +66,7 @@ export default function CiPage() {
           </p>
           <pre><code>{WORKFLOW}</code></pre>
           <p className="ci-copy"><CopyTextButton text={WORKFLOW} label="Copy workflow" copiedLabel="Copied" /></p>
+          <p>The workflow pins the PR-comment release to an immutable commit. Existing workflows using an older version must update the Action reference and add <code>pull-requests: write</code> to get comments.</p>
           <p>Also listed on the <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a>.</p>
           <p>Maintaining a template or starter? Every public report also offers a Scan with DeployDoctor button for its README. Forks keep the README text, so a fork changes the owner/repo in the link to scan its own copy before the first deploy.</p>
         </section>
@@ -86,6 +90,7 @@ export default function CiPage() {
           <ul>
             <li>Fails the job when a check is red: an import that only resolves on macOS, a package that is used but not declared, a <code>process.env</code> read without a fallback that no <code>.env.example</code> documents, a Node-only module on the Edge runtime, Prisma without <code>prisma generate</code>, a live secret in source.</li>
             <li>Annotates each finding on the file and line in the pull request, with the fix.</li>
+            <li>Maintains one PR conversation comment with up to three ranked findings, the analyzed commit, file/line links and the full report. Partial scans say so. An exhausted allowance replaces stale results with Not scanned.</li>
             <li>Writes a status table to the job summary and links the saved report.</li>
             <li>Sets outputs <code>overall</code>, <code>report-url</code>, <code>red</code> and <code>yellow</code> for later steps.</li>
           </ul>
@@ -94,6 +99,14 @@ export default function CiPage() {
             <code>checks</code> (comma-separated <code>next</code>, <code>vercel</code>, <code>env</code>, <code>supabase</code>, <code>prisma</code>; the detected stack decides when empty),
             <code>ref</code> and <code>repository</code> to scan something other than the pull request.
           </p>
+        </section>
+
+        <section>
+          <h2>One comment, kept current</h2>
+          <p>Comments are supported for same-repository pull requests on the scanned head commit. Forks, Dependabot, closed PRs, other events and ref overrides are not commented. Do not use <code>pull_request_target</code> to bypass these restrictions.</p>
+          <p>The built-in GitHub token stays in the runner and is used only for GitHub comments. A missing write permission produces a warning; scan results remain in the job summary. Private reports retain their existing authentication.</p>
+          <p>Set <code>comment: false</code> to disable conversation comments, or <code>audit-link: false</code> to remove the discreet link to the existing optional €149 human audit. No new price or subscription is introduced.</p>
+          <p>Workflow concurrency prevents competing runs. The Action rechecks the live PR head before writing, but GitHub does not provide an atomic head condition for comment updates. Each comment always identifies its exact analyzed commit.</p>
         </section>
 
         <section>
@@ -125,7 +138,7 @@ export default function CiPage() {
           </div>
           <Link className="cta-button" href="/">Scan a repository →</Link>
         </aside>
-        <p className="guide-updated">Updated 2026-10-21 · <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a> · <a href="https://github.com/jonjys/deploydoctor-action">Action source</a></p>
+        <p className="guide-updated">Updated 2026-11-02 · <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a> · <a href="https://github.com/jonjys/deploydoctor-action">Action source</a></p>
       </article>
     </main>
   );
