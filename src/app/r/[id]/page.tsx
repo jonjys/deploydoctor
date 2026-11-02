@@ -26,6 +26,7 @@ import { dateLocale, type MessageKey } from "@/lib/i18n";
 import { neutralReport, reportLabel } from "@/lib/report-summary";
 import { activePlan, customerSession } from "@/lib/access";
 import { frameworkName } from "@/lib/stack";
+import { ReportImprovements, ShareOnX } from "@/components/report-improvements";
 
 const statusLabelKeys: Record<CheckStatus, MessageKey> = {
   red: "report.fail",
@@ -126,6 +127,9 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const overall = reportLabel(results, lang);
   const fixFirst = neutral ? [] : fixFirstItems(results.checks);
   const since = sinceDiff(previous, results);
+  const improvements = (results.improvements ?? []).filter(item => !(report.is_private && item.id === "readme-badge"));
+  // Private reports are never shared; a public one gets a pre-filled X post with its own share image.
+  const share = report.is_private ? null : <ShareOnX repo={repoName} url={`${SITE_URL}/r/${id}`} summary={results.summary} improvements={improvements.length} lang={lang} />;
   return (
     <main className="site-shell report-page">
       <SiteNav note={<><span className="status-dot" /> {status}</>} />
@@ -163,6 +167,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <span>{t("report.scannedFiles", { read: results.scan.sourceFilesRead, found: results.scan.sourceFilesFound })}</span>
           <span>{new Date(report.created_at).toLocaleString(dateLocale(lang), { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC</span>
           <Link className="rescan-link" href={rescanHref}>{t("report.scanAgain")} ↻</Link>
+          {share}
         </div>
         <p className="scope-line">
           <strong>{t("report.scanned")}</strong> {scanned.map((category) => t(`cat.${category}`)).join(", ") || "—"}
@@ -248,6 +253,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
 
       {/* The $2 pass is offered right under the findings, for every visitor without a pass, whether or not a check failed. */}
       {!plan && <ScanPassCta t={t} repoUrl={report.repo_url} />}
+
+      <ReportImprovements items={improvements} lang={lang} isPrivate={Boolean(report.is_private)} share={share} />
 
       {supporting.length > 0 && <details className="report-supporting">
         <summary>{t("report.coverageDetails")} ({supporting.length})</summary>
