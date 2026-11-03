@@ -23,7 +23,7 @@ export function launchReadiness(results: ReportResults, reportId: string, isPriv
   const criticalBlockers = findings.filter(f => f.status === "red");
   const reviewBeforeLaunch = findings.filter(f => f.status !== "red");
   const coverage = results.checks.map(c => ({ checkId: c.id, title: c.title, status: c.status, coverageOnly: isPartialPlaceholder(c), evaluatedRules: c.evaluatedRules ?? null }));
-  const notVerified = [...LAUNCH_LIMITATIONS,
+  const notVerified = [...LAUNCH_LIMITATIONS, ...(results.hosting?.limitations ?? []),
     ...(results.checks.some(isPartialPlaceholder) ? ["Some source checks have incomplete coverage; inspect the detailed report."] : []),
     ...(results.scan.partial ? ["Partial scan: unread files may contain additional problems."] : []),
     ...(excluded.length ? [`Excluded applicable check categories: ${excluded.join(", ")}.`] : []),

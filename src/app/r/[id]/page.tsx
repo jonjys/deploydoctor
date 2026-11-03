@@ -112,6 +112,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   ]);
 
   const { results } = report;
+  const alternativeHost = !!results.hosting?.platforms.length && !results.hosting.platforms.includes("Vercel");
+  const hostingDoc = results.hosting?.platforms.includes("Cloudflare") ? "https://developers.cloudflare.com/workers/wrangler/configuration/" : results.hosting?.platforms.includes("Netlify") ? "https://docs.netlify.com/build/configure-builds/file-based-configuration/" : results.hosting?.platforms.includes("Railway") ? "https://docs.railway.com/config-as-code/reference" : "https://docs.docker.com/reference/dockerfile/";
   const findingContext = contextualFindings(results);
   const repoName = `${results.repository.owner}/${results.repository.name}`;
   const parts = freeFixParts(report, lang);
@@ -177,6 +179,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <strong>{t("report.scanned")}</strong> {scanned.map((category) => t(`cat.${category}`)).join(", ") || "—"}
           {ignoredCategories.length > 0 && <> | <strong>{t("report.ignored")}</strong> {ignoredCategories.map((category) => t(`cat.${category}`)).join(", ")}</>}
         </p>
+        {!!results.hosting?.platforms.length && <p className="scope-line">Detected deployment configuration: <strong>{results.hosting.platforms.join(", ")}</strong>{" · "}<Link href="/platforms">Coverage and limitations →</Link></p>}
         {results.scan.partial && (
           <aside className="partial-notice" role="note">
             <strong>{t("report.partialTitle")}</strong>
@@ -208,7 +211,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                   {check.status === "yellow" && <span className="severity is-review">{t("report.severity.review")}</span>}
                   <h2>{check.title}</h2>
                   <p>{check.explanation}</p>
-                  {showsLocalWhy(check, results.nextApp) && (
+                  {!alternativeHost && showsLocalWhy(check, results.nextApp) && (
                     <div className="local-why"><strong>{t("report.localWhy")}</strong> {t(`report.localWhy.${check.id}`)}</div>
                   )}
                   {check.evidence.length ? (
@@ -233,7 +236,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                   ) : null}
                   {check.status !== "green" && (
                     <div className="card-links">
-                      {docsFor[check.id] && <a href={docsFor[check.id]} target="_blank" rel="noreferrer">{check.status === "yellow" ? (lang === "sv" ? "Dokumentation" : "Documentation") : t("report.docsLink")} ↗</a>}
+                      {docsFor[check.id] && <a href={alternativeHost && check.id === "build-config" ? hostingDoc : docsFor[check.id]} target="_blank" rel="noreferrer">{check.status === "yellow" || alternativeHost ? (lang === "sv" ? "Dokumentation" : "Documentation") : t("report.docsLink")} ↗</a>}
                       {check.status === "red" && (
                         <CopyTextButton
                           text={issueMarkdown(check.title, check.explanation, check.evidence, check.fix, `${SITE_URL}/r/${id}#check-${check.id}`)}

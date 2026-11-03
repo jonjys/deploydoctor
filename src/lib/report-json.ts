@@ -21,6 +21,7 @@ export function reportJson(report: StoredReport) {
     partial: results.scan.partial,
     scan: results.scan,
     stack: results.stack ?? null,
+    hosting: results.hosting ?? null,
     nextApp: results.nextApp ?? null,
     pullRequest: results.pullRequest ?? null,
     checks: results.checks.map((check) => ({

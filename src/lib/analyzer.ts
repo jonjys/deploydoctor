@@ -1,3 +1,4 @@
+import { auditHosting, hasAlternativeHost, hostingPlatforms } from "@/lib/hosting-config";
 import { checkPortableBuild, portableEnvironment } from "@/lib/portable-build";
 import { checkProductionSafety } from "@/lib/production-safety";
 import { findImprovements } from "@/lib/improvements";
@@ -5,7 +6,7 @@ import path from "node:path";
 import type { Category, CheckResult, CheckStatus, ReportResults, Finding } from "@/types/report";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { defaultChecks, detectStack, type Stack } from "@/lib/stack";
-import { analysisText, type AnalysisText } from "@/lib/analysis-text";
+import { analysisText, forHosting, type AnalysisText } from "@/lib/analysis-text";
 import type { Lang } from "@/lib/i18n";
 import { ignoringRule } from "@/lib/gitignore";
 import { nodeRangeAllowsMajor } from "@/lib/node-range";
@@ -346,6 +347,7 @@ function edgeRuntimeFindings(snapshot: RepositorySnapshot, x: AnalysisText): Fin
 
 function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult {
   const manifest = parsePackageJson(snapshot);
+  const alternative = hasAlternativeHost(snapshot);
   const RISKY = /^(?:playwright|playwright-core|@playwright\/test|puppeteer|puppeteer-core|sqlite3|better-sqlite3)$/;
   // A devDependency only matters when application code imports it: Playwright as an end-to-end test runner never ships.
   const TOOLING_FILE = /(?:^|\/)(?:e2e|playwright|cypress|\.storybook)\/|\.config\.[cm]?[jt]s$/i;
@@ -363,24 +365,25 @@ function checkServerLibraries(snapshot: RepositorySnapshot, x: AnalysisText): Ch
       fsWrites.push(file);
     }
   }
-  const edge = edgeRuntimeFindings(snapshot, x);
+  const edge = !alternative || manifest?.dependencies?.next || manifest?.devDependencies?.next ? edgeRuntimeFindings(snapshot, x) : [];
+  if (alternative && !edge.length) return { ...makeCheck("server-libs", x.titles.serverLibs, "yellow", "Provider-specific runtime behavior is not established by these source checks. See platform configuration coverage.", "Run the production build and runtime tests for the configured host."), coverageOnly: true };
 
   const evidence = [
     ...edge.map((item) => `${item.file}:${item.line} → ${item.problem}`),
-    ...riskyPackages.map((name) => `package.json → ${name}`),
-    ...fsWrites.map((file) => x.server.write(file)),
+    ...(!alternative ? riskyPackages.map((name) => `package.json → ${name}`) : []),
+    ...(!alternative ? fsWrites.map((file) => x.server.write(file)) : []),
   ];
   const title = x.titles.serverLibs;
   if (evidence.length) {
-    const other = riskyPackages.length + fsWrites.length > 0;
+    const other = !alternative && riskyPackages.length + fsWrites.length > 0;
     return makeCheck("server-libs", title, "red",
       [edge.length ? x.server.edgeRed(edge.length) : "", other ? x.server.red : ""].filter(Boolean).join(" "),
       [edge.length ? edge[0].fix : "", other ? x.server.fix : ""].filter(Boolean).join(" "),
       evidence,
       // Findings replace the evidence in the copied instructions, so list the other problems too when there are any.
       edge.length ? [...edge,
-        ...riskyPackages.map((name) => ({ file: "package.json", line: 1, problem: x.server.packageProblem(name), fix: x.server.fix })),
-        ...fsWrites.map((file) => ({ file, line: 1, problem: x.server.writeProblem, fix: x.server.fix }))] : undefined);
+        ...(!alternative ? riskyPackages.map((name) => ({ file: "package.json", line: 1, problem: x.server.packageProblem(name), fix: x.server.fix })) : []),
+        ...(!alternative ? fsWrites.map((file) => ({ file, line: 1, problem: x.server.writeProblem, fix: x.server.fix })) : [])] : undefined);
   }
   if (snapshot.partial) return makeCheck("server-libs", title, "yellow", x.server.partial, partialFix(snapshot, x));
   return makeCheck("server-libs", title, "green", x.server.ok, x.noChange);
@@ -873,7 +876,7 @@ function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
   }
 
   const node = manifest?.engines?.node;
-  if (!snapshot.contents.has("netlify.toml") && !snapshot.contents.has("wrangler.toml") && typeof node === "string" && nodeRangeAllowsMajor(node, SUPPORTED_NODE_MAJORS) === false) {
+  if (!hasAlternativeHost(snapshot) && typeof node === "string" && nodeRangeAllowsMajor(node, SUPPORTED_NODE_MAJORS) === false) {
     findings.push({ file: "package.json", line: lineOf('"engines"'), problem: x.build.engines(node), fix: x.build.enginesFix,
       command: "git add -- package.json" });
   }
@@ -893,7 +896,7 @@ function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
   if (vercelRaw) findings.push(...vercelJsonFindings(vercelRaw, x));
 
   // A Vite single page app with a history router needs a catch-all rewrite, or every deep link is a 404 on Vercel.
-  const router = !packages.next && packages.vite && !Object.keys(packages).some((name) => VITE_SERVER_FRAMEWORKS.has(name))
+  const router = !hasAlternativeHost(snapshot) && !packages.next && packages.vite && !Object.keys(packages).some((name) => VITE_SERVER_FRAMEWORKS.has(name))
     && !/"(?:rewrites|routes)"\s*:/.test(vercelRaw ?? "") && !snapshot.entries.some((entry) => /^vercel\.[cm]?[jt]s$/.test(entry.path))
     ? historyRouter(snapshot) : undefined;
   if (router) {
@@ -921,8 +924,8 @@ function checkBuildConfig(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
       ...remoteImageFindings(snapshot, nextConfig, x));
   }
   const framework = packages.next ? undefined : packages["@sveltejs/kit"] ? "SvelteKit" : packages.astro ? "Astro" : undefined;
-  if (framework === "SvelteKit") findings.push(...svelteKitFindings(snapshot, x));
-  if (framework === "Astro") findings.push(...astroFindings(snapshot, packages.astro, x, red));
+  if (!hasAlternativeHost(snapshot) && framework === "SvelteKit") findings.push(...svelteKitFindings(snapshot, x));
+  if (!hasAlternativeHost(snapshot) && framework === "Astro") findings.push(...astroFindings(snapshot, packages.astro, x, red));
 
   if (findings.length) {
     const ordered = [...findings.filter((item) => red.has(item)), ...findings.filter((item) => !red.has(item))];
@@ -1301,11 +1304,11 @@ function checkPrisma(snapshot: RepositorySnapshot, x: AnalysisText): CheckResult
   for (const [file, source] of snapshot.contents) {
     if (!/\.prisma$/.test(file)) continue;
     const match = /datasource\s+\w+\s*\{[^}]*?provider\s*=\s*"sqlite"/.exec(source);
-    if (match) findings.push({ file, line: lineAt(source, match.index), problem: x.prisma.sqlite, fix: x.prisma.sqliteFix });
+    if (match && !hasAlternativeHost(snapshot)) findings.push({ file, line: lineAt(source, match.index), problem: x.prisma.sqlite, fix: x.prisma.sqliteFix });
   }
 
   if (findings.length) {
-    return makeCheck("prisma", title, "red", x.prisma.red(findings.length), findings[0].fix,
+    return makeCheck("prisma", title, hasAlternativeHost(snapshot) ? "yellow" : "red", x.prisma.red(findings.length), findings[0].fix,
       findings.map((item) => `${item.file}:${item.line} → ${item.problem}`), findings);
   }
   if (snapshot.partial) return makeCheck("prisma", title, "yellow", x.prisma.partial, partialFix(snapshot, x));
@@ -1327,7 +1330,8 @@ export function locateNextApp(snapshot: RepositorySnapshot, stack: Stack): "root
 }
 
 export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?: Category[]; lang?: Lang } = {}): ReportResults {
-  const x = analysisText(options.lang ?? "en");
+  const platforms = hostingPlatforms(snapshot.entries.map(e => e.path));
+  const x = forHosting(analysisText(options.lang ?? "en"), platforms);
   const envText: string[] = [];
   const sources: string[] = [];
   for (const [file, source] of snapshot.contents) {
@@ -1337,6 +1341,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
   const stack = detectStack({ packageJson: snapshot.contents.get("package.json"), envText: envText.join("\n"), sources, files: snapshot.entries.map(e => e.path), cargoToml: snapshot.contents.get("Cargo.toml") });
   // Without an explicit choice, scan only what the detected stack needs.
   const chosen = new Set(options.checks ?? defaultChecks(stack));
+  const hosting = chosen.has("vercel") ? auditHosting(snapshot) : { platforms, filesRead: [], evaluatedRules: [], findings: [], limitations: ["Platform configuration analysis was not selected."] };
   const runners: Record<Category, Array<(snapshot: RepositorySnapshot, x: AnalysisText) => CheckResult>> = {
     next: [checkNextEntrypoint, checkImports],
     vercel: [checkServerLibraries, checkBuildConfig, checkDependencies, checkProductionSafety],
@@ -1346,13 +1351,14 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
   };
   const scanned = CATEGORIES.filter((category) => chosen.has(category));
   let checks = scanned.flatMap((category) => runners[category].map((run) => run(snapshot, x)));
-  const portable = checkPortableBuild(snapshot, options.lang ?? "en");
+  const portable = checkPortableBuild(snapshot, options.lang ?? "en", hosting);
   if (chosen.has("vercel") && portable) {
     const existing = checks.find(c => c.id === "build-config");
     if (existing?.findings?.length) {
       portable.findings = [...existing.findings, ...(portable.findings ?? [])];
       portable.status = existing.status === "red" ? "red" : portable.status;
       portable.evidence = [...existing.evidence, ...portable.evidence];
+      portable.evaluatedRules = [...new Set([...(existing.evaluatedRules ?? []), ...(portable.evaluatedRules ?? [])])];
       portable.fix = portable.findings[0].fix;
       portable.explanation = `${portable.findings.length} configuration findings. The build was not executed.`;
     }
@@ -1387,6 +1393,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
     },
     scope: { scanned, ignored: CATEGORIES.filter((category) => !chosen.has(category)) },
     stack,
+    hosting,
     nextApp,
     summary,
     overall: summary.red ? "red" : summary.yellow ? "yellow" : "green",

@@ -20,7 +20,7 @@ export default async function Home() {
   const { titles } = analysisText(lang);
   // The same titles the analyzer prints, in report order. Supabase and Prisma only run when the stack uses them.
   const checks: Array<{ title: string; whenUsed?: boolean; note?: string }> = [
-    { title: titles.nextEntry }, { title: titles.imports }, { title: titles.serverLibs }, { title: titles.buildConfig, note: t("home.checkStacks") },
+    { title: titles.nextEntry }, { title: titles.imports }, { title: lang === "sv" ? "Server- och runtime-risker" : "Server and runtime risks" }, { title: titles.buildConfig, note: t("home.checkStacks") },
     { title: titles.dependencies }, { title: lang === "sv" ? "Betalning och produktionsrisker" : "Payment and production safety" }, { title: titles.env }, { title: titles.secrets },
     { title: titles.supabase, whenUsed: true }, { title: titles.prisma, whenUsed: true },
   ];
@@ -47,6 +47,7 @@ export default async function Home() {
           <a className="entry-path" href="#scan-repository"><span className="section-kicker">{lang === "sv" ? "INNAN DU PUSHAR" : "BEFORE YOU PUSH"}</span><h2>{lang === "sv" ? "Skanna ett repo" : "Scan repository"} <span aria-hidden="true">↘</span></h2><p>{lang === "sv" ? "Hitta risker i koden. Se fil, rad och nästa steg." : "Find risks in your code. See the file, line and next step."}</p></a>
           <Link className="entry-path entry-path-log" href="/diagnose"><span className="section-kicker">{lang === "sv" ? "BYGGET HAR REDAN MISSLYCKATS" : "BUILD ALREADY FAILED"}</span><h2>{lang === "sv" ? "Fixa en misslyckad build" : "Fix a failed build"} <span aria-hidden="true">→</span></h2><p>{lang === "sv" ? "Klistra in byggloggen. Få en diagnos och föreslagna steg." : "Paste your build log. Get a diagnosis and suggested steps."}</p><span className="entry-allowance">{lang === "sv" ? "1 gratis loggdiagnos per dag" : "1 free log diagnosis a day"}</span></Link>
         </div>
+        <p className="plugin-line"><Link href="/platforms">{lang === "sv" ? "Se plattformar, språk och exakt vad som kontrolleras →" : "See supported platforms, languages and exactly what is checked →"}</Link></p>
         <div className="example-chips" aria-label={t("home.examples")}>
           <span>{t("home.examples")}</span>
           {EXAMPLE_REPORTS.map((example) => (
