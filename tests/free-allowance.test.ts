@@ -12,7 +12,7 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 const sourceFiles = (dir: string): string[] => readdirSync(join(root, dir), { withFileTypes: true }).flatMap((entry) =>
   entry.isDirectory() ? sourceFiles(join(dir, entry.name)) : /\.tsx?$/.test(entry.name) ? [join(dir, entry.name)] : []);
 
-test("free allowance: one website scan and one AI diagnosis per visitor, one Action scan per repository", () => {
+test("free allowance: one website scan per visitor, one Action scan per repository, and diagnosis is not scan-quota gated", () => {
   assert.equal(FREE_SCANS_PER_DAY, 1);
   assert.equal(FREE_DIAGNOSES_PER_DAY, 1);
   assert.equal(FREE_ACTION_SCANS_PER_DAY, 1);
@@ -29,13 +29,14 @@ test("free allowance: each route reserves with its own limit, and only those rou
   assert.match(reports, /const allowance = scanAllowance\(oidcRepo\);\s+const quota = await reserveScan\(request, allowance\);/);
   // The Action's limit message names that repository's allowance, not the visitor's one free scan.
   assert.match(reports, /oidcRepo \? t\(lang, "err\.actionLimit", \{ n: allowance\.limit \}\) : t\(lang, "err\.dailyLimit"\)/);
-  assert.match(read("src/app/api/diagnose/route.ts"), /reserveScan\(request, diagnoseAllowance\(hashRequestIp\(request\)\)\)/);
+  assert.doesNotMatch(read("src/app/api/diagnose/route.ts"), /reserveScan\(/);
+  assert.match(read("src/app/api/diagnose/route.ts"), /Diagnosis is free/);
   // /api/scan and the MCP plugin scan through the reports handler; stack detection never reserves.
   assert.match(read("src/app/api/scan/route.ts"), /export \{ POST \} from "\.\.\/reports\/route";/);
   assert.match(read("src/app/api/mcp/route.ts"), /import \{ POST as scan \} from "\.\.\/reports\/route";/);
   assert.match(read("src/app/api/webhook-review/route.ts"), /reserveScan\(request,scanAllowance\(null\)\)/);
   const callers = sourceFiles("src").filter((file) => /reserveScan\(/.test(read(file)) && !file.endsWith(join("lib", "access.ts")));
-  assert.deepEqual(callers.sort(), [join("src", "app", "api", "diagnose", "route.ts"), join("src", "app", "api", "reports", "route.ts"), join("src", "app", "api", "webhook-review", "route.ts")]);
+  assert.deepEqual(callers.sort(), [join("src", "app", "api", "reports", "route.ts"), join("src", "app", "api", "webhook-review", "route.ts")]);
   assert.match(read("src/lib/access.ts"), /p_id: id, p_limit: limit,/);
 });
 
@@ -117,15 +118,18 @@ test("free allowance copy: the numbers match the limits and the $2 pass is the n
   assert.equal(t("sv", "home.trust.free"), `${FREE_SCANS_PER_DAY} gratis skanning / dag`);
   assert.equal(t("en", "pricing.freeScans"), `${FREE_SCANS_PER_DAY} public scan / day`);
   assert.equal(t("sv", "pricing.freeScans"), `${FREE_SCANS_PER_DAY} publik skanning / dag`);
-  assert.match(t("en", "pricing.freeDiag"), new RegExp(`^${FREE_DIAGNOSES_PER_DAY} AI build log diagnosis / day$`));
-  assert.match(t("sv", "pricing.freeDiag"), new RegExp(`^${FREE_DIAGNOSES_PER_DAY} AI-diagnos av bygglogg / dag$`));
-  assert.match(t("en", "account.noPlan"), /1 free scan and 1 free AI diagnosis a day/);
-  assert.match(t("sv", "account.noPlan"), /1 gratis skanning och 1 gratis AI-diagnos per dag/);
+  assert.equal(t("en", "pricing.freeDiag"), "AI build log diagnosis, free");
+  assert.equal(t("sv", "pricing.freeDiag"), "AI-diagnos av bygglogg, gratis");
+  assert.match(t("en", "account.noPlan"), /1 free scan a day/);
+  assert.match(t("en", "account.noPlan"), /diagnosis is free/i);
+  assert.match(t("sv", "account.noPlan"), /1 gratis skanning per dag/);
+  assert.match(t("sv", "account.noPlan"), /Diagnos av byggloggen är gratis/);
+  assert.doesNotMatch(t("en", "account.noPlan"), /1 free AI diagnosis/);
   for (const lang of ["en", "sv"] as const) {
-    assert.match(t(lang, "diag.sub"), /10/);
-    assert.match(t(lang, "pricing.diag"), /10/);
-    assert.match(t(lang, "pricing.capacity"), /10/);
+    assert.match(t(lang, "diag.sub"), /free|gratis/i);
+    assert.doesNotMatch(t(lang, "diag.sub"), /1 free diagnosis|1 gratis diagnos/i);
     assert.doesNotMatch(t(lang, "pricing.diag"), /unlimited|obegränsat/i);
+    assert.match(t(lang, "pricing.diag"), /free|gratis/i);
   }
   // The limit message says the free one is used and that the pass continues right away; the paywall below repeats it.
   assert.match(t("en", "err.dailyLimit"), /^You have used today's free scan\. Get 24 hours for \$2 and scan again right away/);

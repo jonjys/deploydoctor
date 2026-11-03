@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { analyzeSnapshot, type RepositorySnapshot } from "../src/lib/analyzer";
 import { moduleImports } from "../src/lib/dependencies";
-import { diagnosisRules, detectionRules, mailRules, AI_MAX_OUTPUT_TOKENS, AI_SITE_DIAGNOSES_PER_DAY, PAID_DIAGNOSES_PER_DAY } from "../src/lib/budget-policy";
+import { diagnosisRules, detectionRules, mailRules, AI_MAX_OUTPUT_TOKENS, AI_SITE_DIAGNOSES_PER_DAY } from "../src/lib/budget-policy";
 
 function check(files: Record<string, string>, id = "imports") {
   const contents = { "package.json": JSON.stringify({ dependencies: { next: "16.4.2" } }), ...files };
@@ -36,9 +36,11 @@ test("all import consumers distinguish runtime code from type-only code and stri
   assert.deepEqual(moduleImports('const s = "require(\'fake\')"; import type {A} from "types"; export {type B} from "types2"; require("real")').map(item => item.specifier), ["real"]);
 });
 test("paid AI usage, site usage, detection and email all have finite budgets", () => {
-  assert.equal(diagnosisRules("customer", true)[1].limit, PAID_DIAGNOSES_PER_DAY);
   assert.equal(diagnosisRules("customer", true)[0].limit, AI_SITE_DIAGNOSES_PER_DAY);
-  assert.equal(diagnosisRules("visitor", false)[1].limit, 1);
+  // Diagnosis does not use the scan quota, but every identity has its own daily cap so one visitor cannot drain the site budget.
+  assert.equal(diagnosisRules("visitor", false).find((rule) => rule.key === "ai:visitor:day")?.limit, 3);
+  assert.equal(diagnosisRules("customer", true).find((rule) => rule.key === "ai:customer:day")?.limit, 10);
+  assert.equal(diagnosisRules("visitor", false).find((rule) => rule.key.endsWith(":minute"))?.limit, 2);
   assert.ok(AI_MAX_OUTPUT_TOKENS <= 2000);
   for (const rules of [diagnosisRules("a", true), detectionRules("a"), mailRules("a@example.com")]) {
     assert.ok(rules.every(rule => rule.limit > 0 && rule.seconds > 0 && Number.isFinite(rule.limit)));

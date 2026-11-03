@@ -115,6 +115,16 @@ npm run dev
 
 Open `http://localhost:3000` and paste a public GitHub repository URL.
 
+## Fix pull request
+
+Diagnosis of a pasted build log, and the repository diagnosis behind a fix, does not use the daily scan quota. The scan quota for ordinary repository scans stays one free scan a day.
+
+`/fix` accepts a GitHub repository URL, a Vercel build log, or a `*.vercel.app` address (that last one still needs the GitHub repo). When the scanner can prove an import-case repair, the diff and the pull request stay behind a $5 Stripe Checkout payment. The first 50 fixes are free. The counter lives in `fix_promo`. The Stripe webhook validates `checkout.session.completed` and `checkout.session.async_payment_succeeded` before a fix is treated as paid. The buyer then opens the pull request from the success page; that request reads the Checkout Session again, so an unpaid or refunded session cannot open it. If the pull request's GitHub checks fail, or no pull request could be opened, the charge is refunded.
+
+The pull request is opened by a separate GitHub App from the read-only private-scan app. That Fix app needs Contents write, Pull requests write, Commit statuses read and the `status` webhook event: Vercel reports each deployment as a commit status, and only Vercel's status on DeployDoctor's own fix commit decides a refund. Until the app id, slug, private key and webhook secret are all set, the diagnosis stays free and nothing is offered or charged. A daily cron (`/api/cron/fix-reconcile`, `CRON_SECRET`) refunds paid fixes that never got a pull request. Set `GITHUB_FIX_APP_ID`, `GITHUB_FIX_APP_PRIVATE_KEY`, `GITHUB_FIX_APP_SLUG`, `GITHUB_FIX_APP_CLIENT_ID`, `GITHUB_FIX_APP_CLIENT_SECRET`, and `GITHUB_FIX_WEBHOOK_SECRET`. The webhook URL is `/api/fix/github/webhook`. The setup URL is `/api/fix/github/installed`. The OAuth callback is `/api/fix/github/callback`. Apply `supabase/migrations/20261103070000_fix_pr.sql`.
+
+`/rescue` lists a fixed app only when the owner opted in and the build passed. It shows the error summary and the live URL, not source.
+
 ## Latest repository status and verified fixes
 
 Every public report offers a permanent repository badge and status page:
