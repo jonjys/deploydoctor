@@ -24,25 +24,6 @@ export function verifyGithubWebhook(raw: string, signature: string | null, secre
   return timingSafeEqual(Buffer.from(got), Buffer.from(expected));
 }
 
-export type CheckEvent = { conclusion: string | null; headSha: string | null; prUrls: string[] };
-
-/** Pull request URLs and the conclusion from a check_run or check_suite webhook. */
-export function readCheckEvent(payload: unknown): CheckEvent | null {
-  if (!payload || typeof payload !== "object") return null;
-  const body = payload as { action?: string; repository?: { full_name?: string }; check_run?: CheckNode; check_suite?: CheckNode };
-  if (body.action !== "completed") return null;
-  const node = body.check_run ?? body.check_suite;
-  if (!node) return null;
-  const repo = typeof body.repository?.full_name === "string" && /^[\w.-]+\/[\w.-]+$/.test(body.repository.full_name) ? body.repository.full_name : "";
-  const prUrls = (node.pull_requests ?? []).flatMap((pull) => {
-    if (typeof pull.html_url === "string" && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(pull.html_url)) return [pull.html_url];
-    if (repo && typeof pull.number === "number" && Number.isInteger(pull.number) && pull.number > 0) return [`https://github.com/${repo}/pull/${pull.number}`];
-    return [];
-  });
-  return { conclusion: typeof node.conclusion === "string" ? node.conclusion : null, headSha: typeof node.head_sha === "string" ? node.head_sha : null, prUrls };
-}
-
-type CheckNode = { conclusion?: string | null; head_sha?: string; pull_requests?: Array<{ html_url?: string; number?: number }> };
 
 export type FixAppEnv = { appId: string; privateKey: string; clientId: string; clientSecret: string; slug: string; webhookSecret: string };
 
@@ -63,4 +44,27 @@ export function fixAppCanInstall(app: FixAppEnv | null): boolean {
 
 export function fixAppCanAuthorize(app: FixAppEnv | null): boolean {
   return Boolean(app && /^[A-Za-z0-9._-]{5,100}$/.test(app.clientId) && app.clientSecret.length >= 20 && /^[a-z0-9-]{1,100}$/.test(app.slug));
+}
+
+/**
+ * Fix pull requests are offered, charged and promo-claimed only when the Fix GitHub App can open a pull request
+ * (app id, slug and private key) and its webhook can report failed checks for automatic refunds.
+ * Without it the diagnosis stays free and nothing is sold.
+ */
+export function fixPullRequestsEnabled(app: FixAppEnv | null = fixAppFromEnv()): boolean {
+  return fixAppCanInstall(app) && (app?.webhookSecret.length ?? 0) >= 16;
+}
+
+export const FIX_DISABLED_MESSAGE = "Fix pull requests are not switched on yet. The diagnosis is free and nothing was charged.";
+
+export type StatusEvent = { sha: string; context: string; state: string; repository: string };
+
+/** A `status` webhook (a commit status such as Vercel's deployment result). */
+export function readStatusEvent(payload: unknown): StatusEvent | null {
+  if (!payload || typeof payload !== "object") return null;
+  const body = payload as { sha?: unknown; context?: unknown; state?: unknown; repository?: { full_name?: unknown } };
+  if (typeof body.sha !== "string" || !/^[a-f0-9]{40}$/.test(body.sha)) return null;
+  if (typeof body.context !== "string" || typeof body.state !== "string") return null;
+  const repository = typeof body.repository?.full_name === "string" && /^[\w.-]+\/[\w.-]+$/.test(body.repository.full_name) ? body.repository.full_name : "";
+  return { sha: body.sha, context: body.context.slice(0, 200), state: body.state, repository };
 }

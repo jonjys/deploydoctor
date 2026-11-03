@@ -5,6 +5,8 @@ import { signingSecret } from "@/lib/session-token";
 import { sameOrigin, stripeClient } from "@/lib/stripe";
 import { readGatedFixPatch } from "@/lib/fix-pr/open";
 
+import { fixOrderBySession } from "@/lib/fix-pr/store";
+
 export const runtime = "nodejs";
 const noStore = { "Cache-Control": "no-store" };
 const SESSION = /^cs_(?:live|test)_[A-Za-z0-9]{10,200}$/;
@@ -28,6 +30,10 @@ export async function POST(request: Request) {
     if (!parsed.data.sessionId) return Response.json({ error: "Pay for this fix before the diff is released." }, { status: 402, headers: noStore });
     const session = await stripeClient().checkout.sessions.retrieve(parsed.data.sessionId, { expand: ["payment_intent.latest_charge"] });
     if (session.id !== parsed.data.sessionId) return Response.json({ error: "Payment session mismatch." }, { status: 403, headers: noStore });
+    // The paid diff comes with the pull request: never before it is opened, so a refund for "not delivered" can
+    // never leave the buyer holding the patch.
+    const order = await fixOrderBySession(session.id).catch(() => null);
+    if (!order?.pr_url || order.status === "refunded") return Response.json({ error: "The patch is released together with the pull request. Open the pull request first." }, { status: 409, headers: noStore });
     const patch = readGatedFixPatch({ session, promoReceipt: null, quoteToken: parsed.data.quoteToken ?? "", secret, live });
     return Response.json({ filename: "deploydoctor-fix.patch", patch: patch.patch }, { headers: noStore });
   } catch (error) {

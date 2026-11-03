@@ -8,6 +8,7 @@ import { FIX_AMOUNT, FIX_CURRENCY, FIX_PROMO_CAP } from "@/lib/fix-pr/constants"
 import { parseFixTarget } from "@/lib/fix-pr/target";
 import { promoRemaining } from "@/lib/fix-pr/store";
 import { sameOrigin } from "@/lib/stripe";
+import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -29,11 +30,13 @@ export async function POST(request: Request) {
     let token: string | undefined;
     try { token = (await resolveFixToken()) ?? undefined; } catch { token = undefined; }
     const prepared = await prepareRepositoryFix(target.repo, token);
-    const remaining = await promoRemaining();
+    // Without a configured Fix GitHub App nothing can be delivered, so nothing is offered: diagnosis only.
+    const enabled = fixPullRequestsEnabled();
+    const remaining = enabled ? await promoRemaining() : null;
     return Response.json({
-      diagnosisFree: true, needsRepo: false, eligible: prepared.eligible, isPrivate: prepared.isPrivate,
-      repoUrl: prepared.repoUrl, headline: prepared.headline, items: prepared.items, fixes: prepared.fixes,
-      commitSha: prepared.commitSha ?? null, quoteToken: prepared.quoteToken ?? null,
+      diagnosisFree: true, needsRepo: false, eligible: enabled && prepared.eligible, fixAvailable: enabled, isPrivate: prepared.isPrivate,
+      repoUrl: prepared.repoUrl, headline: prepared.headline, items: prepared.items, fixes: enabled ? prepared.fixes : [],
+      commitSha: prepared.commitSha ?? null, quoteToken: enabled ? prepared.quoteToken ?? null : null,
       amountMinor: FIX_AMOUNT, currency: FIX_CURRENCY, promoRemaining: remaining, promoCap: FIX_PROMO_CAP,
     }, { headers: noStore });
   } catch (error) {

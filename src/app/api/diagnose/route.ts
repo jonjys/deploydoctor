@@ -40,9 +40,10 @@ export async function POST(request: Request) {
     const { diagnosis, usage } = await diagnoseWithClaude(log, lang);
     console.log("dd-diagnose-usage", JSON.stringify({ ...usage, paid: Boolean(plan), verdict: diagnosis.verdict }));
     console.log("dd-funnel", JSON.stringify({ step: "diagnosis_completed", paid: Boolean(plan) }));
-    const patchWithheld = Boolean(diagnosis.patch.code.trim());
+    // Pass holders and CLI token users already paid: they keep the patch text. Free visitors get the $5 fix PR offer.
+    const patchWithheld = !plan && Boolean(diagnosis.patch.code.trim());
     return Response.json({
-      diagnosis: { ...diagnosis, patch: { file: diagnosis.patch.file, code: "" } },
+      diagnosis: patchWithheld ? { ...diagnosis, patch: { file: diagnosis.patch.file, code: "" } } : diagnosis,
       fix: patchWithheld ? { paywalled: true, priceUsd: 5, href: "/fix" } : null,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

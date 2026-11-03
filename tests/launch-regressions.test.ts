@@ -37,7 +37,9 @@ test("all import consumers distinguish runtime code from type-only code and stri
 });
 test("paid AI usage, site usage, detection and email all have finite budgets", () => {
   assert.equal(diagnosisRules("customer", true)[0].limit, AI_SITE_DIAGNOSES_PER_DAY);
-  assert.equal(diagnosisRules("visitor", false).some((rule) => rule.key.endsWith(":day") && rule.key !== "ai:site:day"), false);
+  // Diagnosis does not use the scan quota, but every identity has its own daily cap so one visitor cannot drain the site budget.
+  assert.equal(diagnosisRules("visitor", false).find((rule) => rule.key === "ai:visitor:day")?.limit, 3);
+  assert.equal(diagnosisRules("customer", true).find((rule) => rule.key === "ai:customer:day")?.limit, 10);
   assert.equal(diagnosisRules("visitor", false).find((rule) => rule.key.endsWith(":minute"))?.limit, 2);
   assert.ok(AI_MAX_OUTPUT_TOKENS <= 2000);
   for (const rules of [diagnosisRules("a", true), detectionRules("a"), mailRules("a@example.com")]) {

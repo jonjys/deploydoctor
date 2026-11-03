@@ -7,7 +7,7 @@ import { useT } from "@/components/lang";
 type Item = { title: string; status: string; file?: string; line?: number; problem: string };
 type Offer = {
   needsRepo?: boolean; eligible?: boolean; isPrivate?: boolean; headline?: string; repoUrl?: string;
-  items?: Item[]; fixes?: Item[]; quoteToken?: string | null; promoRemaining?: number | null;
+  items?: Item[]; fixes?: Item[]; quoteToken?: string | null; promoRemaining?: number | null; fixAvailable?: boolean;
   message?: string; error?: string; commitSha?: string | null;
 };
 
@@ -91,7 +91,8 @@ export function FixForm({ initialTarget, github }: { initialTarget: string; gith
               {offer.promoRemaining && offer.promoRemaining > 0 ? t("fix.free", { n: offer.promoRemaining }) : t("fix.pay")}
             </button>
           </>}
-          {offer.eligible === false && !offer.isPrivate && <p>{t("fix.none")}</p>}
+          {offer.fixAvailable === false && <p>{t("fix.soon")}</p>}
+          {offer.fixAvailable !== false && offer.eligible === false && !offer.isPrivate && <p>{t("fix.none")}</p>}
           {prUrl && <p><a href={prUrl}>Pull request</a></p>}
         </section>
       )}

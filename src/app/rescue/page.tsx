@@ -25,8 +25,8 @@ export default async function RescuePage() {
                 <div>
                   <strong>{entry.repo.replace("https://github.com/", "")}</strong>
                   <p><span>{t("fix.wallBefore")}: </span>{entry.error}</p>
-                  <p><span>{t("fix.wallAfter")}: </span><a href={entry.liveUrl}>{entry.liveUrl}</a></p>
-                  <p><a href={entry.prUrl}>Pull request</a></p>
+                  <p><span>{t("fix.wallAfter")}: </span><a href={entry.liveUrl} rel="nofollow ugc noopener noreferrer" target="_blank">{entry.liveUrl}</a></p>
+                  <p><a href={entry.prUrl} rel="nofollow noopener noreferrer" target="_blank">Pull request</a></p>
                 </div>
               </li>
             ))}

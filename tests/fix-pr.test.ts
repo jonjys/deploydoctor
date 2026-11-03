@@ -9,9 +9,9 @@ import { sealQuote } from "../src/lib/patch/quote";
 import { PullRequestApiError, type GitRequest } from "../src/lib/patch/pull-request";
 import { FIX_AMOUNT, FIX_APP, FIX_PROMO_CAP } from "../src/lib/fix-pr/constants";
 import { handleFixEvent } from "../src/lib/fix-pr/events";
-import { githubAppJwt, readCheckEvent, verifyGithubWebhook } from "../src/lib/fix-pr/github-app";
+import { githubAppJwt, readStatusEvent, verifyGithubWebhook } from "../src/lib/fix-pr/github-app";
 import { openGatedFixPullRequest, readGatedFixPatch } from "../src/lib/fix-pr/open";
-import { buildOutcome, refundReason } from "../src/lib/fix-pr/outcome";
+import { deliveryImpossible, refundForBuild, vercelOutcome } from "../src/lib/fix-pr/outcome";
 import { fixCheckoutParams, validateFixPayment } from "../src/lib/fix-pr/payments";
 import { claimPromoSlot, openPromoReceipt, sealPromoReceipt } from "../src/lib/fix-pr/promo";
 import { parseFixTarget } from "../src/lib/fix-pr/target";
@@ -114,14 +114,26 @@ test("the launch counter stops at 50 and a failed build is the refund, not a pen
     claimed = step.claimed;
   }
   assert.deepEqual(claimPromoSlot(claimed), { granted: false, claimed: 50, cap: 50 });
-  assert.equal(buildOutcome([]), "pending");
-  assert.equal(buildOutcome([{ status: "in_progress", conclusion: null }]), "pending");
-  assert.equal(buildOutcome([{ status: "completed", conclusion: "failure" }]), "failed");
-  assert.equal(buildOutcome([{ status: "completed", conclusion: "success" }]), "passed");
-  assert.equal(refundReason({ outcome: "pending", prUrl: "https://github.com/acme/demo/pull/7", deliveryFailed: false, alreadyRefunded: false }), null);
-  assert.equal(refundReason({ outcome: "failed", prUrl: "https://github.com/acme/demo/pull/7", deliveryFailed: false, alreadyRefunded: false }), "build_failed");
-  assert.equal(refundReason({ outcome: "pending", prUrl: null, deliveryFailed: true, alreadyRefunded: false }), "not_delivered");
-  assert.equal(refundReason({ outcome: "failed", prUrl: "https://github.com/acme/demo/pull/7", deliveryFailed: false, alreadyRefunded: true }), null);
+});
+
+test("only Vercel's status on DeployDoctor's own fix commit decides a refund", () => {
+  // Vercel reports deployments as commit statuses; other checks (the buyer's CI, comment bots) never count.
+  assert.equal(vercelOutcome([]), "pending");
+  assert.equal(vercelOutcome([{ context: "ci/test", state: "failure" }]), "pending");
+  assert.equal(vercelOutcome([{ context: "Vercel Preview Comments", state: "success" }, { context: "Vercel", state: "pending" }]), "pending");
+  assert.equal(vercelOutcome([{ context: "Vercel", state: "failure" }, { context: "ci/test", state: "success" }]), "failed");
+  assert.equal(vercelOutcome([{ context: "Vercel – shop", state: "error" }]), "failed");
+  assert.equal(vercelOutcome([{ context: "Vercel", state: "success" }, { context: "ci/lint", state: "failure" }]), "passed");
+  const sha = "b".repeat(40);
+  const order = { status: "opened", promo: false, amount_minor: 500, head_sha: sha, payment_intent_id: "pi_1" };
+  assert.equal(refundForBuild(order, sha, "failed"), true);
+  assert.equal(refundForBuild(order, "c".repeat(40), "failed"), false, "a commit the buyer pushed on top is not ours");
+  assert.equal(refundForBuild({ ...order, status: "passed" }, sha, "failed"), false, "a passed order is never refunded later");
+  assert.equal(refundForBuild({ ...order, status: "refunded" }, sha, "failed"), false, "never twice");
+  assert.equal(refundForBuild({ ...order, promo: true, amount_minor: 0 }, sha, "failed"), false, "nothing to refund on a free fix");
+  assert.equal(refundForBuild(order, sha, "pending"), false, "a running build is not a failure");
+  assert.equal(refundForBuild({ ...order, head_sha: null }, sha, "failed"), false);
+  assert.deepEqual([403, 404, 409, 422, 500, 503].map(deliveryImpossible), [true, true, true, true, false, false]);
 });
 
 test("the rescue wall keeps only consented public https results and strips secrets", () => {
@@ -147,7 +159,7 @@ test("stripe fulfillment accepts a paid fix session and ignores an unpaid one wi
   assert.equal(await handleFixEvent({ id: "evt_other", type: "checkout.session.completed", data: { object: { metadata: { app: "deploydoctor" } } } } as unknown as Stripe.Event, secret, false, async () => paid), false);
 });
 
-test("a GitHub App JWT verifies and a check webhook names the pull request", () => {
+test("a GitHub App JWT verifies and a status webhook names the commit", () => {
   const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
   const jwt = githubAppJwt("4242", pem, 1_700_000_000);
@@ -156,9 +168,10 @@ test("a GitHub App JWT verifies and a check webhook names the pull request", () 
   verify.update(`${header}.${payload}`);
   assert.equal(verify.verify(publicKey, Buffer.from(signature, "base64url")), true);
   assert.equal(JSON.parse(Buffer.from(payload, "base64url").toString()).iss, "4242");
-  const raw = JSON.stringify({ action: "completed", repository: { full_name: "acme/shop" }, check_run: { conclusion: "failure", head_sha: "a".repeat(40), pull_requests: [{ number: 4 }] } });
+  const raw = JSON.stringify({ sha: "a".repeat(40), context: "Vercel", state: "failure", repository: { full_name: "acme/shop" } });
   assert.equal(verifyGithubWebhook(raw, `sha256=${createHmac("sha256", "hook-secret").update(raw).digest("hex")}`, "hook-secret"), true);
-  assert.deepEqual(readCheckEvent(JSON.parse(raw)), { conclusion: "failure", headSha: "a".repeat(40), prUrls: ["https://github.com/acme/shop/pull/4"] });
+  assert.deepEqual(readStatusEvent(JSON.parse(raw)), { sha: "a".repeat(40), context: "Vercel", state: "failure", repository: "acme/shop" });
+  assert.equal(readStatusEvent({ sha: "not-a-sha", context: "Vercel", state: "failure" }), null);
   assert.equal(verifyGithubWebhook(raw, "sha256=00", "hook-secret"), false);
 });
 
@@ -188,5 +201,38 @@ test("the promo counter is service-role only and stops at 50, including a repeat
     assert.equal(blocked.rows[0].claimed, 50);
     const left = await db.query<{ remaining: number }>("select * from fix_promo_remaining()");
     assert.equal(left.rows[0].remaining, 0);
+    // A slot whose pull request could not be opened goes back, once; an unknown key changes nothing.
+    await db.query("select release_fix_promo($1)", [hash]);
+    await db.query("select release_fix_promo($1)", [hash]);
+    await db.query("select release_fix_promo($1)", ["ee".repeat(32)]);
+    assert.equal((await db.query<{ remaining: number }>("select * from fix_promo_remaining()")).rows[0].remaining, 1);
+    assert.equal((await claim("ff".repeat(32))).rows[0].granted, true);
+    await db.query("insert into fix_orders (repo_url, commit_sha, status, amount_minor, is_private) values ('https://github.com/acme/shop', $1, 'opened', 0, true)", ["a".repeat(40)]);
+    await db.exec("reset role; set role anon;");
+    await assert.rejects(() => db.query("select release_fix_promo($1)", [hash]));
   } finally { await db.close(); }
+});
+
+test("without a configured Fix GitHub App nothing is offered, charged or promo-claimed", async () => {
+  const { fixPullRequestsEnabled, fixAppFromEnv } = await import("../src/lib/fix-pr/github-app");
+  const pem = "-----BEGIN PRIVATE KEY-----\nfixture\n-----END PRIVATE KEY-----";
+  assert.equal(fixPullRequestsEnabled(fixAppFromEnv({} as NodeJS.ProcessEnv)), false);
+  assert.equal(fixPullRequestsEnabled(fixAppFromEnv({ GITHUB_FIX_APP_ID: "123", GITHUB_FIX_APP_SLUG: "deploydoctor-fix", GITHUB_FIX_APP_PRIVATE_KEY: pem } as unknown as NodeJS.ProcessEnv)), false, "no webhook secret: refunds could not be triggered");
+  assert.equal(fixPullRequestsEnabled(fixAppFromEnv({ GITHUB_FIX_APP_ID: "123", GITHUB_FIX_APP_SLUG: "deploydoctor-fix", GITHUB_FIX_APP_PRIVATE_KEY: pem, GITHUB_FIX_WEBHOOK_SECRET: "x".repeat(32) } as unknown as NodeJS.ProcessEnv)), true);
+  const { createRequire } = await import("node:module");
+  const require = createRequire(import.meta.url);
+  require.cache[require.resolve("server-only")] = { exports: {}, loaded: true } as NodeModule;
+  const saved = Object.fromEntries(["GITHUB_FIX_APP_ID", "GITHUB_FIX_APP_SLUG", "GITHUB_FIX_APP_PRIVATE_KEY", "GITHUB_FIX_WEBHOOK_SECRET"].map(k => [k, process.env[k]]));
+  for (const key of Object.keys(saved)) delete process.env[key];
+  try {
+    const post = (path: string, body: unknown) => new Request(`https://fixture.test${path}`, { method: "POST", headers: { Origin: "https://fixture.test", "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const checkout = await import("../src/app/api/fix/checkout/route");
+    const charged = await checkout.POST(post("/api/fix/checkout", { quoteToken: "q".repeat(60) }));
+    assert.equal(charged.status, 503);
+    assert.match((await charged.json()).error, /not switched on yet.*nothing was charged/i);
+    const pull = await import("../src/app/api/fix/pull-request/route");
+    assert.equal((await pull.POST(post("/api/fix/pull-request", { quoteToken: "q".repeat(60) }))).status, 503);
+  } finally {
+    for (const [key, value] of Object.entries(saved)) if (value !== undefined) process.env[key] = value;
+  }
 });

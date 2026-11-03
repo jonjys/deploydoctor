@@ -1,13 +1,13 @@
 export type BudgetRule = { key: string; limit: number; seconds: number };
-/** Historical paid-account cap. Diagnosis no longer applies a per-visitor daily quota. */
+/** Diagnosis no longer uses the daily scan quota, but each identity keeps its own daily cap, so one visitor cannot use up the shared site budget. */
 export const PAID_DIAGNOSES_PER_DAY = 10;
+export const FREE_DIAGNOSES_PER_DAY = 3;
 export const AI_SITE_DIAGNOSES_PER_DAY = 40;
 export const AI_MAX_OUTPUT_TOKENS = 2000;
 export function diagnosisRules(identity: string, paid: boolean): BudgetRule[] {
-  void paid;
   return [
     { key: "ai:site:day", limit: AI_SITE_DIAGNOSES_PER_DAY, seconds: 86400 },
-    // Diagnosis has no per-visitor daily quota. The site-wide cap and the burst limit remain.
+    { key: `ai:${identity}:day`, limit: paid ? PAID_DIAGNOSES_PER_DAY : FREE_DIAGNOSES_PER_DAY, seconds: 86400 },
     { key: `ai:${identity}:minute`, limit: 2, seconds: 60 },
   ];
 }

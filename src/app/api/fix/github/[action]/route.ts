@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { githubJson } from "@/lib/github-connect";
+import { verifiedInstallation } from "@/lib/fix-pr/installations";
 import { matchesState, nonce, openGitHub, pkceChallenge, sealGitHub } from "@/lib/github-connect-crypto";
 import { repoFromPath } from "@/lib/repo-link";
 import { signingSecret } from "@/lib/session-token";
@@ -49,23 +50,28 @@ export async function GET(request: Request, { params }: { params: Promise<{ acti
     jar.set(FIX_FLOW_COOKIE, sealGitHub({ state, verifier: nonce(), repo, expiresAt: Date.now() + 600_000 }, "fix-oauth", secret), { ...fixCookieOptions, maxAge: 600 });
     return redirect(`https://github.com/apps/${app.slug}/installations/new?state=${state}`);
   }
-  if (action === "connect") {
-    if (!fixAppCanAuthorize(app)) return json({ error: "Set the Fix app OAuth client id and secret." }, 503);
+  // OAuth with PKCE. After an installation the claimed installation id rides along, unverified, until the callback.
+  const authorize = (flowRepo: string, claimedInstallation?: number) => {
     const state = nonce();
     const verifier = nonce();
-    jar.set(FIX_FLOW_COOKIE, sealGitHub({ state, verifier, repo, expiresAt: Date.now() + 600_000 }, "fix-oauth", secret), { ...fixCookieOptions, maxAge: 600 });
+    jar.set(FIX_FLOW_COOKIE, sealGitHub({ state, verifier, repo: flowRepo, expiresAt: Date.now() + 600_000, ...(claimedInstallation ? { claimedInstallation } : {}) }, "fix-oauth", secret), { ...fixCookieOptions, maxAge: 600 });
     const url = new URL("https://github.com/login/oauth/authorize");
     url.search = new URLSearchParams({ client_id: app.clientId, redirect_uri: `${origin}/api/fix/github/callback`, state, code_challenge: pkceChallenge(verifier), code_challenge_method: "S256", allow_signup: "false" }).toString();
     return redirect(url.toString());
+  };
+  if (action === "connect") {
+    if (!fixAppCanAuthorize(app)) return json({ error: "Set the Fix app OAuth client id and secret." }, 503);
+    return authorize(repo);
   }
   const flow = openGitHub(jar.get(FIX_FLOW_COOKIE)?.value, "fix-oauth", secret, fixFlowSchema);
   jar.delete(FIX_FLOW_COOKIE);
   if (!flow || flow.expiresAt <= Date.now() || !matchesState(search.get("state"), flow.state)) return json({ error: "GitHub authorization expired. Connect again." }, 400);
   if (action === "installed") {
-    const installationId = Number(search.get("installation_id"));
-    if (!Number.isInteger(installationId) || installationId <= 0) return json({ error: "GitHub did not confirm an installation." }, 400);
-    jar.set(FIX_INSTALL_COOKIE, sealGitHub({ installationId, expiresAt: Date.now() + 8 * 3600_000 }, "fix-install", secret), { ...fixCookieOptions, maxAge: 8 * 3600 });
-    return redirect(back(origin, flow.repo, "connected"));
+    // installation_id in this redirect is attacker-controllable. It is never trusted here: the user authorizes,
+    // and the callback keeps it only if GitHub lists it among that user's own installations of this app.
+    const claimed = Number(search.get("installation_id"));
+    if (!fixAppCanAuthorize(app)) return json({ error: "Set the Fix app OAuth client id and secret." }, 503);
+    return authorize(flow.repo, Number.isInteger(claimed) && claimed > 0 ? claimed : undefined);
   }
   if (search.has("error")) return redirect(back(origin, flow.repo, "cancelled"));
   const code = search.get("code");
@@ -84,6 +90,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ acti
     const seconds = Math.min(typeof issued.expires_in === "number" && issued.expires_in > 0 ? issued.expires_in : 8 * 3600, 8 * 3600);
     const expiresAt = Date.now() + seconds * 1000;
     jar.set(FIX_TOKEN_COOKIE, sealGitHub({ token: issued.access_token, login: user.login, expiresAt }, "fix-token", secret), { ...fixCookieOptions, maxAge: seconds });
+    if (flow.claimedInstallation) {
+      const installationId = await verifiedInstallation(issued.access_token, flow.claimedInstallation, app);
+      if (installationId) jar.set(FIX_INSTALL_COOKIE, sealGitHub({ installationId, expiresAt: Date.now() + 8 * 3600_000 }, "fix-install", secret), { ...fixCookieOptions, maxAge: 8 * 3600 });
+    }
     return redirect(back(origin, flow.repo, "connected"));
   } catch { return redirect(back(origin, flow.repo, "failed")); }
 }
@@ -95,3 +105,4 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
   jar.delete(FIX_INSTALL_COOKIE); jar.delete(FIX_FLOW_COOKIE); jar.delete(FIX_TOKEN_COOKIE);
   return json({ connected: false });
 }
+

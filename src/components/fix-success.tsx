@@ -13,7 +13,8 @@ export function FixSuccess({ sessionId }: { sessionId: string }) {
     setBusy(true); setError("");
     try {
       const response = await fetch("/api/fix/pull-request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId }) });
-      const data = await response.json() as { url?: string; error?: string };
+      const data = await response.json() as { url?: string; error?: string; refunded?: boolean };
+      if (data.refunded) { setOutcome(data.error || "Refunded."); setBusy(false); return; }
       if (!response.ok || !data.url) throw new Error(data.error || "The pull request could not be opened.");
       setUrl(data.url);
     } catch (caught) {
@@ -35,14 +36,14 @@ export function FixSuccess({ sessionId }: { sessionId: string }) {
     setBusy(false);
   }
 
-  async function checkBuild(action: "build" | "missing") {
+  async function checkBuild(action: "build") {
     setBusy(true); setError("");
     try {
       const response = await fetch("/api/fix/outcome", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, action }) });
       const data = await response.json() as { refunded?: boolean; outcome?: string; prUrl?: string | null; error?: string };
       if (!response.ok) throw new Error(data.error || "The build could not be checked.");
       if (data.prUrl) setUrl(data.prUrl);
-      setOutcome(data.refunded ? "Refunded. The build did not pass, so the charge comes back." : `Build status: ${data.outcome ?? "unknown"}.`);
+      setOutcome(data.refunded ? "Refunded. Vercel did not build the fix commit, so the charge comes back." : data.outcome === "pending" ? "Vercel has not reported a result for the fix commit yet. Check again after the deployment finishes." : `Vercel build: ${data.outcome ?? "unknown"}.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The build could not be checked.");
     }
@@ -54,7 +55,7 @@ export function FixSuccess({ sessionId }: { sessionId: string }) {
       <button className="cta-button" type="button" disabled={busy} onClick={openPullRequest}>Open the pull request</button>
       <button className="cta-button" type="button" disabled={busy} onClick={loadDiff}>Show the patch</button>
       <button type="button" disabled={busy} onClick={() => checkBuild("build")}>Build failed? Refund me</button>
-      <button type="button" disabled={busy} onClick={() => checkBuild("missing")}>No pull request was opened</button>
+      <p className="form-note">If the pull request cannot be opened, the $5 is refunded automatically. Paid orders without a pull request are also refunded within a day.</p>
       {url && <p><a href={url}>{url}</a></p>}
       {patch && <pre><code>{patch}</code></pre>}
       {outcome && <p role="status">{outcome}</p>}

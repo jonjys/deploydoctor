@@ -57,7 +57,7 @@ export async function openGatedFixPullRequest(input: {
   live?: boolean;
   summary: string;
   api: GitRequest;
-}): Promise<{ url: string; reused: boolean; state: string; draft: boolean; paid: boolean }> {
+}): Promise<{ url: string; reused: boolean; state: string; draft: boolean; paid: boolean; headSha: string | null; isPrivate: boolean }> {
   const quote = authorizeFix(input);
   const paid = !input.promoReceipt;
   const order = quoteToOrder(quote);

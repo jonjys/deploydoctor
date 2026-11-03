@@ -4,6 +4,9 @@ import type Stripe from "stripe";
 import { boundedBody } from "@/lib/bounded-body";
 import { openGitHub } from "@/lib/github-connect-crypto";
 import { PullRequestApiError, type GitRequest } from "@/lib/patch/pull-request";
+import { PatchError } from "@/lib/patch/case-patch";
+import { deliveryImpossible } from "@/lib/fix-pr/outcome";
+import { refundFix } from "@/lib/fix-pr/refund";
 import { tokenHash } from "@/lib/patch/quote";
 import { objectId } from "@/lib/stripe";
 import { signingSecret } from "@/lib/session-token";
@@ -66,16 +69,51 @@ export async function fulfillPaidFix(session: Stripe.Checkout.Session, explicitT
   const token = explicitToken ?? (installation && /^\d{1,12}$/.test(installation) ? await installationAccessToken(Number(installation)) : "");
   if (!token) return null;
   const summary = session.metadata?.error_summary || "Verified deploy fix";
-  const result = await openGatedFixPullRequest({ session, promoReceipt: null, quoteToken: "", secret, live, summary, api: githubApi(token) });
   const intent = session.payment_intent;
+  const paymentIntentId = typeof intent === "string" ? intent : intent ? objectId(intent) : null;
+  let result: Awaited<ReturnType<typeof openGatedFixPullRequest>>;
+  try {
+    result = await openGatedFixPullRequest({ session, promoReceipt: null, quoteToken: "", secret, live, summary, api: githubApi(token) });
+  } catch (error) {
+    // No fix, no pay: when GitHub refuses for a reason a retry cannot change, the buyer gets the $5 back now.
+    const status = error instanceof PatchError ? error.status : error instanceof PullRequestApiError ? error.status : 0;
+    if (deliveryImpossible(status) && paymentIntentId) {
+      await saveFixOrder({ repo_url: quote.repoUrl, commit_sha: quote.commitSha, status: "paid", promo: false, amount_minor: FIX_AMOUNT,
+        stripe_session_id: session.id, payment_intent_id: paymentIntentId, consent: false }).catch(() => undefined);
+      await refundFix(paymentIntentId, session.id, "not_delivered");
+      throw new FixRefundedError();
+    }
+    throw error;
+  }
   await saveFixOrder({
     repo_url: quote.repoUrl, commit_sha: quote.commitSha, status: "opened", promo: false, amount_minor: FIX_AMOUNT,
-    stripe_session_id: session.id, payment_intent_id: typeof intent === "string" ? intent : intent ? objectId(intent) : null,
-    pr_url: result.url, error_summary: summary, live_url: session.metadata?.live_url ?? null, consent: session.metadata?.consent === "1",
+    stripe_session_id: session.id, payment_intent_id: paymentIntentId, pr_url: result.url, head_sha: result.headSha,
+    error_summary: summary, live_url: session.metadata?.live_url ?? null, consent: session.metadata?.consent === "1", is_private: result.isPrivate,
   }).catch(() => console.error("Fix order was not saved"));
   return result;
 }
 
 export function promoOrderId(quoteToken: string): string {
   return `promo_${tokenHash(quoteToken).slice(0, 40)}`;
+}
+
+/** The pull request could not be opened and the payment was refunded. */
+export class FixRefundedError extends Error {
+  constructor() { super("GitHub would not accept the pull request, so the $5 was refunded. Nothing else is needed."); }
+}
+
+/**
+ * Before anything is charged or a launch slot is taken: GitHub is connected, the account can push to the repository,
+ * and its default branch is still at the diagnosed commit. Otherwise the pull request could not be delivered.
+ */
+export async function assertDeliverable(repoUrl: string, commitSha: string, token: string): Promise<void> {
+  const match = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)$/.exec(repoUrl);
+  if (!match) throw new PatchError("The repository is not valid.", 422, "path");
+  const api = githubApi(token);
+  let repository: { default_branch: string; archived?: boolean; permissions?: { push?: boolean } };
+  try { repository = await api(`/repos/${match[1]}/${match[2]}`); }
+  catch { throw new PatchError("The connected GitHub account cannot open this repository. Install the Fix app on it, then try again. Nothing was charged.", 403, "access"); }
+  if (repository.archived || !repository.permissions?.push) throw new PatchError("The connected GitHub account cannot push to this repository. Nothing was charged.", 403, "access");
+  const ref = await api<{ object: { sha: string } }>(`/repos/${match[1]}/${match[2]}/git/ref/heads/${encodeURIComponent(repository.default_branch)}`);
+  if (ref.object.sha !== commitSha) throw new PatchError("The repository changed since the diagnosis. Diagnose it again; nothing was charged.", 409, "version");
 }
