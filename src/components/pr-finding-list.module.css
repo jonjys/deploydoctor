@@ -1,0 +1,15 @@
+.context { min-width: 0; margin: 1rem 0; text-align: left; }
+.note { color: var(--muted); font-size: .85rem; }
+.list { list-style: none; padding: 0; margin: 0; }
+.finding { padding: .9rem 0; border-top: 1px solid var(--line); min-width: 0; }
+.finding strong, .finding code { display: block; overflow-wrap: anywhere; }
+.finding strong { margin: .5rem 0; }
+.finding code { white-space: normal; font-size: .8rem; }
+.finding p { margin: .5rem 0 0; }
+.origin { display: inline-block; padding: .25rem .5rem; border: 1px solid currentColor; border-radius: 5px; font-size: .75rem; line-height: 1.5; max-width: 100%; overflow-wrap: anywhere; }
+.introduced { color: #174b7a; background: #eaf2fb; }
+.severity { display: inline-block; margin: .25rem .5rem; font-size: .75rem; color: var(--muted); }
+.existing { color: var(--muted); background: var(--paper); }
+.uncertain { color: var(--yellow-text); background: var(--yellow-soft); }
+.existingGroup { margin-top: .9rem; padding: .75rem; border: 1px solid var(--line); border-radius: 8px; }
+.existingGroup summary { cursor: pointer; overflow-wrap: anywhere; }

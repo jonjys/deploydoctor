@@ -2,6 +2,36 @@ import type { CheckId, CheckResult, Finding, ReportResults } from "@/types/repor
 import { isPartialPlaceholder } from "@/lib/report-insights";
 
 export type ImpactFinding = Finding & { checkId: CheckId; title: string; status: "red" | "yellow" };
+export type FindingOrigin = "introduced" | "existing" | "uncertain";
+export type ContextualFinding = Finding & { prOrigin: FindingOrigin };
+
+/** Attach comparison context to each current observation without modifying stored scan evidence.
+ * Match the saved HEAD observations exactly (including their current line), not similar base text.
+ * Queues preserve multiplicity when a rule emits the same observation more than once.
+ */
+export function contextualFindings(results: ReportResults): Map<CheckId, ContextualFinding[]> {
+  const context = new Map<CheckId, ContextualFinding[]>(), impact = results.pullRequest;
+  if (!impact) return context;
+  const pinned = impact.version === 1 && /^[a-f0-9]{40}$/i.test(impact.baseCommitSha)
+    && /^[a-f0-9]{40}$/i.test(impact.headCommitSha) && impact.headCommitSha === results.repository.commitSha;
+  const key = (checkId: CheckId, f: Finding) => JSON.stringify([checkId, f.ruleId ?? "", f.file, f.line, f.problem]);
+  const origins = new Map<string, FindingOrigin[]>();
+  const add = (f: ImpactFinding, origin: FindingOrigin) => {
+    const k = key(f.checkId, f);
+    origins.set(k, [...(origins.get(k) ?? []), origin]);
+  };
+  // Existing observations match first, as in comparePullRequest's multiset consumption order.
+  for (const f of impact.persisting) add(f, "existing");
+  for (const f of impact.introduced) add(f, impact.partial || results.scan.partial ? "uncertain" : "introduced");
+  for (const f of impact.uncertain) if (f.side === "head") add(f, "uncertain");
+  for (const check of results.checks) {
+    if (check.status === "green") continue;
+    context.set(check.id, (check.findings ?? []).map(f => ({ ...f, status: f.status ?? (check.status === "red" ? "red" : "yellow"),
+      prOrigin: pinned && !impact.notCompared.includes(check.id) ? origins.get(key(check.id, f))?.shift() ?? "uncertain" : "uncertain",
+    })));
+  }
+  return context;
+}
 export type PullRequestImpact = {
   version: 1;
   number: number;
