@@ -1,9 +1,11 @@
 # DeployDoctor
 
-Static deployment checks for public GitHub repositories, especially Next.js on Vercel.
+Static deployment checks for public GitHub repositories. Supported configuration checks for Cloudflare Workers/Pages, Netlify, Vercel, Fly.io, Render, Railway legacy configuration and Docker.
+JavaScript/TypeScript source rules; specific Rust/Cargo, Python and Go configuration rules. Other languages have limited inventory/secret checks; detection is not full language support.
 Reads GitHub API files. Never clones, installs, builds or executes repository code.
 
 - [Product](https://deploydoctor.nyttolabs.com/): public repository scan.
+- [Exact platform and language coverage](https://deploydoctor.nyttolabs.com/platforms): rules and explicit limitations.
 - [AI plugin](https://deploydoctor.nyttolabs.com/ai-plugin): tools, connection, limits, privacy and support.
 - [Pricing](https://deploydoctor.nyttolabs.com/pricing): current website scan passes.
 - [Source and plugin package](https://github.com/jonjys/deploydoctor): implementation and installation docs.
@@ -19,3 +21,6 @@ Pasted-log triage: module resolution, npm ERESOLVE and React hydration signature
 Line evidence, context requests, verification criteria and official documentation.
 Logs are processed in memory, never echoed raw or saved by this application.
 No repository fetch, model API call or scan quota for log triage. Unknown signatures request context.
+
+Deploy Handoff: https://deploydoctor.nyttolabs.com/deploy-handoff
+For same-repository PR comparisons with build and environment categories selected, saved reports include a commit-pinned manual checklist of supported environment, migration, hosting, command and endpoint-source changes. Tasks are never automatically verified. Existing private permissions, scan limits and fork restrictions apply. New PR scans are required for older reports.

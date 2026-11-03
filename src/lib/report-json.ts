@@ -2,10 +2,12 @@ import { launchReadiness } from "@/lib/launch-readiness";
 import type { StoredReport } from "@/types/report";
 import { SITE_URL } from "@/lib/site";
 import { improvementCopy } from "@/lib/improvements";
+import { contextualFindings } from "@/lib/pr-impact";
 
 /** The machine-readable shape of a report, shared by the CI token API and the public report endpoint. */
 export function reportJson(report: StoredReport) {
   const { results } = report;
+  const context = contextualFindings(results);
   return {
     id: report.id,
     href: `/r/${report.id}`,
@@ -19,10 +21,13 @@ export function reportJson(report: StoredReport) {
     partial: results.scan.partial,
     scan: results.scan,
     stack: results.stack ?? null,
+    hosting: results.hosting ?? null,
     nextApp: results.nextApp ?? null,
+    pullRequest: results.pullRequest ?? null,
+    deployHandoff: results.pullRequest?.handoff ?? null,
     checks: results.checks.map((check) => ({
       id: check.id, title: check.title, status: check.status, explanation: check.explanation, fix: check.fix,
-      evidence: check.evidence, findings: check.findings ?? [], suggestedFile: check.suggestedFile ?? null,
+      evidence: check.evidence, findings: context.get(check.id) ?? check.findings ?? [], suggestedFile: check.suggestedFile ?? null,
       evaluatedRules: check.evaluatedRules ?? null, coverageOnly: check.coverageOnly ?? false,
     })),
     launchReadiness: launchReadiness(results, report.id, Boolean(report.is_private)),

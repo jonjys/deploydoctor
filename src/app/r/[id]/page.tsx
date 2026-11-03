@@ -1,4 +1,8 @@
 import { LaunchReadiness } from "@/components/launch-readiness";
+import { DeployHandoffPanel } from "@/components/deploy-handoff";
+import { PrImpact } from "@/components/pr-impact";
+import { PrFindingList } from "@/components/pr-finding-list";
+import { contextualFindings } from "@/lib/pr-impact";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -109,6 +113,9 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   ]);
 
   const { results } = report;
+  const alternativeHost = !!results.hosting?.platforms.length && !results.hosting.platforms.includes("Vercel");
+  const hostingDoc = results.hosting?.platforms.includes("Cloudflare") ? "https://developers.cloudflare.com/workers/wrangler/configuration/" : results.hosting?.platforms.includes("Netlify") ? "https://docs.netlify.com/build/configure-builds/file-based-configuration/" : results.hosting?.platforms.includes("Render") ? "https://render.com/docs/blueprint-spec" : results.hosting?.platforms.includes("Fly.io") ? "https://fly.io/docs/reference/configuration/" : results.hosting?.platforms.includes("Railway") ? "https://docs.railway.com/config-as-code/reference" : "https://docs.docker.com/reference/dockerfile/";
+  const findingContext = contextualFindings(results);
   const repoName = `${results.repository.owner}/${results.repository.name}`;
   const parts = freeFixParts(report, lang);
   const checkStates = results.checks.map(check => ({ id: check.id, status: check.status, coverageOnly: isPartialPlaceholder(check) }));
@@ -120,7 +127,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const ignoredCategories = results.scope?.ignored ?? [];
 
   const status = report.is_private ? t("report.private") : t("report.savedFree");
-  const rescanHref = `/?repo=${encodeURIComponent(`${results.repository.owner}/${results.repository.name}`)}`;
+  const rescanHref = `/?repo=${encodeURIComponent(results.pullRequest?.url ?? `${results.repository.owner}/${results.repository.name}`)}`;
   // A root app on another framework the scan knows still gets real results, so it keeps the normal headline.
   const otherStack = results.nextApp === "none" ? results.stack?.framework : undefined;
   const neutral = neutralReport(results);
@@ -157,7 +164,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <ScoreCard checks={checkStates} notNext={neutral} partial={results.scan.partial} />
         </div>
 
-        <FixFirst items={fixFirst} limit={3} />
+        {results.pullRequest?.handoff ? <DeployHandoffPanel handoff={results.pullRequest.handoff} repoUrl={report.repo_url} reportUrl={`${SITE_URL}/r/${id}`} lang={lang} /> : null}
+        {results.pullRequest ? <PrImpact impact={results.pullRequest} repoUrl={report.repo_url} lang={lang} /> : <FixFirst items={fixFirst} limit={3} />}
         <div className="report-meta">
           <a className="report-repo" href={report.repo_url} target="_blank" rel="noreferrer">
             {report.repo_url} ↗
@@ -173,6 +181,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <strong>{t("report.scanned")}</strong> {scanned.map((category) => t(`cat.${category}`)).join(", ") || "—"}
           {ignoredCategories.length > 0 && <> | <strong>{t("report.ignored")}</strong> {ignoredCategories.map((category) => t(`cat.${category}`)).join(", ")}</>}
         </p>
+        {!!results.hosting?.platforms.length && <p className="scope-line">Detected deployment configuration: <strong>{results.hosting.platforms.join(", ")}</strong>{" · "}<Link href="/platforms">Coverage and limitations →</Link></p>}
         {results.scan.partial && (
           <aside className="partial-notice" role="note">
             <strong>{t("report.partialTitle")}</strong>
@@ -186,7 +195,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         )}
       </header>
 
-      {previous && since && (hasChanges(since) ? <SinceLastScan diff={since} previous={previous} lang={lang} /> : <details className="report-supporting"><summary>{t("report.sinceTitle")}</summary><SinceLastScan diff={since} previous={previous} lang={lang} /></details>)}
+      {!results.pullRequest && previous && since && (hasChanges(since) ? <SinceLastScan diff={since} previous={previous} lang={lang} /> : <details className="report-supporting"><summary>{t("report.sinceTitle")}</summary><SinceLastScan diff={since} previous={previous} lang={lang} /></details>)}
 
       <section className="results-list" id="checks" aria-label="Deployment checks">
         {!actionable.length && <p className="report-no-findings">{t("report.noFindings")}</p>}
@@ -204,7 +213,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                   {check.status === "yellow" && <span className="severity is-review">{t("report.severity.review")}</span>}
                   <h2>{check.title}</h2>
                   <p>{check.explanation}</p>
-                  {showsLocalWhy(check, results.nextApp) && (
+                  {!alternativeHost && showsLocalWhy(check, results.nextApp) && (
                     <div className="local-why"><strong>{t("report.localWhy")}</strong> {t(`report.localWhy.${check.id}`)}</div>
                   )}
                   {check.evidence.length ? (
@@ -214,7 +223,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                       ))}
                     </ul></details>
                   ) : null}
-                  {check.id === "production-safety" && check.findings?.map((finding, index) => <div className="fix-box" key={`${finding.ruleId}-${index}`}><strong>{finding.status === "red" ? "Confirmed code issue" : "Review"} · {finding.ruleId}</strong><p>{finding.problem}</p><code>{finding.file}:{finding.line}</code><p>{finding.fix}</p></div>)}
+                  {results.pullRequest ? <PrFindingList findings={findingContext.get(check.id) ?? []} lang={lang} /> : check.id === "production-safety" && check.findings?.map((finding, index) => <div className="fix-box" key={`${finding.ruleId}-${index}`}><strong>{finding.status === "red" ? "Confirmed code issue" : "Review"} · {finding.ruleId}</strong><p>{finding.problem}</p><code>{finding.file}:{finding.line}</code><p>{finding.fix}</p></div>)}
                   <div className="fix-box">
                     <strong>{t("report.suggested")}</strong> {check.fix}
                   </div>
@@ -229,7 +238,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                   ) : null}
                   {check.status !== "green" && (
                     <div className="card-links">
-                      {docsFor[check.id] && <a href={docsFor[check.id]} target="_blank" rel="noreferrer">{check.status === "yellow" ? (lang === "sv" ? "Dokumentation" : "Documentation") : t("report.docsLink")} ↗</a>}
+                      {docsFor[check.id] && <a href={alternativeHost && check.id === "build-config" ? hostingDoc : docsFor[check.id]} target="_blank" rel="noreferrer">{check.status === "yellow" || alternativeHost ? (lang === "sv" ? "Dokumentation" : "Documentation") : t("report.docsLink")} ↗</a>}
                       {check.status === "red" && (
                         <CopyTextButton
                           text={issueMarkdown(check.title, check.explanation, check.evidence, check.fix, `${SITE_URL}/r/${id}#check-${check.id}`)}

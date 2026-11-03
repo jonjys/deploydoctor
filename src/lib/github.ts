@@ -1,4 +1,5 @@
 import "server-only";
+import { HOST_CONFIG_FILE } from "@/lib/hosting-config";
 import { boundedBody } from "@/lib/bounded-body";
 import { db, query } from "@/lib/db";
 import { digest } from "@/lib/session-token";
@@ -15,7 +16,7 @@ import type { Category, ReportResults } from "@/types/report";
 
 const GITHUB_API = "https://api.github.com";
 const SOURCE_FILE = /\.(?:[cm]?[jt]sx?|vue|svelte|rs|py|go|java|cs|rb|php|swift|kt|c|cpp|h)$/i;
-const BUILD_FILE = /(?:^|\/)(?:Cargo\.toml|Cargo\.lock|rust-toolchain(?:\.toml)?|netlify\.toml|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Dockerfile|wrangler\.toml|wrangler\.jsonc)$|^\.github\/workflows\/[^/]+\.ya?ml$/;
+const BUILD_FILE = /(?:^|\/)(?:Cargo\.toml|Cargo\.lock|rust-toolchain(?:\.toml)?|netlify\.toml|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|go\.work(?:\.sum)?|\.python-version|Dockerfile|wrangler\.toml|wrangler\.jsonc)$|^\.github\/workflows\/[^/]+\.ya?ml$/;
 const ASTRO_PAGE = /^src\/pages\/.*\.astro$/i;
 const API_ROUTE = /(?:^|\/)(?:src\/)?app\/api(?:\/.*)?\/route\.[cm]?[jt]s$|(?:^|\/)(?:src\/)?pages\/api\/.*\.[cm]?[jt]s$/i;
 const MAX_FILE_BYTES = 256_000;
@@ -93,18 +94,27 @@ export function parseGitHubRepoUrl(input: string): {
 }
 
 /** `userToken`: the token is the buyer's own, so a 401, 403 or 404 means it cannot read the repository. */
+async function githubResponse(pathname: string, token: string | undefined, userToken: boolean, redirect: RequestRedirect = "follow"): Promise<Response> {
+  const serviceToken = Boolean(token && token === process.env.GITHUB_TOKEN);
+  const send = async (credential?: string) => {
+    if (serviceToken) await acquireWork(githubRules());
+    return fetch(`${GITHUB_API}${pathname}`, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "DeployDoctor", "X-GitHub-Api-Version": "2022-11-28", ...(credential ? { Authorization: `Bearer ${credential}` } : {}) },
+      cache: "no-store", redirect, signal: AbortSignal.timeout(15_000),
+    });
+  };
+  let response = await send(token);
+  // Only a service-token 404 may be retried. A successful anonymous response proves that exact
+  // resource is public. Never fall back for buyer tokens, authorization errors or any rate limit.
+  if (serviceToken && !userToken && response.status === 404 && response.headers.get("x-ratelimit-remaining") !== "0" && !response.headers.has("retry-after")) {
+    await response.body?.cancel().catch(() => {});
+    response = await send();
+  }
+  return response;
+}
+
 export async function githubRequest<T>(pathname: string, token?: string, userToken = false): Promise<T> {
-  if (token && token === process.env.GITHUB_TOKEN) await acquireWork(githubRules());
-  const response = await fetch(`${GITHUB_API}${pathname}`, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "User-Agent": "DeployDoctor",
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    cache: "no-store",
-    signal: AbortSignal.timeout(15_000),
-  });
+  const response = await githubResponse(pathname, token, userToken);
 
   if (!response.ok) {
     // GitHub also answers 403 for primary (remaining 0) and secondary (Retry-After) rate limits.
@@ -132,7 +142,8 @@ export async function resolveCommitSha(repoPath: string, ref: string, token?: st
 }
 
 function priorityFor(pathname: string): number {
-  if (pathname === "package.json" || BUILD_FILE.test(pathname)) return 0;
+  if (pathname === "package.json" || BUILD_FILE.test(pathname) || HOST_CONFIG_FILE.test(pathname)) return 0;
+  if (/(?:^|\/)package\.json$/.test(pathname)) return 2;
   if (/(?:^|\/)\.env(?:\..+)?$/.test(pathname) || MISNAMED_ENV_TEMPLATE.test(pathname) || pathname === ".gitignore") return 1;
   if (/(?:^|\/)(?:tsconfig|jsconfig)\.json$|^vercel\.json$/.test(pathname) || /\.prisma$/.test(pathname) || ROOT_LOCKFILE.test(pathname)
     || /^(?:next|svelte|astro|vite)\.config\.[cm]?[jt]s$/.test(pathname)) return 2;
@@ -161,7 +172,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
   // Resolve once, then read only this immutable commit (including the archive and cache key).
   const commitSha = await resolveCommitSha(repoPath, ref ?? repository.default_branch, token, userToken);
   const cacheKey = !options.privateToken && !repository.private && commitSha
-    ? digest(JSON.stringify(["scan-v3", owner.toLowerCase(), name.toLowerCase(), commitSha, ref ?? "", [...(options.checks ?? [])].sort(), options.lang ?? "en"])) : null;
+    ? digest(JSON.stringify(["scan-v6-handoff", owner.toLowerCase(), name.toLowerCase(), commitSha, ref ?? "", [...(options.checks ?? [])].sort(), options.lang ?? "en"])) : null;
   if (cacheKey) {
     const rows = await db<Array<{ results: ReportResults }>>(query("public_scan_cache", {
       key: `eq.${cacheKey}`, expires_at: `gt.${new Date().toISOString()}`, select: "results", limit: "1",
@@ -172,11 +183,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
   let archive;
   try {
     const archivePath = `${repoPath}/tarball/${commitSha}`;
-    if (token && token === process.env.GITHUB_TOKEN) await acquireWork(githubRules());
-    const redirect = await fetch(`${GITHUB_API}${archivePath}`, {
-      headers: { "User-Agent": "DeployDoctor", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      redirect: "manual", signal: AbortSignal.timeout(15_000), cache: "no-store",
-    });
+    const redirect = await githubResponse(archivePath, token, userToken, "manual");
     if (redirect.status !== 302) {
       if (ref && redirect.status === 404) throw new GitHubApiError(`Branch or commit "${ref}" was not found in the repository.`, 404, "gh.refNotFound");
       const rateLimited = redirect.headers.get("x-ratelimit-remaining") === "0" || redirect.headers.has("retry-after");
@@ -194,7 +201,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
     archive = await readRepositoryArchive(downloaded.body, (file, size) =>
       (ROOT_LOCKFILE.test(file) && size <= MAX_LOCKFILE_BYTES) || (size <= MAX_FILE_BYTES &&
       // Nested tsconfig files resolve a nested app's aliases; Astro pages can opt out of prerendering in their frontmatter.
-      (SOURCE_FILE.test(file) || BUILD_FILE.test(file) || /^(?:package|vercel)\.json$/.test(file) || /(?:^|\/)(?:tsconfig|jsconfig)\.json$/.test(file) || ASTRO_PAGE.test(file) || file === ".gitignore"
+      (SOURCE_FILE.test(file) || BUILD_FILE.test(file) || HOST_CONFIG_FILE.test(file) || /(?:^|\/)package\.json$/.test(file) || /^vercel\.json$/.test(file) || /(?:^|\/)(?:tsconfig|jsconfig)\.json$/.test(file) || ASTRO_PAGE.test(file) || file === ".gitignore"
         || /\.prisma$/.test(file) || MIGRATION_FILE.test(file) || MISNAMED_ENV_TEMPLATE.test(file) || /(?:^|\/)\.env(?:\..+)?$/.test(file))), priorityFor, signal);
   } catch (error) {
     if (error instanceof GitHubApiError) throw error;
@@ -214,6 +221,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
     owner,
     name,
     defaultBranch: repository.default_branch,
+    gitRef: ref ?? repository.default_branch,
     entries,
     contents,
     sourceFilesFound: sourceFiles.length,

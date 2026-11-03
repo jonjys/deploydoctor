@@ -6,7 +6,17 @@ const REPO_INPUT = /^(?:(?:https?:\/\/)?(?:www\.)?github\.com\/)?([A-Za-z0-9_-]{
  * a full URL with www, a trailing slash or .git, or a branch or file link (/tree/x, /blob/x). Anything else gives "".
  */
 export function repoUrlFromParam(value: string | null | undefined): string {
+  const pr = pullRequestFromInput(value);
+  if (pr) return pr.repoUrl;
   const match = REPO_INPUT.exec((value ?? "").trim());
   if (!match) return "";
   return `https://github.com/${match[1]}/${match[2]}`;
+}
+
+/** A PR link retains its number instead of silently scanning the default branch. */
+export function pullRequestFromInput(value: string | null | undefined): { repoUrl: string; number: number; url: string } | null {
+  const match = /^(?:https:\/\/)?(?:www\.)?github\.com\/([A-Za-z0-9_-]{1,39})\/([A-Za-z0-9_.-]{1,100})\/pull\/([1-9][0-9]{0,8})(?:\/(?:files|commits|checks))?\/?(?:#[^\s]*)?$/i.exec((value ?? "").trim());
+  if (!match) return null;
+  const repoUrl = `https://github.com/${match[1]}/${match[2]}`;
+  return { repoUrl, number: Number(match[3]), url: `${repoUrl}/pull/${Number(match[3])}` };
 }

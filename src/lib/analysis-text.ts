@@ -510,3 +510,21 @@ const sv: AnalysisText = {
 export function analysisText(lang: Lang): AnalysisText {
   return lang === "sv" ? sv : en;
 }
+
+/** Adapt provider names in shared source checks, after Vercel-only rule gates have been applied. */
+export function forHosting(copy: AnalysisText, platforms: string[]): AnalysisText {
+  if (!platforms.length || platforms.includes("Vercel")) return copy;
+  const host = platforms.filter(p => p !== "Docker").join(" / ") || "the configured container host";
+  const adapt = (v: unknown): unknown => {
+    if (typeof v === "string") return v.replace(/vercel\.json/g, "the hosting routing configuration").replace(/Vercel Functions/g, `${host} runtime`).replace(/Vercel/g, host);
+    if (typeof v === "function") return (...args: unknown[]) => adapt(v(...args));
+    if (Array.isArray(v)) return v.map(adapt);
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, value]) => [k, adapt(value)]));
+    return v;
+  };
+  const result = adapt(copy) as AnalysisText;
+  result.titles.serverLibs = "Server runtime coverage";
+  result.prisma.ok = "No matching Prisma build findings in the source checked. Runtime and database behavior were not verified.";
+  result.prisma.okDrizzle = "Drizzle detected. Database driver/runtime compatibility must be verified on the configured host.";
+  return result;
+}

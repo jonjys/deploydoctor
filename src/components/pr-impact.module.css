@@ -1,0 +1,23 @@
+.panel { margin: 1.5rem 0; padding: clamp(1rem, 4vw, 1.75rem); border: 1px solid var(--line, #334232); border-radius: 16px; min-width: 0; text-align: left; }
+.panel h2 { font-size: clamp(1.35rem, 4vw, 1.9rem); margin: .5rem 0; }
+.panel h3 { margin-top: 1.5rem; font-size: 1rem; }
+.panel p { line-height: 1.6; }
+.panel a, .panel strong { overflow-wrap: anywhere; }
+.commits { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; font-size: .8rem; opacity: .8; }
+.counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin: 1.25rem 0; }
+.counts div { border-top: 1px solid var(--line, #334232); padding-top: .75rem; min-width: 0; }
+.counts dt { font-size: .75rem; line-height: 1.4; }
+.counts dd { font-size: 1.8rem; margin: .25rem 0 0; font-weight: 700; }
+.notice { padding: .75rem; border-left: 3px solid #bca253; background: #bca25312; font-size: .9rem; }
+.findings { list-style: none; margin: 0; padding: 0; }
+.findings li { padding: 1rem 0; border-bottom: 1px solid var(--line, #334232); min-width: 0; }
+.findings strong, .file { display: block; }
+.findings strong { margin: .35rem 0; }
+.file { font-family: var(--font-mono, monospace); font-size: .8rem; }
+.findings p { margin: .5rem 0; }
+.severity { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; opacity: .75; }
+.panel details { padding: .8rem 0; border-top: 1px solid var(--line, #334232); }
+.panel summary { cursor: pointer; line-height: 1.5; }
+@media (max-width: 360px) { .counts { gap: .35rem; } .counts dt { font-size: .7rem; } }
+
+.panel code { overflow-wrap: anywhere; white-space: normal; }

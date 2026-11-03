@@ -17,7 +17,7 @@ const RESERVED = new Set([
   // The page the Watch this repo email links land on.
   "watch",
   // Public folders, so a path below one of their files never starts a scan.
-  "rescue-kit", "stats", "growth", "badge", "score", "launch-readiness", "webhook-replay-lab",
+  "rescue-kit", "stats", "growth", "badge", "score", "launch-readiness", "webhook-replay-lab", "platforms", "deploy-handoff",
   "fix", "rescue",
 ]);
 
