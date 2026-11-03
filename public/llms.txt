@@ -21,3 +21,6 @@ Pasted-log triage: module resolution, npm ERESOLVE and React hydration signature
 Line evidence, context requests, verification criteria and official documentation.
 Logs are processed in memory, never echoed raw or saved by this application.
 No repository fetch, model API call or scan quota for log triage. Unknown signatures request context.
+
+Deploy Handoff: https://deploydoctor.nyttolabs.com/deploy-handoff
+For same-repository PR comparisons with build and environment categories selected, saved reports include a commit-pinned manual checklist of supported environment, migration, hosting, command and endpoint-source changes. Tasks are never automatically verified. Existing private permissions, scan limits and fork restrictions apply. New PR scans are required for older reports.

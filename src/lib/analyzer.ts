@@ -3,6 +3,7 @@ import { checkPortableBuild, portableEnvironment } from "@/lib/portable-build";
 import { checkProductionSafety } from "@/lib/production-safety";
 import { findImprovements } from "@/lib/improvements";
 import path from "node:path";
+import { deploymentInventory } from "@/lib/deploy-handoff";
 import type { Category, CheckResult, CheckStatus, ReportResults, Finding } from "@/types/report";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { defaultChecks, detectStack, type Stack } from "@/lib/stack";
@@ -1396,6 +1397,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
     scope: { scanned, ignored: CATEGORIES.filter((category) => !chosen.has(category)) },
     stack,
     hosting,
+    ...(chosen.has("vercel") && chosen.has("env") ? { deploymentInventory: deploymentInventory(snapshot) } : {}),
     nextApp,
     summary,
     overall: summary.red ? "red" : summary.yellow ? "yellow" : "green",

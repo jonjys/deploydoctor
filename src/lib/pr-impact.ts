@@ -1,3 +1,4 @@
+import { createDeployHandoff, type DeployHandoff } from "@/lib/deploy-handoff";
 import type { CheckId, CheckResult, Finding, ReportResults } from "@/types/report";
 import { isPartialPlaceholder } from "@/lib/report-insights";
 
@@ -33,6 +34,7 @@ export function contextualFindings(results: ReportResults): Map<CheckId, Context
   return context;
 }
 export type PullRequestImpact = {
+  handoff?: DeployHandoff;
   version: 1;
   number: number;
   url: string;
@@ -101,5 +103,7 @@ export function comparePullRequest(base: ReportResults, head: ReportResults,
     if ((old.status !== "green" && !old.findings?.length) || (current.status !== "green" && !current.findings?.length)) result.notCompared.push(id);
   }
   for (const list of [result.introduced, result.persisting, result.noLongerDetected, result.uncertain]) list.sort((a, b) => Number(a.status !== "red") - Number(b.status !== "red") || a.file.localeCompare(b.file) || a.line - b.line);
+  const handoff = createDeployHandoff(base, head, renames, renameCoverageComplete);
+  if (handoff) result.handoff = handoff;
   return result;
 }

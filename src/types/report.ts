@@ -1,3 +1,4 @@
+import type { DeploymentInventory } from "@/lib/deploy-handoff";
 import type { HostingAudit } from "@/lib/hosting-config";
 import type { Stack } from "@/lib/stack";
 import type { Improvement } from "@/lib/improvements";
@@ -45,6 +46,7 @@ export type ReportResults = {
   scope?: { scanned: Category[]; ignored: Category[] };
   stack?: Stack;
   hosting?: HostingAudit;
+  deploymentInventory?: DeploymentInventory;
   /** Where the Next.js app was found. "nested" means a subfolder (monorepo), which is not supported yet. Absent on older reports. */
   nextApp?: "root" | "nested" | "none";
   summary: Record<CheckStatus, number>;

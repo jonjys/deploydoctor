@@ -163,7 +163,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
   // Resolve once, then read only this immutable commit (including the archive and cache key).
   const commitSha = await resolveCommitSha(repoPath, ref ?? repository.default_branch, token, userToken);
   const cacheKey = !options.privateToken && !repository.private && commitSha
-    ? digest(JSON.stringify(["scan-v5-containers", owner.toLowerCase(), name.toLowerCase(), commitSha, ref ?? "", [...(options.checks ?? [])].sort(), options.lang ?? "en"])) : null;
+    ? digest(JSON.stringify(["scan-v6-handoff", owner.toLowerCase(), name.toLowerCase(), commitSha, ref ?? "", [...(options.checks ?? [])].sort(), options.lang ?? "en"])) : null;
   if (cacheKey) {
     const rows = await db<Array<{ results: ReportResults }>>(query("public_scan_cache", {
       key: `eq.${cacheKey}`, expires_at: `gt.${new Date().toISOString()}`, select: "results", limit: "1",
