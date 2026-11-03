@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jonjys/deploydoctor",
   "title": "DeployDoctor",
-  "description": "Triage pasted JavaScript build logs and inspect public Next.js/Vercel repositories with evidence.",
-  "version": "1.1.0",
+  "description": "Static deployment checks for Cloudflare, Netlify, Vercel, Fly.io, Render and containers.",
+  "version": "1.2.0",
   "websiteUrl": "https://deploydoctor.nyttolabs.com/ai-plugin",
   "repository": {
     "url": "https://github.com/jonjys/deploydoctor",

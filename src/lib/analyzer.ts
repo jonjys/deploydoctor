@@ -20,6 +20,8 @@ export type RepositorySnapshot = {
   owner: string;
   name: string;
   defaultBranch: string;
+  /** Ref used for this immutable snapshot; optional for older callers. */
+  gitRef?: string;
   entries: Array<{ path: string; type: "blob" | "tree"; size?: number }>;
   contents: Map<string, string>;
   sourceFilesFound: number;
@@ -1351,7 +1353,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
   };
   const scanned = CATEGORIES.filter((category) => chosen.has(category));
   let checks = scanned.flatMap((category) => runners[category].map((run) => run(snapshot, x)));
-  const portable = checkPortableBuild(snapshot, options.lang ?? "en", hosting);
+  const portable = chosen.has("vercel") ? checkPortableBuild(snapshot, options.lang ?? "en", hosting) : null;
   if (chosen.has("vercel") && portable) {
     const existing = checks.find(c => c.id === "build-config");
     if (existing?.findings?.length) {

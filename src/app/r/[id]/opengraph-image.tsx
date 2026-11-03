@@ -32,7 +32,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
             </div>
             <div style={{ fontSize: 30, fontWeight: 700 }}>DeployDoctor</div>
           </div>
-          <div style={{ fontSize: 20, color: "#b7c2bd", letterSpacing: 2 }}>VERCEL READINESS REPORT</div>
+          <div style={{ fontSize: 20, color: "#b7c2bd", letterSpacing: 2 }}>DEPLOYMENT PREFLIGHT REPORT</div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

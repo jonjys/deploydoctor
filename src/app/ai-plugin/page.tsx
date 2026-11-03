@@ -5,7 +5,7 @@ import { SITE_URL } from "@/lib/site";
 import { plans } from "@/lib/plans";
 
 export const metadata: Metadata = {
-  title: "DeployDoctor MCP plugin — diagnose Next.js and Vercel deploy errors",
+  title: "DeployDoctor MCP plugin — source-backed deployment checks",
   description: "Paste a build log in your AI chat: investigate missing modules, npm ERESOLVE and hydration mismatches with official docs and verification steps. Public repo scans also available.",
   alternates: { canonical: "/ai-plugin" },
 };
@@ -28,7 +28,8 @@ export default function PluginPage() {
     <h2>When to use it</h2>
     <ul><li>“AI keeps changing my code, but the same build error returns. Triage this sanitized log.”</li><li>“My public Next.js repository fails to deploy on Vercel. Check it.”</li><li>“It works on my Mac but imports fail on Linux. Find case mismatches.”</li><li>“Find undeclared packages and environment variables missing from .env.example.”</li><li>“Explain this saved DeployDoctor report without running another scan.”</li></ul>
     <h2>What the tools do</h2>
-    <dl><dt><code>diagnose_build_log</code></dt><dd>Pattern-based triage for module resolution, npm peer conflicts and React hydration errors. Returns line numbers, possible causes, context needed, verification steps and official docs. Does not fetch a repository or spend scan quota.</dd><dt><code>scan_public_repository</code></dt><dd>Static checks and a saved public report. Optional Next.js, Vercel, environment, Supabase and Prisma check categories.</dd><dt><code>get_public_report</code></dt><dd>Read saved findings, file/line evidence and suggested fixes without another scan.</dd><dt><code>get_deploydoctor_plans</code></dt><dd>Read website prices; no payment action.</dd></dl>
+    <dl><dt><code>diagnose_build_log</code></dt><dd>Pattern-based triage for module resolution, npm peer conflicts and React hydration errors. Returns line numbers, possible causes, context needed, verification steps and official docs. Does not fetch a repository or spend scan quota.</dd><dt><code>scan_public_repository</code></dt><dd>Static checks and a saved public report. Supported source and configuration checks for Cloudflare, Netlify, Vercel, Fly.io, Render and containers, with language-specific coverage and explicit limits.</dd><dt><code>get_public_report</code></dt><dd>Read saved findings, file/line evidence and suggested fixes without another scan.</dd><dt><code>get_deploydoctor_plans</code></dt><dd>Read website prices; no payment action.</dd></dl>
+    <p><Link href="/platforms">See exact platform and language coverage →</Link></p>
     <h2>Free allowance and website prices</h2>
     <p>Build-log triage has no repository scan quota and makes no model API calls. Repository scanning allows one free scan per day per source IP. AI services can share an IP and therefore an allowance. Existing reports remain readable. Website passes start at {plans.day.usd} for 24 hours; a 7-day pass is {plans.week.usd}. <Link href="/pricing">See all website plans</Link>.</p>
     <p>Paid website sessions do not transfer to this remote plugin. Public repositories only; never send private access tokens. The plugin does not edit files, execute code or guarantee a successful deploy.</p>

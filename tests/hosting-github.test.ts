@@ -11,6 +11,7 @@ test("the real GitHub archive pipeline reads Wrangler JSON and nested Netlify ma
  const leases:unknown[][]=[];
  require.cache[require.resolve("../src/lib/work-budget")]={exports:{acquireWork:async(...args:unknown[])=>{leases.push(args);return "lease";},releaseWork:async()=>{}},loaded:true} as NodeModule;
  const files={"wrangler.json":JSON.stringify({name:"fixture",compatibility_date:"2026-09-01",main:"src/Worker.ts"}),"src/worker.ts":"throw new Error('REPOSITORY_CODE_MUST_NOT_EXECUTE');", "netlify.toml":'[build]\nbase="apps/site"\ncommand="pnpm run missing-build"',"apps/site/package.json":JSON.stringify({scripts:{build:"vite build"}})};
+ Object.assign(files,{"fly.toml":"[http_service]\ninternal_port=70000","render.yaml":"services:\n  - type: web\n    name: fixture\n    runtime: node\n    rootDir: apps/site\n    healthCheckPath: health",".python-version":"3.11.9","pyproject.toml":'[project]\nrequires-python=">=3.12"'});
  const tar=pack();for(const [file,text] of Object.entries(files))tar.entry({name:`fixture-head/${file}`},text);tar.finalize();const chunks:Buffer[]=[];for await(const chunk of tar)chunks.push(chunk);const compressed=gzipSync(Buffer.concat(chunks));
  const previousFetch=globalThis.fetch, previousToken=process.env.GITHUB_TOKEN, previousSecret=process.env.SESSION_SECRET;delete process.env.GITHUB_TOKEN;process.env.SESSION_SECRET="fixture-only-session-key-for-archive-test-123456789";
  const calls:Array<{url:string;headers:Headers}> = [],sha="d".repeat(40);
@@ -29,6 +30,7 @@ test("the real GitHub archive pipeline reads Wrangler JSON and nested Netlify ma
   const findings=result.results.checks.flatMap(c=>c.findings??[]);
   assert.ok(findings.some(f=>f.ruleId==="cloudflare-entrypoint"&&f.status==="red"));
   assert.ok(findings.some(f=>f.ruleId==="netlify-context-build-script"&&f.problem.includes("apps/site/package.json")));
+  for (const id of ["fly-internal-port","render-healthcheck-path","python-pinned-version"]) assert.ok(findings.some(f=>f.ruleId===id),id);
   assert.ok(result.results.hosting?.filesRead.includes("wrangler.json"));assert.equal(calls.length,4);
   assert.ok(calls.filter(c=>c.url.includes("codeload")).every(c=>!c.headers.has("authorization")));
   assert.ok(leases.some(args=>args[1]==="repository-download"));

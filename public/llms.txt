@@ -1,9 +1,11 @@
 # DeployDoctor
 
-Static deployment checks for public GitHub repositories, especially Next.js on Vercel.
+Static deployment checks for public GitHub repositories. Supported configuration checks for Cloudflare Workers/Pages, Netlify, Vercel, Fly.io, Render, Railway legacy configuration and Docker.
+JavaScript/TypeScript source rules; specific Rust/Cargo, Python and Go configuration rules. Other languages have limited inventory/secret checks; detection is not full language support.
 Reads GitHub API files. Never clones, installs, builds or executes repository code.
 
 - [Product](https://deploydoctor.nyttolabs.com/): public repository scan.
+- [Exact platform and language coverage](https://deploydoctor.nyttolabs.com/platforms): rules and explicit limitations.
 - [AI plugin](https://deploydoctor.nyttolabs.com/ai-plugin): tools, connection, limits, privacy and support.
 - [Pricing](https://deploydoctor.nyttolabs.com/pricing): current website scan passes.
 - [Source and plugin package](https://github.com/jonjys/deploydoctor): implementation and installation docs.

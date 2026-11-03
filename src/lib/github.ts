@@ -16,7 +16,7 @@ import type { Category, ReportResults } from "@/types/report";
 
 const GITHUB_API = "https://api.github.com";
 const SOURCE_FILE = /\.(?:[cm]?[jt]sx?|vue|svelte|rs|py|go|java|cs|rb|php|swift|kt|c|cpp|h)$/i;
-const BUILD_FILE = /(?:^|\/)(?:Cargo\.toml|Cargo\.lock|rust-toolchain(?:\.toml)?|netlify\.toml|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Dockerfile|wrangler\.toml|wrangler\.jsonc)$|^\.github\/workflows\/[^/]+\.ya?ml$/;
+const BUILD_FILE = /(?:^|\/)(?:Cargo\.toml|Cargo\.lock|rust-toolchain(?:\.toml)?|netlify\.toml|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|go\.work(?:\.sum)?|\.python-version|Dockerfile|wrangler\.toml|wrangler\.jsonc)$|^\.github\/workflows\/[^/]+\.ya?ml$/;
 const ASTRO_PAGE = /^src\/pages\/.*\.astro$/i;
 const API_ROUTE = /(?:^|\/)(?:src\/)?app\/api(?:\/.*)?\/route\.[cm]?[jt]s$|(?:^|\/)(?:src\/)?pages\/api\/.*\.[cm]?[jt]s$/i;
 const MAX_FILE_BYTES = 256_000;
@@ -163,7 +163,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
   // Resolve once, then read only this immutable commit (including the archive and cache key).
   const commitSha = await resolveCommitSha(repoPath, ref ?? repository.default_branch, token, userToken);
   const cacheKey = !options.privateToken && !repository.private && commitSha
-    ? digest(JSON.stringify(["scan-v4-hosting", owner.toLowerCase(), name.toLowerCase(), commitSha, ref ?? "", [...(options.checks ?? [])].sort(), options.lang ?? "en"])) : null;
+    ? digest(JSON.stringify(["scan-v5-containers", owner.toLowerCase(), name.toLowerCase(), commitSha, ref ?? "", [...(options.checks ?? [])].sort(), options.lang ?? "en"])) : null;
   if (cacheKey) {
     const rows = await db<Array<{ results: ReportResults }>>(query("public_scan_cache", {
       key: `eq.${cacheKey}`, expires_at: `gt.${new Date().toISOString()}`, select: "results", limit: "1",
@@ -216,6 +216,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
     owner,
     name,
     defaultBranch: repository.default_branch,
+    gitRef: ref ?? repository.default_branch,
     entries,
     contents,
     sourceFilesFound: sourceFiles.length,

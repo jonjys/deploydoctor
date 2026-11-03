@@ -1,4 +1,5 @@
 import path from "node:path";
+import { auditContainerHosting } from "@/lib/container-hosting";
 import { builtinModules } from "node:module";
 import ts from "typescript";
 import { parse as parseToml } from "smol-toml";
@@ -181,9 +182,14 @@ export function auditHosting(s: RepositorySnapshot): HostingAudit {
       if (copy && !/\.(?:example|sample|template)$/.test(copy[1])) add("docker-env-copy", "Dockerfile", i + 1, "The image build explicitly copies an environment file into an image layer.", "Verify it contains no secrets. Prefer runtime secret injection or build secret mounts; removing the file in a later layer does not remove it from earlier layers.");
     }
   }
-  const nested = [...paths].filter(f => /\/(?:wrangler\.(?:toml|jsonc?)|netlify\.toml|railway\.(?:toml|json))$/.test(f));
+  const nested = [...paths].filter(f => /\/(?:wrangler\.(?:toml|jsonc?)|netlify\.toml|fly\.toml|render\.ya?ml|railway\.(?:toml|json))$/.test(f));
   if (nested.length) out.limitations.push("Nested hosting configurations are present; path-relative platform rules currently inspect root hosting configs only.");
   if (out.platforms.length) out.limitations.push("Static repository configuration only. Dashboard settings, CLI overrides, generated output, actual builds and live behavior were not verified.");
+  const containers = auditContainerHosting(s);
+  containers.findings.forEach(f => add(f.ruleId!, f.file, f.line, f.problem, f.fix, f.status === "red" ? "red" : "yellow"));
+  out.filesRead.push(...containers.filesRead);
+  containers.evaluatedRules.forEach(rule => evaluated.add(rule));
+  out.limitations.push(...containers.limitations);
   out.evaluatedRules = [...evaluated]; out.limitations = [...new Set(out.limitations)];
   return out;
 }

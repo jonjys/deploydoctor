@@ -1,4 +1,5 @@
 import path from "node:path";
+import { languageBuildFindings } from "@/lib/language-build";
 import { auditHosting, type HostingAudit } from "@/lib/hosting-config";
 import { parse } from "smol-toml";
 import type { RepositorySnapshot } from "@/lib/analyzer";
@@ -57,13 +58,17 @@ export function checkPortableBuild(s: RepositorySnapshot, lang: Lang, hosting: H
   }
   findings.push(...hosting.findings.filter(f => !(f.ruleId === "hosting-config-syntax" && findings.some(old => old.file === f.file && old.ruleId === "invalid-toml"))));
   checked.push(...hosting.filesRead);
-  if (s.contents.has("pyproject.toml")) toml("pyproject.toml");
+  const python = s.contents.has("pyproject.toml") ? toml("pyproject.toml") : null;
+  const language = languageBuildFindings(s, table(python?.project));
+  findings.push(...language.findings);
+  hosting.limitations.push(...language.limitations);
+  if (s.contents.has(".python-version")) checked.push(".python-version");
   for (const file of ["go.mod", "requirements.txt", "Dockerfile"]) if (s.contents.has(file)) checked.push(file);
   const status = findings.some(f => f.status === "red") ? "red" : "yellow";
   return { id: "build-config", category: "vercel", title: sv ? "Bygg- och hostingkonfiguration" : "Build and hosting configuration", status,
     explanation: findings.length ? `${findings.length} ${sv ? "konfigurationsfynd. Bygget kördes inte." : "configuration findings. The build was not executed."}` : (sv ? "Inga fel hittades av dessa begränsade konfigurationsregler. Kompilering, runtime och hosting verifierades inte." : "No issues found by these limited configuration rules. Compilation, runtime and hosting were not verified."),
     fix: findings[0]?.fix ?? (sv ? "Kör projektets riktiga produktionsbuild och tester i dess målmiljö." : "Run the project's actual production build and tests in its target environment."),
-    findings, evidence: [...new Set(checked)].map(f => `${f}: configuration read`), evaluatedRules: [...hosting.evaluatedRules, "invalid-toml", ...(cargo ? ["rust-edition-msrv", "rust-toolchain-msrv", "rust-target-path", "rust-locked-build"] : []), ...(netlify ? ["netlify-functions-publish", "netlify-missing-script"] : [])] };
+    findings, evidence: [...new Set(checked)].map(f => `${f}: configuration read`), evaluatedRules: [...hosting.evaluatedRules, ...language.evaluatedRules, "invalid-toml", ...(cargo ? ["rust-edition-msrv", "rust-toolchain-msrv", "rust-target-path", "rust-locked-build"] : []), ...(netlify ? ["netlify-functions-publish", "netlify-missing-script"] : [])] };
 }
 
 export function portableEnvironment(s: RepositorySnapshot, lang: Lang): CheckResult {

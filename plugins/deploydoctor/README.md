@@ -27,7 +27,7 @@ Supabase report service, and tool results are visible to the user's AI client.
 ## Relevant requests
 
 - Triage a pasted build error before asking an AI to change code again.
-- Diagnose a public Next.js repository that fails to deploy on Vercel.
+- Diagnose supported source/configuration risks on Cloudflare, Netlify, Vercel, Fly.io, Render and container hosts. See [coverage](https://deploydoctor.nyttolabs.com/platforms); Python, Go and Rust support is rule-specific, not full compiler verification.
 - Check case-sensitive imports before moving a project from macOS to Linux.
 - Identify missing environment declarations or undeclared imported packages.
 - Explain a saved report without rescanning the repository.
