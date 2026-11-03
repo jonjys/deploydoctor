@@ -94,18 +94,27 @@ export function parseGitHubRepoUrl(input: string): {
 }
 
 /** `userToken`: the token is the buyer's own, so a 401, 403 or 404 means it cannot read the repository. */
+async function githubResponse(pathname: string, token: string | undefined, userToken: boolean, redirect: RequestRedirect = "follow"): Promise<Response> {
+  const serviceToken = Boolean(token && token === process.env.GITHUB_TOKEN);
+  const send = async (credential?: string) => {
+    if (serviceToken) await acquireWork(githubRules());
+    return fetch(`${GITHUB_API}${pathname}`, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "DeployDoctor", "X-GitHub-Api-Version": "2022-11-28", ...(credential ? { Authorization: `Bearer ${credential}` } : {}) },
+      cache: "no-store", redirect, signal: AbortSignal.timeout(15_000),
+    });
+  };
+  let response = await send(token);
+  // Only a service-token 404 may be retried. A successful anonymous response proves that exact
+  // resource is public. Never fall back for buyer tokens, authorization errors or any rate limit.
+  if (serviceToken && !userToken && response.status === 404 && response.headers.get("x-ratelimit-remaining") !== "0" && !response.headers.has("retry-after")) {
+    await response.body?.cancel().catch(() => {});
+    response = await send();
+  }
+  return response;
+}
+
 export async function githubRequest<T>(pathname: string, token?: string, userToken = false): Promise<T> {
-  if (token && token === process.env.GITHUB_TOKEN) await acquireWork(githubRules());
-  const response = await fetch(`${GITHUB_API}${pathname}`, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "User-Agent": "DeployDoctor",
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    cache: "no-store",
-    signal: AbortSignal.timeout(15_000),
-  });
+  const response = await githubResponse(pathname, token, userToken);
 
   if (!response.ok) {
     // GitHub also answers 403 for primary (remaining 0) and secondary (Retry-After) rate limits.
@@ -174,11 +183,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
   let archive;
   try {
     const archivePath = `${repoPath}/tarball/${commitSha}`;
-    if (token && token === process.env.GITHUB_TOKEN) await acquireWork(githubRules());
-    const redirect = await fetch(`${GITHUB_API}${archivePath}`, {
-      headers: { "User-Agent": "DeployDoctor", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      redirect: "manual", signal: AbortSignal.timeout(15_000), cache: "no-store",
-    });
+    const redirect = await githubResponse(archivePath, token, userToken, "manual");
     if (redirect.status !== 302) {
       if (ref && redirect.status === 404) throw new GitHubApiError(`Branch or commit "${ref}" was not found in the repository.`, 404, "gh.refNotFound");
       const rateLimited = redirect.headers.get("x-ratelimit-remaining") === "0" || redirect.headers.has("retry-after");
