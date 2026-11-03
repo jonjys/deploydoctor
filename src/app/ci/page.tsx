@@ -27,9 +27,9 @@ jobs:
       pull-requests: write # maintains one PR conversation comment
       id-token: write # lets GitHub prove which public repo is asking; no account, no secret
     steps:
-      - uses: jonjys/deploydoctor-action@ccd293dafc2a6692daf29fcd03fcd5738abeed6b`;
+      - uses: jonjys/deploydoctor-action@ef4c69e41868bf712b6dab3ccc1ea123eb4037c0`;
 
-const PAID_WORKFLOW = `      - uses: jonjys/deploydoctor-action@ccd293dafc2a6692daf29fcd03fcd5738abeed6b
+const PAID_WORKFLOW = `      - uses: jonjys/deploydoctor-action@ef4c69e41868bf712b6dab3ccc1ea123eb4037c0
         with:
           token: \${{ secrets.DEPLOYDOCTOR_TOKEN }}
           # Private repository? Let the scan read it:
@@ -66,7 +66,7 @@ export default function CiPage() {
           </p>
           <pre><code>{WORKFLOW}</code></pre>
           <p className="ci-copy"><CopyTextButton text={WORKFLOW} label="Copy workflow" copiedLabel="Copied" /></p>
-          <p>The workflow pins the PR-comment release to an immutable commit. Existing workflows using an older version must update the Action reference and add <code>pull-requests: write</code> to get comments.</p>
+          <p>The workflow pins the PR Change Review release to an immutable commit. Existing workflows using an older version must update the Action reference and add <code>pull-requests: write</code> to get comments.</p>
           <p>Also listed on the <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a>.</p>
           <p>Maintaining a template or starter? Every public report also offers a Scan with DeployDoctor button for its README. Forks keep the README text, so a fork changes the owner/repo in the link to scan its own copy before the first deploy.</p>
         </section>
@@ -102,7 +102,9 @@ export default function CiPage() {
         </section>
 
         <section>
-          <h2>One comment, kept current</h2>
+          <h2>What changed in this PR?</h2>
+          <p>For a matching same-repository PR head, the Action compares static findings at the PR merge base and head. Newly detected findings appear first; already-present findings and observations no longer detected stay separate. Moving lines are matched, known file renames are accounted for, and incomplete coverage requires review. Both commits are pinned.</p>
+          <p>The comparison uses one existing scan allowance. It does not build the merged app or certify a fix. The job still applies <code>fail-on</code> to the full head scan, including existing problems.</p>
           <p>Comments are supported for same-repository pull requests on the scanned head commit. Forks, Dependabot, closed PRs, other events and ref overrides are not commented. Do not use <code>pull_request_target</code> to bypass these restrictions.</p>
           <p>The built-in GitHub token stays in the runner and is used only for GitHub comments. A missing write permission produces a warning; scan results remain in the job summary. Private reports retain their existing authentication.</p>
           <p>Set <code>comment: false</code> to disable conversation comments, or <code>audit-link: false</code> to remove the discreet link to the existing optional €149 human audit. No new price or subscription is introduced.</p>
@@ -138,7 +140,7 @@ export default function CiPage() {
           </div>
           <Link className="cta-button" href="/">Scan a repository →</Link>
         </aside>
-        <p className="guide-updated">Updated 2026-11-02 · <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a> · <a href="https://github.com/jonjys/deploydoctor-action">Action source</a></p>
+        <p className="guide-updated">Updated 2026-11-03 · <a href="https://github.com/marketplace/actions/deploydoctor">GitHub Marketplace</a> · <a href="https://github.com/jonjys/deploydoctor-action">Action source</a></p>
       </article>
     </main>
   );
