@@ -20,6 +20,7 @@ export function reportJson(report: StoredReport) {
     scan: results.scan,
     stack: results.stack ?? null,
     nextApp: results.nextApp ?? null,
+    pullRequest: results.pullRequest ?? null,
     checks: results.checks.map((check) => ({
       id: check.id, title: check.title, status: check.status, explanation: check.explanation, fix: check.fix,
       evidence: check.evidence, findings: check.findings ?? [], suggestedFile: check.suggestedFile ?? null,

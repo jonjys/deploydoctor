@@ -1,4 +1,5 @@
 import { LaunchReadiness } from "@/components/launch-readiness";
+import { PrImpact } from "@/components/pr-impact";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -120,7 +121,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const ignoredCategories = results.scope?.ignored ?? [];
 
   const status = report.is_private ? t("report.private") : t("report.savedFree");
-  const rescanHref = `/?repo=${encodeURIComponent(`${results.repository.owner}/${results.repository.name}`)}`;
+  const rescanHref = `/?repo=${encodeURIComponent(results.pullRequest?.url ?? `${results.repository.owner}/${results.repository.name}`)}`;
   // A root app on another framework the scan knows still gets real results, so it keeps the normal headline.
   const otherStack = results.nextApp === "none" ? results.stack?.framework : undefined;
   const neutral = neutralReport(results);
@@ -157,7 +158,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <ScoreCard checks={checkStates} notNext={neutral} partial={results.scan.partial} />
         </div>
 
-        <FixFirst items={fixFirst} limit={3} />
+        {results.pullRequest ? <PrImpact impact={results.pullRequest} repoUrl={report.repo_url} lang={lang} /> : <FixFirst items={fixFirst} limit={3} />}
         <div className="report-meta">
           <a className="report-repo" href={report.repo_url} target="_blank" rel="noreferrer">
             {report.repo_url} ↗
@@ -186,7 +187,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         )}
       </header>
 
-      {previous && since && (hasChanges(since) ? <SinceLastScan diff={since} previous={previous} lang={lang} /> : <details className="report-supporting"><summary>{t("report.sinceTitle")}</summary><SinceLastScan diff={since} previous={previous} lang={lang} /></details>)}
+      {!results.pullRequest && previous && since && (hasChanges(since) ? <SinceLastScan diff={since} previous={previous} lang={lang} /> : <details className="report-supporting"><summary>{t("report.sinceTitle")}</summary><SinceLastScan diff={since} previous={previous} lang={lang} /></details>)}
 
       <section className="results-list" id="checks" aria-label="Deployment checks">
         {!actionable.length && <p className="report-no-findings">{t("report.noFindings")}</p>}

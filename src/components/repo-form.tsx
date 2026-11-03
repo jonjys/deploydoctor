@@ -7,7 +7,7 @@ import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { GitHubConnect } from "@/components/github-connect";
 import { CATEGORIES } from "@/lib/categories";
 import { describeStack, type Stack } from "@/lib/stack";
-import { repoUrlFromParam } from "@/lib/repo-input";
+import { pullRequestFromInput, repoUrlFromParam } from "@/lib/repo-input";
 import { useLang, useT } from "@/components/lang";
 import type { Category } from "@/types/report";
 
@@ -31,7 +31,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
   const lang = useLang();
   const t = useT();
   const searchParams = useSearchParams();
-  const autoRepoUrl = repoUrlFromParam(searchParams.get("repo"));
+  const autoRepoUrl = pullRequestFromInput(searchParams.get("repo"))?.url ?? repoUrlFromParam(searchParams.get("repo"));
   // Back from checkout for a private repo: the scan waits for the token instead of starting on arrival.
   const privateStart = searchParams.get("private") === "1";
   const [privateMode, setPrivateMode] = useState(privateStart);
@@ -165,7 +165,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
       return;
     }
     // Anything the normalizer cannot read goes as typed, so the server explains what is wrong with it.
-    await startScan(repoUrlFromParam(repoUrl) || repoUrl.trim(), sendChecks);
+    await startScan(pullRequestFromInput(repoUrl)?.url ?? (repoUrlFromParam(repoUrl) || repoUrl.trim()), sendChecks);
   }
 
   async function startScan(url: string, sendChecks: boolean) {
@@ -232,7 +232,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
       <div className="input-shell">
         <GitHubIcon />
         <label className="sr-only" htmlFor="repo-url">
-          {t("form.urlLabel")}
+          {lang === "sv" ? "GitHub-repo eller pull request-länk" : "GitHub repository or pull request URL"}
         </label>
         <div className="repo-input-wrap">
         <input
@@ -244,7 +244,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
           autoComplete="url"
           autoCapitalize="none"
           spellCheck={false}
-          placeholder="https://github.com/owner/repository"
+          placeholder="GitHub repository or pull request URL"
           value={repoUrl}
           onChange={(event) => handleUrlChange(event.target.value)}
           ref={inputRef}
@@ -253,10 +253,11 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
         <kbd className="slash-hint" aria-hidden="true" title={t("form.shortcut")}>/</kbd>
         </div>
         <button className="scan-button" type="submit" disabled={isLoading}>
-          {isLoading ? t("form.scanning") : privateMode ? (lang === "sv" ? "Skanna privat repo" : "Scan private repo") : (lang === "sv" ? "Skanna publikt repo" : "Scan public repo")}
+          {isLoading ? t("form.scanning") : pullRequestFromInput(repoUrl) ? (lang === "sv" ? "Jämför PR" : "Compare PR") : privateMode ? (lang === "sv" ? "Skanna privat repo" : "Scan private repo") : (lang === "sv" ? "Skanna publikt repo" : "Scan public repo")}
           <span aria-hidden="true">→</span>
         </button>
       </div>
+      <p className="plugin-line">{pullRequestFromInput(repoUrl) ? (lang === "sv" ? "Jämför PR head med gemensam bas. Två fasta snapshots, en skanningskvot. Fork-PR stöds inte ännu." : "Compare PR head with its merge base. Two pinned snapshots, one scan allowance. Fork PRs are not supported yet.") : (lang === "sv" ? "Nytt: klistra in en PR-länk för att skilja nytillkomna fynd från gamla." : "New: paste a PR link to separate newly detected findings from existing ones.")}</p>
       {/* Shown to everyone: without a pass, a token scan answers with the $2 offer. */}
       <div className="private-input" hidden={!privateMode} ref={privateDetails}>
         {!privateAccess && <><p>{t("form.private.needsPass")}</p><ScanCheckoutButton plan="day" context={repoUrlFromParam(repoUrl) || undefined}>{lang === "sv" ? "Aktivera privata skanningar · 19 kr" : "Unlock private scans · $2"}</ScanCheckoutButton></>}

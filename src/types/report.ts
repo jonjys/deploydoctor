@@ -1,5 +1,6 @@
 import type { Stack } from "@/lib/stack";
 import type { Improvement } from "@/lib/improvements";
+import type { PullRequestImpact } from "@/lib/pr-impact";
 
 export type CheckStatus = "red" | "yellow" | "green";
 export type CheckId = "next-entry" | "imports" | "server-libs" | "env" | "supabase" | "prisma" | "build-config" | "secrets" | "dependencies" | "production-safety";
@@ -49,6 +50,8 @@ export type ReportResults = {
   checks: CheckResult[];
   /** Things the scan can see are missing that are not errors. Absent on reports saved before improvements existed. */
   improvements?: Improvement[];
+  /** Optional PR comparison; legacy and ordinary repository reports are unchanged. */
+  pullRequest?: PullRequestImpact;
 };
 
 export type StoredReport = {

@@ -60,6 +60,14 @@ if (!["warn", "fail"].includes(quotaExhausted)) fail(`Input \`quota-exhausted\` 
 
 const body = { repoUrl: `https://github.com/${repository}` };
 if (ref) body.ref = ref;
+// Only a matching same-repository PR event may request a base/head comparison.
+if (env("GITHUB_EVENT_NAME") === "pull_request" && env("GITHUB_ACTOR") !== "dependabot[bot]" && env("GITHUB_REPOSITORY") === repository) {
+  try {
+    const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
+    if (Number.isSafeInteger(event.number) && event.number > 0 && event.pull_request?.base?.repo?.full_name === repository
+      && event.pull_request?.head?.repo?.full_name === repository && /^[a-f0-9]{40}$/i.test(ref) && event.pull_request?.head?.sha?.toLowerCase() === ref.toLowerCase()) body.pullRequest = event.number;
+  } catch { /* Missing or malformed context keeps the ordinary repository scan. */ }
+}
 if (githubToken) body.privateToken = githubToken;
 if (checks.length) body.checks = checks;
 
