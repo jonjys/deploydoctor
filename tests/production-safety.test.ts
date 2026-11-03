@@ -15,6 +15,7 @@ const fixtures = [
   {rule:"stripe-event-verification", file:"app/api/stripe/webhook/route.ts", bad:stripe+`export async function POST(req: Request) { const event = await req.json(); return Response.json({type: event.type}); }`, good:stripe+`export async function POST(req: Request) { const event = await verifyStripeWebhook(req); return Response.json({type: event.type}); }`},
   {rule:"stripe-pages-body-parser", file:"pages/api/stripe-webhook.ts", bad:stripe+`export default async function handler(req, res) { const event = stripe.webhooks.constructEvent(req.body, 'sig','secret'); res.json(event); }`, good:stripe+`export const config = { api: { bodyParser: false } }; export default async function handler(req, res) { const event = stripe.webhooks.constructEvent(await buffer(req), 'sig','secret'); res.json(event); }`},
   {rule:"checkout-local-redirect", file:"app/api/checkout/route.ts", bad:stripe+`export async function POST(){ return stripe.checkout.sessions.create({success_url:'http://localhost:3000/success', cancel_url:'https://shop.example/cancel'}); }`, good:stripe+`export async function POST(){ return stripe.checkout.sessions.create({success_url:'https://shop.example/success', cancel_url:process.env.CANCEL_URL}); }`},
+  {rule:"checkout-client-unlock", file:"src/app/success/page.tsx", bad:`'use client'; import { useEffect } from 'react'; export default function Success(){ useEffect(()=>{ const q = new URLSearchParams(location.search); if (q.get('pro') === 'success') localStorage.setItem('app_pro', '1'); }, []); return null }`, good:`'use client'; import { useEffect } from 'react'; export default function Success(){ useEffect(()=>{ const id = new URLSearchParams(location.search).get('session_id'); fetch('/api/checkout/verify?session_id=' + id).then(r => r.json()).then(s => { if (s.paid) localStorage.setItem('app_pro', '1'); }); }, []); return null }`},
   {rule:"next-client-boundary", file:"app/page.tsx", bad:`'use client'; import { cookies } from 'next/headers'; export default function Page(){const store=cookies(); return null}`, good:`'use client'; import type { ReadonlyHeaders } from 'next/headers'; export default function Page(){return null}`},
   {rule:"next-runtime-value", file:"src/app/api/orders/route.ts", bad:`export const runtime = 'node'; export function GET(){return Response.json({ok:true})}`, good:`export const runtime = 'nodejs'; export function GET(){return Response.json({ok:true})}`},
   {rule:"personalized-static-cache", file:"app/api/account/route.ts", bad:`export const dynamic = 'force-static'; export function GET(req: Request){ return Response.json({token: req.headers.get('authorization')}); }`, good:`export const dynamic = 'force-dynamic'; export function GET(req: Request){ return Response.json({ok: !!req.headers.get('authorization')}, { headers: { 'Cache-Control': 'private, no-store' } }); }`},
@@ -111,4 +112,15 @@ test("launch repair hints require proven eligible imports and never advertise pr
   assert.equal(launchReadiness(r,"r",true).criticalBlockers.find(f=>f.checkId==="imports")?.repair,null);
   const json=reportJson({id:"r",repo_url:"https://github.com/owner/private",created_at:r.checkedAt,results:r,is_private:true});
   assert.ok(json.launchReadiness.criticalBlockers.every(f=>f.repair===null));
+});
+test("client unlock: paid-key shapes, unrelated keys and storage without a return URL", () => {
+  const page = (key: string, read = "new URLSearchParams(location.search).get('success')") =>
+    `'use client'; export function done(){ if (${read}) localStorage.setItem('${key}', 'true'); }`;
+  const flagged = (code: string) => checkProductionSafety(snapshot({"components/paywall.tsx": code})).findings?.some(f => f.ruleId === "checkout-client-unlock");
+  for (const key of ["snabbfaktura_pro", "isPro", "hasPremium", "premium-unlocked", "license"]) assert.ok(flagged(page(key)), key);
+  for (const key of ["theme", "thisProfile", "productId", "recentPlans"]) assert.ok(!flagged(page(key)), key);
+  // A paid key with no read of the return URL is not this pattern.
+  assert.ok(!flagged(`'use client'; export function save(){ localStorage.setItem('isPro', 'true'); }`));
+  // Server routes are not browser storage.
+  assert.ok(!checkProductionSafety(snapshot({"app/api/x/route.ts": page("isPro")})).findings?.some(f => f.ruleId === "checkout-client-unlock"));
 });

@@ -13,6 +13,12 @@ const SOURCE = /\.[cm]?[jt]sx?$/;
 const EXCLUDED = /(?:^|\/)(?:tests?|__tests__|__mocks__|fixtures|spec|examples?|scripts|cli|action)\/|\.(?:test|spec|stories)\.[cm]?[jt]sx?$|\.d\.[cm]?ts$/;
 const ROUTE = /^(?:src\/)?app\/(?:.*\/)?route\.[cm]?[jt]s$/;
 const PAGES_API = /^(?:src\/)?pages\/api\/.*\.[cm]?[jt]s$/;
+// Storage keys that name a paid state (snake, kebab or camel case), and return-URL parameters a checkout typically sets.
+const PAID_WORD = /(?:^|[^a-z])(?:pro|premium|paid|plus|vip|unlocked?|subscri[a-z]*|licen[cs]e[a-z]*|purchased?|entitle[a-z]*|full[-_]?access)(?:$|[^a-z])/;
+const PAID_CAMEL = /(?:^|[a-z])(?:Pro|Premium|Paid|Plus|Vip|Unlocked?|Subscri[a-z]*|Licen[cs]e[a-z]*|Purchased?|Entitle[a-z]*|FullAccess)(?:$|[A-Z_-])/;
+const PAID_KEY = { test: (key: string) => PAID_WORD.test(key.toLowerCase()) || PAID_CAMEL.test(key) };
+const RETURN_PARAM = /^(?:success|paid|pro|premium|purchase[ds]?|checkout|payment|session_?id|unlock(?:ed)?|status)$/i;
+const VERIFY_PATH = /verify|confirm|session|entitle|licen[cs]e|subscription|status|check/i;
 const unwrap = (n: ts.Node): ts.Node => ts.isAwaitExpression(n) || ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n) ? unwrap(n.expression) : n;
 const prop = (n: ts.Node) => ts.isPropertyAccessExpression(n) ? n.name.text : "";
 const literal = (n: ts.Node | undefined) => n && ts.isStringLiteralLike(n) ? n.text : undefined;
@@ -138,6 +144,24 @@ export function checkProductionSafety(snapshot: RepositorySnapshot): CheckResult
           const value = literal(p.initializer);
           if (value && /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(value)) add("checkout-local-redirect", p, "yellow", `Stripe ${name(p.name)} points directly to a loopback address.`, "Use an authorized production HTTPS origin for deployed checkout redirects. Keep local-only checkout code behind an explicit development configuration; verify redirects in Stripe test mode.");
         }
+      }
+    }
+    if (!route && !pages && !expressHandler) {
+      // A paid state written to browser storage after reading the return URL: anyone can type the URL or set the key.
+      const storageWrites = calls.filter(n => /^(?:window\.)?(?:localStorage|sessionStorage)\.setItem$/.test(n.expression.getText(sf))
+        && PAID_KEY.test(literal(n.arguments[0]) ?? ""));
+      if (storageWrites.length) {
+        evaluated.add("checkout-client-unlock");
+        const readsReturnUrl = nodes.some(n => (ts.isPropertyAccessExpression(n) && n.name.text === "search" && /(?:^|\.)location$/.test(n.expression.getText(sf)))
+          || (ts.isNewExpression(n) && n.expression.getText(sf) === "URLSearchParams")
+          || (ts.isCallExpression(n) && n.expression.getText(sf) === "useSearchParams")
+          || (ts.isCallExpression(n) && prop(n.expression) === "get" && RETURN_PARAM.test(literal(n.arguments[0]) ?? "")));
+        // A request to the server to confirm the purchase is the safe pattern; trust it rather than guess at its handler.
+        const asksServer = calls.some(n => ["fetch", "axios", "axios.get", "axios.post"].includes(n.expression.getText(sf))
+          && n.arguments[0] && VERIFY_PATH.test(n.arguments[0].getText(sf)));
+        if (readsReturnUrl && !asksServer) add("checkout-client-unlock", storageWrites[0], "yellow",
+          "A paid state is saved in browser storage from the checkout return URL, without a visible server check. Anyone can open that URL or set the key and get the paid feature free.",
+          "Send the Stripe session_id from the return URL to your server, retrieve the Checkout Session there and confirm payment_status is paid, then store the entitlement server-side (database row or signed cookie). Grant paid features only from that server answer; test by opening the success URL without paying.");
       }
     }
     if (route) {
