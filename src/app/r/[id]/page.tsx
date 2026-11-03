@@ -113,7 +113,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
 
   const { results } = report;
   const alternativeHost = !!results.hosting?.platforms.length && !results.hosting.platforms.includes("Vercel");
-  const hostingDoc = results.hosting?.platforms.includes("Cloudflare") ? "https://developers.cloudflare.com/workers/wrangler/configuration/" : results.hosting?.platforms.includes("Netlify") ? "https://docs.netlify.com/build/configure-builds/file-based-configuration/" : results.hosting?.platforms.includes("Railway") ? "https://docs.railway.com/config-as-code/reference" : "https://docs.docker.com/reference/dockerfile/";
+  const hostingDoc = results.hosting?.platforms.includes("Cloudflare") ? "https://developers.cloudflare.com/workers/wrangler/configuration/" : results.hosting?.platforms.includes("Netlify") ? "https://docs.netlify.com/build/configure-builds/file-based-configuration/" : results.hosting?.platforms.includes("Render") ? "https://render.com/docs/blueprint-spec" : results.hosting?.platforms.includes("Fly.io") ? "https://fly.io/docs/reference/configuration/" : results.hosting?.platforms.includes("Railway") ? "https://docs.railway.com/config-as-code/reference" : "https://docs.docker.com/reference/dockerfile/";
   const findingContext = contextualFindings(results);
   const repoName = `${results.repository.owner}/${results.repository.name}`;
   const parts = freeFixParts(report, lang);

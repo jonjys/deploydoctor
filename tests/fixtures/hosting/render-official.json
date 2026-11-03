@@ -1,0 +1,8 @@
+{
+  "repository": "render-examples/express-hello-world",
+  "commit": "039c34770852fb07cef7f9f0f8534c5de408b207",
+  "files": {
+    "render.yaml": "services:\n  - type: web\n    name: express-hello-world\n    runtime: node\n    plan: free\n    buildCommand: yarn install --frozen-lockfile\n    startCommand: node app.js\n    envVars:\n      - key: NODE_ENV\n        value: production\n",
+    "package.json": "{\n  \"name\": \"express-hello-world\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Express Hello World on Render\",\n  \"main\": \"app.js\",\n  \"repository\": \"https://github.com/render-examples/express-hello-world\",\n  \"author\": \"Render Developers\",\n  \"license\": \"MIT\",\n  \"private\": false,\n  \"scripts\": {\n    \"start\": \"node app.js\"\n  },\n  \"dependencies\": {\n    \"express\": \"^5.0.0\"\n  }\n}\n"
+  }
+}

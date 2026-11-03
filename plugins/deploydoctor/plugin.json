@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "deploydoctor",
-  "version": "1.1.0",
-  "description": "Triage pasted JavaScript build logs and inspect public Next.js/Vercel repositories with evidence, official documentation and verification steps.",
+  "version": "1.2.0",
+  "description": "Static deployment checks for Cloudflare, Netlify, Vercel, Fly.io, Render and containers. Triage supported JavaScript build logs with evidence and verification steps.",
   "author": {
     "name": "Nytto Labs",
     "email": "support@nyttolabs.com",
@@ -17,14 +17,22 @@
     "Next.js",
     "GitHub",
     "build errors",
-    "environment variables"
+    "environment variables",
+    "Cloudflare",
+    "Netlify",
+    "Fly.io",
+    "Render",
+    "Docker",
+    "Rust",
+    "Python",
+    "Go"
   ],
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "DeployDoctor",
         "shortDescription": "Triage build and deploy errors",
-        "longDescription": "Paste a sanitized build log to investigate module resolution errors, npm ERESOLVE peer conflicts or React hydration mismatches. Get matching line numbers, possible causes, required context, verification steps and official documentation. Log triage uses deterministic rules: no code execution, storage or model API call. Unsupported errors request context rather than inventing a fix. Public GitHub repository scans also return saved file/line evidence and use the free allowance of one scan/day per source IP. Private repositories and paid website sessions are not supported remotely. No deployment guarantee.",
+        "longDescription": "Paste a sanitized build log to investigate module resolution errors, npm ERESOLVE peer conflicts or React hydration mismatches. Get matching line numbers, possible causes, required context, verification steps and official documentation. Log triage uses deterministic rules: no code execution, storage or model API call. Unsupported errors request context rather than inventing a fix. Public GitHub repository scans also return saved file/line evidence and use the free allowance of one scan/day per source IP. Private repositories and paid website sessions are not supported remotely. No deployment guarantee. Supported configuration checks cover Cloudflare, Netlify, Vercel, Fly.io, Render, legacy Railway and containers; Python, Go and Rust have specific configuration checks. See /platforms for limits.",
         "developerName": "Nytto Labs",
         "category": "Developer Tools",
         "capabilities": [
@@ -37,7 +45,7 @@
         "privacyPolicyURL": "https://deploydoctor.nyttolabs.com/ai-plugin#privacy",
         "termsOfServiceURL": "https://deploydoctor.nyttolabs.com/ai-plugin#terms",
         "defaultPrompt": [
-          "Check my public GitHub repository for Vercel deployment mistakes.",
+          "Check my public GitHub repository for source-backed deployment risks on its configured host.",
           "Diagnose this sanitized build error and tell me what to inspect and how to verify a fix.",
           "Read my saved DeployDoctor report and explain the failed checks."
         ],

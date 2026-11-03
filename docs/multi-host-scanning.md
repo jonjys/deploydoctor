@@ -1,6 +1,6 @@
 # Multi-host scanning, November 2026
 
-DeployDoctor keeps one scanner, one immutable repository snapshot, the existing quota/authentication model and the same reports, repairs, PR comparison, API, Action and CLI. Platform rules inspect committed data only. No repository code, config module, build, plugin or Railway TypeScript IaC is executed. No new AI usage, dependency or database migration is introduced.
+DeployDoctor keeps one scanner, one immutable repository snapshot, the existing quota/authentication model and the same reports, repairs, PR comparison, API, Action and CLI. Platform rules inspect committed data only. No repository code, config module, build, plugin or Railway TypeScript IaC is executed. No new AI usage or database migration is introduced. The follow-up adds the pinned, dependency-free `yaml@2.9.1` parser for Render Blueprints with an alias-expansion budget.
 
 ## Before and after
 
@@ -13,7 +13,7 @@ DeployDoctor keeps one scanner, one immutable repository snapshot, the existing 
 | Existing source rules | Many Vercel-specific assumptions | Explicit alternative-host configurations no longer get Vercel-only Node version, Svelte/Astro adapter, SPA rewrite, browser/SQLite package or local SQLite hosting conclusions. Shared source risks and provider-specific findings remain |
 | Reporting | Provider name alone | Additive hosting metadata: platforms, configuration files read, evaluated rule families, evidence-backed findings and limitations. /platforms explains exact language/host coverage |
 
-## Added rule families
+## Initial multi-host rule families
 
 | Rule | Evidence | Classification |
 | --- | --- | --- |
@@ -58,3 +58,40 @@ Railway's current documentation marks Config as Code deprecated for new services
 ## Tests
 
 `hosting-config.test.ts` includes positive and negative fixtures for every new family, AST strings/comments, modern and legacy dates, generated/partial entrypoints, nested manifests, conditional redirects, explicit edge regexes, unchanged alternative-host adapter/SQLite choices and selected-category behavior. `hosting-github.test.ts` exercises the real archive downloader/analyzer pipeline with fake bounded HTTP responses: nested package.json and wrangler.json are read at a fixed SHA, concurrency guards are used, credentials are not forwarded to codeload, and source containing an execution trap remains data.
+
+## Portable host and language follow-up
+
+| Rule | Evidence and conservative behavior |
+| --- | --- |
+| fly-config-syntax | Root fly.toml fails TOML parsing; source configuration issue |
+| fly-internal-port | Literal numeric internal port outside 1–65535; source configuration issue |
+| fly-process-reference | Explicit service process absent from an explicit processes table; review, no invented default-process error |
+| fly-volume-destination | Literal relative/root-filesystem mount destination; source configuration issue |
+| fly-dockerfile-path | Explicit local Dockerfile absent; review, remote URLs/images/buildpacks excluded |
+| render-config-syntax | Invalid YAML or duplicate mapping keys; ambiguous multiple files stay review |
+| render-root-directory | Explicit rootDir absent from complete snapshot; other repos/unscanned branches excluded |
+| render-dockerfile-path | Explicit Dockerfile absent relative to service root; review, image runtime excluded |
+| render-healthcheck-path | Explicit path missing leading slash; source configuration issue, not a live health test |
+| render-missing-script | Literal run command or bare pnpm/yarn build absent from the service package; complex shell and builtins excluded |
+| render-development-start | Exact development-server start command; review |
+| render-static-publish-file | Output setting points at an actual tracked file; missing generated directories are not errors |
+| render-cron-schedule | Cron service with no committed schedule; review of existing provider setting required |
+| docker-sensitive-build-variable | Sensitive ARG/ENV declaration; review only. No secret value is included in findings |
+| python-pinned-version | Exact three-component .python-version contradicts a simple standard requires-python constraint; review because the production runtime is unknown |
+| go-toolchain-minimum | Explicit stable toolchain directive older than the module go directive; source configuration issue, no installed-version inference |
+| go-local-replacement | Literal local replacement outside snapshot or absent from complete tree; review of build/workspace context |
+
+Render YAML is data only: no custom tag execution, no dynamic config evaluation, duplicate keys rejected, unknown tags skipped and alias expansion capped at 30. Up to 100 services, 32 projects and 32 environments per project are inspected. Root and ungrouped services and project environments are supported. An explicit different repository or unscanned branch cannot create local source-path/script errors. Fly service and mount inspection is bounded; finding counts are capped with limitations. Nested hosting configs remain detected with explicit coverage limitations. Docker variable rules intentionally do not certify image security, multi-stage reachability or actual secret injection.
+
+Python constraints use only a proven subset of standard release comparisons (>=, <=, ==, !=, >, < and comma conjunctions). Wildcards, compatible-release syntax, prereleases, environment markers and multiple pins are skipped rather than guessed. Go dependencies are not fetched, and toolchain auto-download behavior is not confused with the module's explicit configuration consistency.
+
+A pinned fixture comes from the official Render Express example at commit `039c34770852fb07cef7f9f0f8534c5de408b207`. Its Blueprint produces no Render rule false positives; adding an invalid healthcheck path produces the expected finding. This checks actual committed example configuration, not its runtime or a real Render deployment.
+
+Additional primary documentation:
+- https://fly.io/docs/reference/configuration/
+- https://render.com/docs/blueprint-spec
+- https://render.com/docs/monorepo-support (rootDir changes Docker/publish path resolution)
+- https://docs.docker.com/build/building/variables/
+- https://eemeli.org/yaml/
+- https://go.dev/doc/modules/gomod-ref
+- https://packaging.python.org/en/latest/specifications/version-specifiers/
