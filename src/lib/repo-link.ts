@@ -18,6 +18,7 @@ const RESERVED = new Set([
   "watch",
   // Public folders, so a path below one of their files never starts a scan.
   "rescue-kit", "stats", "growth", "badge", "score", "launch-readiness", "webhook-replay-lab",
+  "fix", "rescue",
 ]);
 
 /** Where a path that names no repository is sent: one segment matches no route, so it renders the app's not-found page. */

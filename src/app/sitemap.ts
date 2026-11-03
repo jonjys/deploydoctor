@@ -13,6 +13,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE_URL}/ai-plugin`, lastModified: "2026-10-04", changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/guides`, lastModified: "2026-10-21", changeFrequency: "weekly", priority: 0.8 },
     { url: `${SITE_URL}/diagnose`, lastModified: "2026-10-11", changeFrequency: "monthly", priority: 0.9 },
+    { url: `${SITE_URL}/fix`, lastModified: "2026-11-03", changeFrequency: "monthly", priority: 0.9 },
+    { url: `${SITE_URL}/rescue`, lastModified: "2026-11-03", changeFrequency: "daily", priority: 0.6 },
     { url: `${SITE_URL}/ci`, lastModified: "2026-10-06", changeFrequency: "monthly", priority: 0.8 },
     ...guides.map((guide) => ({ url: `${SITE_URL}/guides/${guide.slug}`, lastModified: guide.updated, changeFrequency: "monthly" as const, priority: 0.7 })),
     { url: `${SITE_URL}/errors`, lastModified: "2026-10-28", changeFrequency: "monthly", priority: 0.8 },

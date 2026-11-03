@@ -1,9 +1,8 @@
 import { diagnosisRules } from "@/lib/budget-policy";
 import { acquireWork, releaseWork, workLimitResponse } from "@/lib/work-budget";
 import Anthropic from "@anthropic-ai/sdk";
-import { activePlan, finishScan, hashRequestIp, requestCustomer, reserveScan } from "@/lib/access";
+import { activePlan, hashRequestIp, requestCustomer } from "@/lib/access";
 import { DiagnoseUnavailable, diagnoseConfigured, diagnoseWithClaude, MAX_LOG_CHARS } from "@/lib/ai-diagnose";
-import { diagnoseAllowance } from "@/lib/limits";
 import { sameOrigin } from "@/lib/stripe";
 import { langFromRequest, t } from "@/lib/i18n";
 
@@ -11,8 +10,9 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
- * AI diagnosis of a pasted build log. Free visitors get the daily allowance that reserve_scan enforces,
- * counted under its own key so it never uses up their repository scans; any active pass is unlimited.
+ * AI diagnosis of a pasted build log. Diagnosis is free: it does not reserve a daily scan.
+ * A shared site capacity and a short burst limit still apply so one visitor cannot exhaust the model budget.
+ * The exact patch text is withheld; the $5 fix pull request is the paid delivery.
  */
 export async function POST(request: Request) {
   const lang = langFromRequest(request);
@@ -20,8 +20,6 @@ export async function POST(request: Request) {
   if (invalidToken) return Response.json({ error: t(lang, "err.badToken") }, { status: 401 });
   if (!viaToken && !sameOrigin(request)) return Response.json({ error: t(lang, "err.origin") }, { status: 403 });
 
-  let reservation: string | undefined;
-  let done = false;
   let globalLease: string | null = null;
   let accountLease: string | null = null;
   try {
@@ -35,24 +33,18 @@ export async function POST(request: Request) {
     // Never take a free diagnosis when the model cannot run.
     if (!diagnoseConfigured()) throw new DiagnoseUnavailable();
     const plan = await activePlan(customer);
-    if (!plan) {
-      const quota = await reserveScan(request, diagnoseAllowance(hashRequestIp(request)));
-      if (!quota.allowed) {
-        console.log("dd-funnel", JSON.stringify({ step: "paywall", plan: null, reason: "diagnose_limit" }));
-        return Response.json({ error: t(lang, "diag.limit"), paywall: true, resetsAt: quota.resetsAt }, { status: 429 });
-      }
-      reservation = quota.id;
-    }
-
     const identity = plan && customer ? customer.customerId : hashRequestIp(request);
     accountLease = await acquireWork([], `ai:${identity}`, 1, 90);
     globalLease = await acquireWork(diagnosisRules(identity, Boolean(plan)), "ai:site", 3, 90);
     console.log("dd-funnel", JSON.stringify({ step: "diagnosis_started", paid: Boolean(plan) }));
     const { diagnosis, usage } = await diagnoseWithClaude(log, lang);
     console.log("dd-diagnose-usage", JSON.stringify({ ...usage, paid: Boolean(plan), verdict: diagnosis.verdict }));
-    done = true;
     console.log("dd-funnel", JSON.stringify({ step: "diagnosis_completed", paid: Boolean(plan) }));
-    return Response.json({ diagnosis }, { headers: { "Cache-Control": "no-store" } });
+    const patchWithheld = Boolean(diagnosis.patch.code.trim());
+    return Response.json({
+      diagnosis: { ...diagnosis, patch: { file: diagnosis.patch.file, code: "" } },
+      fix: patchWithheld ? { paywalled: true, priceUsd: 5, href: "/fix" } : null,
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const limited = workLimitResponse(error, lang);
     if (limited) return limited;
@@ -64,7 +56,5 @@ export async function POST(request: Request) {
   } finally {
     if (globalLease) await releaseWork(globalLease);
     if (accountLease) await releaseWork(accountLease);
-    // A failed diagnosis gives the free allowance back.
-    if (reservation) await finishScan(reservation, done).catch(() => console.error("Diagnose quota completion failed"));
   }
 }

@@ -44,7 +44,8 @@ function githubRepo(text) {
   const trimmed = text.trim();
   // GitHub owners are letters, digits and hyphens; repository names also allow dots and underscores.
   const short = /^([A-Za-z0-9-]+)\/([\w.-]+?)(?:\.git)?$/.exec(trimmed);
-  const remote = /^(?:(?:https?|ssh|git):\/\/(?:[\w.-]+@)?|[\w.-]+@|www\.)?github\.com[/:]([A-Za-z0-9-]+)\/([\w.-]+?)(?:\.git)?(?:[/#?].*)?$/i.exec(trimmed);
+  // Userinfo may be user:token@ from a credentialed remote. The token is not part of the repository URL.
+  const remote = /^(?:(?:https?|ssh|git):\/\/(?:[^@\s/]+@)?|[^@\s/]+@|www\.)?github\.com[/:]([A-Za-z0-9-]+)\/([\w.-]+?)(?:\.git)?(?:[/#?].*)?$/i.exec(trimmed);
   const match = short ?? remote;
   if (!match || match[2].startsWith(".")) return null;
   return `https://github.com/${match[1]}/${match[2]}`;

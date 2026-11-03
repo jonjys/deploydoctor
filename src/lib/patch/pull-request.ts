@@ -37,19 +37,25 @@ function checkedPull(pr: Pull, repoUrl: string) {
   return { url: pr.html_url, state: pr.state, draft: pr.draft };
 }
 
+export type PullRequestText = { branch: string; commitMessage: string; title: string; body: string; draft: boolean; allowPrivate?: boolean };
+
 /**
- * A draft only, on a new deterministic branch. Default branch and source blobs must match the paid
- * commit. Retries return the same PR, including a closed PR; no branch is ever force-updated.
+ * A new deterministic branch. Default branch and source blobs must match the paid commit.
+ * Retries return the same PR, including a closed PR; no branch is ever force-updated.
+ * The import-patch defaults stay a draft on `deploydoctor/imports-`. Fix PR passes its own text.
  */
-export async function openPatchPullRequest(order: PrOrder, branchKey: string, api: GitRequest) {
+export async function openPatchPullRequest(order: PrOrder, branchKey: string, api: GitRequest, text?: PullRequestText) {
   const match = /^https:\/\/github\.com\/([^/]+)\/([^/]+)$/.exec(order.repoUrl);
   const repo = match && statusRepository(match[1], match[2]);
-  if (!repo || !/^[a-f0-9]{24}$/.test(branchKey) || !SHA.test(order.commitSha)) throw new PatchError("Invalid patch repository.", 422, "path");
+  const branch = text?.branch ?? `deploydoctor/imports-${branchKey}`;
+  if (!repo || !/^[a-f0-9]{24}$/.test(branchKey) || !SHA.test(order.commitSha) || !/^deploydoctor\/(?:imports|fix)-[a-f0-9]{24}$/.test(branch))
+    throw new PatchError("Invalid patch repository.", 422, "path");
   const root = `/repos/${repo.owner}/${repo.name}`;
   const repository = await api<{ full_name: string; default_branch: string; private: boolean; archived: boolean; permissions?: { push?: boolean } }>(root);
-  if (repository.private || repository.archived || repository.full_name.toLowerCase() !== `${repo.owner}/${repo.name}`.toLowerCase() || !repository.permissions?.push)
-    throw new PatchError("Use a token with Contents and Pull requests write access to this public repository.", 403, "access");
-  const branch = `deploydoctor/imports-${branchKey}`;
+  if (repository.archived || repository.full_name.toLowerCase() !== `${repo.owner}/${repo.name}`.toLowerCase() || !repository.permissions?.push || (repository.private && !text?.allowPrivate))
+    throw new PatchError(text?.allowPrivate
+      ? "GitHub access cannot push to this repository. Reconnect the Fix app with Contents and Pull requests write."
+      : "Use a token with Contents and Pull requests write access to this public repository.", 403, "access");
   const pulls = await api<Pull[]>(`${root}/pulls?state=all&head=${encodeURIComponent(`${repo.owner}:${branch}`)}&per_page=1`);
   if (pulls[0]) return { ...checkedPull(pulls[0], order.repoUrl), reused: true };
 
@@ -92,14 +98,16 @@ export async function openPatchPullRequest(order: PrOrder, branchKey: string, ap
     if (saved.tree.sha !== changedTree.sha || saved.parents.length !== 1 || saved.parents[0].sha !== order.commitSha)
       throw new PatchError("The patch branch was changed. It will not be overwritten.", 409, "version");
   } else {
-    const fixed = await api<{ sha: string }>(`${root}/git/commits`, "POST", { message: "fix: correct verified import casing", tree: changedTree.sha, parents: [order.commitSha] });
+    const fixed = await api<{ sha: string }>(`${root}/git/commits`, "POST", { message: text?.commitMessage ?? "fix: correct verified import casing", tree: changedTree.sha, parents: [order.commitSha] });
     if (!SHA.test(fixed.sha)) throw new PatchError("Unexpected patch commit.", 422, "verify");
     await assertBase();
     await api(`${root}/git/refs`, "POST", { ref: `refs/heads/${branch}`, sha: fixed.sha });
   }
   await assertBase();
-  const pr = await api<Pull>(`${root}/pulls`, "POST", { title: "Fix verified import casing", head: branch, base: repository.default_branch, draft: true,
-    body: `## Verified import casing fix\n\nCorrects import paths in ${changes.length} file(s), using the patch purchased from DeployDoctor.\n\nScanned commit: ${order.commitSha}\n\nOnly import letter case is changed. The patch was checked against the original source; repository code was never executed. Review the diff and run your tests and build before merging. This does not guarantee a successful deployment.\n\nReport: https://deploydoctor.nyttolabs.com/r/${order.reportId}` });
+  const pr = await api<Pull>(`${root}/pulls`, "POST", {
+    title: text?.title ?? "Fix verified import casing", head: branch, base: repository.default_branch, draft: text?.draft ?? true,
+    body: text?.body ?? `## Verified import casing fix\n\nCorrects import paths in ${changes.length} file(s), using the patch purchased from DeployDoctor.\n\nScanned commit: ${order.commitSha}\n\nOnly import letter case is changed. The patch was checked against the original source; repository code was never executed. Review the diff and run your tests and build before merging. This does not guarantee a successful deployment.\n\nReport: https://deploydoctor.nyttolabs.com/r/${order.reportId}`,
+  });
   return { ...checkedPull(pr, order.repoUrl), reused: false };
 }
 

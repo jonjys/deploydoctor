@@ -1,6 +1,7 @@
 /**
- * Free daily allowances without a pass, per UTC day. reserve_scan counts them in the database; any pass is unlimited.
- * The website gives each visitor one repository scan and one AI diagnosis. The GitHub Action gives each public repository one scan per day.
+ * Free daily allowances without a pass, per UTC day. reserve_scan counts repository scans in the database; any pass is unlimited.
+ * Build-log diagnosis is free and does not reserve a scan. The GitHub Action gives each public repository one scan per day.
+ * diagnoseAllowance remains so a caller cannot silently reuse the old one-a-day key.
  */
 export const FREE_SCANS_PER_DAY = 1;
 export const FREE_DIAGNOSES_PER_DAY = 1;
