@@ -1,4 +1,6 @@
 import { githubConnection } from "@/lib/github-connect";
+import { analyzeGitHubPullRequest } from "@/lib/github-pull-request";
+import { pullRequestFromInput } from "@/lib/repo-input";
 import { workLimitResponse } from "@/lib/work-budget";
 import { analyzeGitHubRepository, GitHubApiError, parseGitHubRepoUrl } from "@/lib/github";
 import { parseGitRef } from "@/lib/git-ref";
@@ -15,7 +17,7 @@ import { langFromRequest, t } from "@/lib/i18n";
 import { reportJson } from "@/lib/report-json";
 import { SITE_URL } from "@/lib/site";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /**
  * Runs a scan and saves the report.
@@ -62,12 +64,17 @@ export async function POST(request: Request) {
 
     const raw = await request.text();
     if (raw.length > 10_000) return Response.json({ error: t(lang, "err.tooLarge") }, { status: 413 });
-    const body = JSON.parse(raw) as { repoUrl?: unknown; privateToken?: unknown; checks?: unknown; ref?: unknown };
+    const body = JSON.parse(raw) as { repoUrl?: unknown; privateToken?: unknown; checks?: unknown; ref?: unknown; pullRequest?: unknown };
     if (typeof body.repoUrl !== "string" || body.repoUrl.length > 300) {
       return Response.json({ error: t(lang, "err.repoUrl") }, { status: 400 });
     }
 
-    const parsed = parseGitHubRepoUrl(body.repoUrl);
+    const target = pullRequestFromInput(body.repoUrl);
+    const parsed = parseGitHubRepoUrl(target?.repoUrl ?? body.repoUrl);
+    const pullRequest = body.pullRequest ?? target?.number;
+    if (pullRequest !== undefined && (typeof pullRequest !== "number" || !Number.isSafeInteger(pullRequest) || pullRequest < 1 || pullRequest > 999_999_999 || (target && target.number !== pullRequest))) {
+      return Response.json({ error: "Enter a valid, matching pull request number." }, { status: 400 });
+    }
     if (oidcRepo && `${parsed.owner}/${parsed.name}`.toLowerCase() !== oidcRepo.toLowerCase()) {
       return Response.json({ error: t(lang, "err.oidcRepo") }, { status: 403 });
     }
@@ -76,6 +83,7 @@ export async function POST(request: Request) {
     if (checks === null) return Response.json({ error: t(lang, "err.badChecks") }, { status: 400 });
     const ref = viaCi ? parseGitRef(body.ref) : undefined;
     if (ref === null) return Response.json({ error: t(lang, "err.badRef") }, { status: 400 });
+    if (pullRequest && body.ref !== undefined && (typeof body.ref !== "string" || !/^[a-f0-9]{40}$/i.test(body.ref))) return Response.json({ error: "A PR comparison accepts only its exact head commit as ref." }, { status: 400 });
     plan = await activePlan(customer);
     if (viaToken && !plan) return Response.json({ error: t(lang, "err.tokenPlan"), paywall: true, pricingUrl: `${SITE_URL}/pricing` }, { status: 402 });
     privateToken = typeof body.privateToken === "string" ? body.privateToken.trim() : undefined;
@@ -100,7 +108,9 @@ export async function POST(request: Request) {
       reservation = quota.id;
     }
     console.log("dd-funnel", JSON.stringify({ step: "scan_started", source: viaCi ? "ci" : viaCli ? "cli" : "web", paid: Boolean(plan) }));
-    const { canonicalUrl, results, isPrivate } = await analyzeGitHubRepository(body.repoUrl, { privateToken, checks, lang, ref });
+    const { canonicalUrl, results, isPrivate } = pullRequest
+      ? await analyzeGitHubPullRequest(parsed.canonicalUrl, pullRequest, { privateToken, checks, lang, expectedHeadSha: typeof body.ref === "string" ? body.ref : undefined })
+      : await analyzeGitHubRepository(body.repoUrl, { privateToken, checks, lang, ref });
     const report = await saveReport(canonicalUrl, results, customer?.customerId, isPrivate);
     saved = true;
     console.log("dd-funnel", JSON.stringify({ step: "scan_completed", source: viaCi ? "ci" : viaCli ? "cli" : "web", partial: results.scan.partial }));

@@ -110,3 +110,13 @@ test("mixed production findings keep review annotations as warnings", () => {
   const result = run(201, {overall:"red",summary:{red:1,yellow:0,green:0},url:"https://deploydoctor.example/r/report",checks:[{id:"production-safety",title:"Production safety",status:"red",explanation:"Source risks",fix:"Review",findings:[{file:"app/a.ts",line:1,status:"red",problem:"Invalid runtime",fix:"Use nodejs"},{file:"app/b.ts",line:2,status:"yellow",problem:"Review payment redirect",fix:"Confirm production URL"}]}]});
   assert.equal(result.status,1);assert.match(result.stdout,/::error file=app\/a.ts,line=1,/);assert.match(result.stdout,/::warning file=app\/b.ts,line=2,/);assert.doesNotMatch(result.stdout,/::error file=app\/b.ts/);
 });
+
+test("bundled Action asks for PR comparison only for its exact trusted event head", () => {
+  const dir = mkdtempSync(join(tmpdir(), "dd-impact-action-")), eventPath = join(dir,"event.json");
+  const sha="a".repeat(40),repo={full_name:"acme/site"};
+  const event={number:7,pull_request:{base:{repo},head:{sha,repo}}};
+  const mock=`globalThis.fetch=async(url,options)=>{if(String(url).startsWith('https://oidc.example/'))return Response.json({value:'fixture'});console.log('PAYLOAD:'+options.body);return Response.json({overall:'green',summary:{red:0,yellow:0,green:1},checks:[],url:'https://deploydoctor.example/r/fixture'});};`;
+  const invoke=(changes={})=>{const env={...process.env,DD_REPOSITORY:'acme/site',DD_REF:sha,DD_API_URL:'https://deploydoctor.example',DD_TOKEN:'fixture-paid',GITHUB_OUTPUT:'',GITHUB_STEP_SUMMARY:'',GITHUB_EVENT_NAME:'pull_request',GITHUB_ACTOR:'builder',GITHUB_REPOSITORY:'acme/site',GITHUB_EVENT_PATH:eventPath,...changes};writeFileSync(eventPath,JSON.stringify(event));const r=spawnSync(process.execPath,['--import',`data:text/javascript,${encodeURIComponent(mock)}`,scan],{env,encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout.split('\n').find(line=>line.startsWith('PAYLOAD:')).slice(8));};
+  assert.equal(invoke().pullRequest,7);
+  for(const changes of [{DD_REF:'main'},{GITHUB_EVENT_NAME:'push'},{GITHUB_EVENT_NAME:'pull_request_target'},{GITHUB_ACTOR:'dependabot[bot]'}])assert.equal(invoke(changes).pullRequest,undefined);
+});

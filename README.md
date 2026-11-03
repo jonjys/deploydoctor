@@ -173,3 +173,7 @@ Saved reports include Launch Readiness: blockers, review findings, evidence, nex
 - [Before/after detection inventory and primary references](docs/launch-readiness-audit.md)
 - [MakeItReal server integration contract](docs/integrations/holiday-launch-readiness.md)
 - [Launch entry point](https://deploydoctor.nyttolabs.com/launch-readiness)
+
+### PR Change Review
+
+Paste a same-repository GitHub PR URL into the scanner. DeployDoctor compares the PR head with its merge base using the existing static checks: newly detected findings first, already-present findings separately, and observations no longer detected. Both commits and source locations are pinned. Partial scans and unmatched coverage go to review, not a new/fixed verdict. One comparison uses one existing scan allowance; private PRs retain paid owner authorization. It does not build or simulate the merged app. [Contract and accuracy rules](docs/pr-change-review.md).
