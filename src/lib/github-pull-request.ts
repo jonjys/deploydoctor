@@ -14,7 +14,25 @@ export async function analyzeGitHubPullRequest(repoUrl: string, number: number, 
   const { owner, name, canonicalUrl } = parseGitHubRepoUrl(repoUrl);
   const repository = `${owner}/${name}`, repoPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
   const token = options.privateToken || process.env.GITHUB_TOKEN, userToken = Boolean(options.privateToken);
-  const pr = await backend.request<PullRequest>(`${repoPath}/pulls/${number}`, token, userToken);
+  let pr: PullRequest;
+  try {
+    pr = await backend.request<PullRequest>(`${repoPath}/pulls/${number}`, token, userToken);
+  } catch (error) {
+    // A service fine-grained token may read contents but not PR metadata, even for public repos.
+    // Retry public metadata anonymously only after proving the repository is public. Never retry a
+    // buyer's credential or any rate-limit/authorization error through another identity.
+    if (!(error instanceof GitHubApiError) || error.status !== 404 || userToken || !token) {
+      if (error instanceof GitHubApiError && error.status === 404 && !userToken) throw new GitHubApiError("GitHub could not find or expose this pull request. Verify its number and repository; no private pass is required for a public PR.", 404);
+      throw error;
+    }
+    const repositoryInfo = await backend.request<{ private: boolean }>(repoPath, token, false);
+    if (repositoryInfo.private !== false) throw error;
+    try { pr = await backend.request<PullRequest>(`${repoPath}/pulls/${number}`, undefined, false); }
+    catch (publicError) {
+      if (publicError instanceof GitHubApiError && publicError.status === 404) throw new GitHubApiError("GitHub could not find or expose this public pull request. Verify its number and repository.", 404);
+      throw publicError;
+    }
+  }
   if (pr.number !== number || pr.base?.repo?.full_name?.toLowerCase() !== repository.toLowerCase()
     || pr.head?.repo?.full_name?.toLowerCase() !== repository.toLowerCase()) {
     throw new GitHubApiError("Fork pull requests are not supported for comparison yet. Scan the head repository directly.", 422);
