@@ -1,4 +1,5 @@
 import { LaunchReadiness } from "@/components/launch-readiness";
+import { DeployHandoffPanel } from "@/components/deploy-handoff";
 import { PrImpact } from "@/components/pr-impact";
 import { PrFindingList } from "@/components/pr-finding-list";
 import { contextualFindings } from "@/lib/pr-impact";
@@ -163,6 +164,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <ScoreCard checks={checkStates} notNext={neutral} partial={results.scan.partial} />
         </div>
 
+        {results.pullRequest?.handoff ? <DeployHandoffPanel handoff={results.pullRequest.handoff} repoUrl={report.repo_url} reportUrl={`${SITE_URL}/r/${id}`} lang={lang} /> : null}
         {results.pullRequest ? <PrImpact impact={results.pullRequest} repoUrl={report.repo_url} lang={lang} /> : <FixFirst items={fixFirst} limit={3} />}
         <div className="report-meta">
           <a className="report-repo" href={report.repo_url} target="_blank" rel="noreferrer">

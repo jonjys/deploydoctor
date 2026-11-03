@@ -19,3 +19,5 @@
 .panel details { padding: .8rem 0; border-top: 1px solid var(--line, #334232); }
 .panel summary { cursor: pointer; line-height: 1.5; }
 @media (max-width: 360px) { .counts { gap: .35rem; } .counts dt { font-size: .7rem; } }
+
+.panel code { overflow-wrap: anywhere; white-space: normal; }

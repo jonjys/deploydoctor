@@ -24,6 +24,7 @@ export function reportJson(report: StoredReport) {
     hosting: results.hosting ?? null,
     nextApp: results.nextApp ?? null,
     pullRequest: results.pullRequest ?? null,
+    deployHandoff: results.pullRequest?.handoff ?? null,
     checks: results.checks.map((check) => ({
       id: check.id, title: check.title, status: check.status, explanation: check.explanation, fix: check.fix,
       evidence: check.evidence, findings: context.get(check.id) ?? check.findings ?? [], suggestedFile: check.suggestedFile ?? null,
