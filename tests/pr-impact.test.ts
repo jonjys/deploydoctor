@@ -104,3 +104,24 @@ test("GitHub PR orchestration resolves a merge base, pins both scans and rejects
   privateRepo = true; assert.equal((await run()).isPrivate, true);
   changedFiles = 300; assert.equal((await run()).results.pullRequest.introduced.length, 0);
 });
+
+test("public PR metadata can recover from a contents-only service token, but never bypass buyer access or rate limits",async()=>{
+  const require=createRequire(import.meta.url);require.cache[require.resolve("server-only")]={exports:{},loaded:true} as NodeModule;
+  const {analyzeGitHubPullRequest}=await import("../src/lib/github-pull-request");const {GitHubApiError}=await import("../src/lib/github");
+  const previous=process.env.GITHUB_TOKEN;process.env.GITHUB_TOKEN="fixture-service-token";
+  const calls:Array<{path:string;token?:string}>=[];let status=404,privateRepo=false,scans=0;
+  const backend={request:async<T,>(path:string,token?:string)=>{calls.push({path,token});
+    if(path.endsWith("/pulls/42")){if(token)throw new GitHubApiError("Fixture",status,status===429?"gh.rateLimit":"gh.notFound");return {number:42,base:{ref:"main",sha:baseSha,repo:{full_name:"fixture/shop",private:false}},head:{sha:headSha,repo:{full_name:"fixture/shop"}}} as T;}
+    if(path==="/repos/fixture/shop")return {private:privateRepo} as T;
+    return {merge_base_commit:{sha:baseSha},files:[]} as T;},
+    scan:async(url:string,options:{ref?:string}={})=>{scans++;return{canonicalUrl:url,isPrivate:false,results:report(options.ref!,[check([])])};}};
+  try{
+    await analyzeGitHubPullRequest("https://github.com/fixture/shop",42,{},backend);assert.equal(scans,2);assert.equal(calls.filter(c=>c.path.endsWith('/pulls/42')&&!c.token).length,1);
+    calls.length=0;scans=0;await assert.rejects(()=>analyzeGitHubPullRequest("https://github.com/fixture/shop",42,{privateToken:"buyer-token"},backend));assert.equal(calls.length,1);assert.equal(scans,0);
+    calls.length=0;privateRepo=true;await assert.rejects(()=>analyzeGitHubPullRequest("https://github.com/fixture/shop",42,{},backend));assert.equal(calls.length,2);assert.ok(calls.every(c=>c.token));
+    privateRepo=false;for(const code of [403,429]){status=code;calls.length=0;await assert.rejects(()=>analyzeGitHubPullRequest("https://github.com/fixture/shop",42,{},backend));assert.equal(calls.length,1);}
+    delete process.env.GITHUB_TOKEN;status=404;calls.length=0;
+    const anonymous={...backend,request:async<T,>()=>{throw new GitHubApiError("Fixture",404,"gh.notFound");return {} as T;}};
+    await assert.rejects(()=>analyzeGitHubPullRequest("https://github.com/fixture/shop",42,{},anonymous),(error:unknown)=>error instanceof GitHubApiError&&error.key===undefined&&/pull request/.test(error.message));
+  }finally{if(previous===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=previous;}
+});
