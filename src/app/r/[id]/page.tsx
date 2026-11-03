@@ -1,5 +1,7 @@
 import { LaunchReadiness } from "@/components/launch-readiness";
 import { PrImpact } from "@/components/pr-impact";
+import { PrFindingList } from "@/components/pr-finding-list";
+import { contextualFindings } from "@/lib/pr-impact";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -110,6 +112,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   ]);
 
   const { results } = report;
+  const findingContext = contextualFindings(results);
   const repoName = `${results.repository.owner}/${results.repository.name}`;
   const parts = freeFixParts(report, lang);
   const checkStates = results.checks.map(check => ({ id: check.id, status: check.status, coverageOnly: isPartialPlaceholder(check) }));
@@ -215,7 +218,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
                       ))}
                     </ul></details>
                   ) : null}
-                  {check.id === "production-safety" && check.findings?.map((finding, index) => <div className="fix-box" key={`${finding.ruleId}-${index}`}><strong>{finding.status === "red" ? "Confirmed code issue" : "Review"} · {finding.ruleId}</strong><p>{finding.problem}</p><code>{finding.file}:{finding.line}</code><p>{finding.fix}</p></div>)}
+                  {results.pullRequest ? <PrFindingList findings={findingContext.get(check.id) ?? []} lang={lang} /> : check.id === "production-safety" && check.findings?.map((finding, index) => <div className="fix-box" key={`${finding.ruleId}-${index}`}><strong>{finding.status === "red" ? "Confirmed code issue" : "Review"} · {finding.ruleId}</strong><p>{finding.problem}</p><code>{finding.file}:{finding.line}</code><p>{finding.fix}</p></div>)}
                   <div className="fix-box">
                     <strong>{t("report.suggested")}</strong> {check.fix}
                   </div>

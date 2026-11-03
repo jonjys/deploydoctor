@@ -36,6 +36,14 @@ The browser receives its normal `{id, href}` response. CI/CLI receive existing f
 
 Finding entries retain the existing file, line, problem, fix, optional ruleId/repairable fields, plus checkId, title and status. Uncertain entries also identify `side: base | head`. `commitSha` and the top-level scan/checks still describe only the head, preserving existing clients and repair eligibility. Existing import repair actions remain at the detailed check; the comparison generates no patch.
 
+### Context on each finding
+
+For PR reports, each current finding in `checks[].findings[]` also carries `prOrigin: introduced | existing | uncertain`. This is derived when reading the report, including reports saved before this UI upgrade; it requires no rescan or extra allowance. Ordinary report findings keep their original shape.
+
+The detailed report shows new and uncertain findings immediately. Already-present findings stay available in a closed, keyboard-accessible disclosure for each check. The origin label is distinct from severity: a new observation is not automatically a confirmed failure, and an old red finding still counts in the full check result and Action gate. Missing/mismatched context is uncertain. Base-only observations never appear as current findings. Matching consumes duplicate observations individually without modifying saved scan evidence.
+
+`tests/pr-finding-context.test.ts` covers exact per-finding context, duplicate counts, cross-check separation, stale/partial/unmatched context, legacy API compatibility, preservation of overall status, and rendered disclosures/escaping in both languages.
+
 ## Accuracy
 
 - Match by check, rule, file and exact problem text. Ignore line movement; count duplicate occurrences independently. A changed severity alone does not fabricate a new problem.
