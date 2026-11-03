@@ -1,4 +1,5 @@
 import "server-only";
+import { HOST_CONFIG_FILE } from "@/lib/hosting-config";
 import { boundedBody } from "@/lib/bounded-body";
 import { db, query } from "@/lib/db";
 import { digest } from "@/lib/session-token";
@@ -132,7 +133,8 @@ export async function resolveCommitSha(repoPath: string, ref: string, token?: st
 }
 
 function priorityFor(pathname: string): number {
-  if (pathname === "package.json" || BUILD_FILE.test(pathname)) return 0;
+  if (pathname === "package.json" || BUILD_FILE.test(pathname) || HOST_CONFIG_FILE.test(pathname)) return 0;
+  if (/(?:^|\/)package\.json$/.test(pathname)) return 2;
   if (/(?:^|\/)\.env(?:\..+)?$/.test(pathname) || MISNAMED_ENV_TEMPLATE.test(pathname) || pathname === ".gitignore") return 1;
   if (/(?:^|\/)(?:tsconfig|jsconfig)\.json$|^vercel\.json$/.test(pathname) || /\.prisma$/.test(pathname) || ROOT_LOCKFILE.test(pathname)
     || /^(?:next|svelte|astro|vite)\.config\.[cm]?[jt]s$/.test(pathname)) return 2;
@@ -161,7 +163,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
   // Resolve once, then read only this immutable commit (including the archive and cache key).
   const commitSha = await resolveCommitSha(repoPath, ref ?? repository.default_branch, token, userToken);
   const cacheKey = !options.privateToken && !repository.private && commitSha
-    ? digest(JSON.stringify(["scan-v3", owner.toLowerCase(), name.toLowerCase(), commitSha, ref ?? "", [...(options.checks ?? [])].sort(), options.lang ?? "en"])) : null;
+    ? digest(JSON.stringify(["scan-v4-hosting", owner.toLowerCase(), name.toLowerCase(), commitSha, ref ?? "", [...(options.checks ?? [])].sort(), options.lang ?? "en"])) : null;
   if (cacheKey) {
     const rows = await db<Array<{ results: ReportResults }>>(query("public_scan_cache", {
       key: `eq.${cacheKey}`, expires_at: `gt.${new Date().toISOString()}`, select: "results", limit: "1",
@@ -194,7 +196,7 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
     archive = await readRepositoryArchive(downloaded.body, (file, size) =>
       (ROOT_LOCKFILE.test(file) && size <= MAX_LOCKFILE_BYTES) || (size <= MAX_FILE_BYTES &&
       // Nested tsconfig files resolve a nested app's aliases; Astro pages can opt out of prerendering in their frontmatter.
-      (SOURCE_FILE.test(file) || BUILD_FILE.test(file) || /^(?:package|vercel)\.json$/.test(file) || /(?:^|\/)(?:tsconfig|jsconfig)\.json$/.test(file) || ASTRO_PAGE.test(file) || file === ".gitignore"
+      (SOURCE_FILE.test(file) || BUILD_FILE.test(file) || HOST_CONFIG_FILE.test(file) || /(?:^|\/)package\.json$/.test(file) || /^vercel\.json$/.test(file) || /(?:^|\/)(?:tsconfig|jsconfig)\.json$/.test(file) || ASTRO_PAGE.test(file) || file === ".gitignore"
         || /\.prisma$/.test(file) || MIGRATION_FILE.test(file) || MISNAMED_ENV_TEMPLATE.test(file) || /(?:^|\/)\.env(?:\..+)?$/.test(file))), priorityFor, signal);
   } catch (error) {
     if (error instanceof GitHubApiError) throw error;

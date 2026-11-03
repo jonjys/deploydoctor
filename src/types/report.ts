@@ -1,3 +1,4 @@
+import type { HostingAudit } from "@/lib/hosting-config";
 import type { Stack } from "@/lib/stack";
 import type { Improvement } from "@/lib/improvements";
 import type { PullRequestImpact } from "@/lib/pr-impact";
@@ -43,6 +44,7 @@ export type ReportResults = {
   /** Absent on reports saved before category filtering existed: every check counts as scanned. */
   scope?: { scanned: Category[]; ignored: Category[] };
   stack?: Stack;
+  hosting?: HostingAudit;
   /** Where the Next.js app was found. "nested" means a subfolder (monorepo), which is not supported yet. Absent on older reports. */
   nextApp?: "root" | "nested" | "none";
   summary: Record<CheckStatus, number>;

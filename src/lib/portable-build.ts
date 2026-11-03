@@ -1,4 +1,5 @@
 import path from "node:path";
+import { auditHosting, type HostingAudit } from "@/lib/hosting-config";
 import { parse } from "smol-toml";
 import type { RepositorySnapshot } from "@/lib/analyzer";
 import type { CheckResult, Finding } from "@/types/report";
@@ -9,8 +10,8 @@ const table = (v: unknown): Table => v && typeof v === "object" && !Array.isArra
 const line = (text: string, needle: string) => text.slice(0, Math.max(0, text.indexOf(needle))).split("\n").length;
 const rootFiles = ["Cargo.toml", "go.mod", "pyproject.toml", "requirements.txt", "netlify.toml", "wrangler.toml", "Dockerfile"];
 /** Configuration data only. No commands, dependency downloads, build scripts or customer code execute. */
-export function checkPortableBuild(s: RepositorySnapshot, lang: Lang): CheckResult | null {
-  if (!rootFiles.some(f => s.entries.some(e => e.path === f)) && (s.contents.has("package.json") || s.entries.some(e => /\.html$/i.test(e.path)))) return null;
+export function checkPortableBuild(s: RepositorySnapshot, lang: Lang, hosting: HostingAudit = auditHosting(s)): CheckResult | null {
+  if (!rootFiles.some(f => s.entries.some(e => e.path === f)) && !hosting.platforms.some(p => p !== "Vercel") && (s.contents.has("package.json") || s.entries.some(e => /\.html$/i.test(e.path)))) return null;
   const sv = lang === "sv", findings: Finding[] = [], checked: string[] = [];
   const paths = new Set(s.entries.map(e => e.path));
   const add = (file: string, needle: string, problem: string, fix: string, status: "red" | "yellow" = "yellow", ruleId = "portable-config") => findings.push({ file, line: line(s.contents.get(file) ?? "", needle), problem, fix, status, ruleId });
@@ -54,14 +55,15 @@ export function checkPortableBuild(s: RepositorySnapshot, lang: Lang): CheckResu
       } catch { /* package parser owns JSON syntax */ }
     }
   }
-  if (s.contents.has("wrangler.toml")) toml("wrangler.toml");
+  findings.push(...hosting.findings.filter(f => !(f.ruleId === "hosting-config-syntax" && findings.some(old => old.file === f.file && old.ruleId === "invalid-toml"))));
+  checked.push(...hosting.filesRead);
   if (s.contents.has("pyproject.toml")) toml("pyproject.toml");
   for (const file of ["go.mod", "requirements.txt", "Dockerfile"]) if (s.contents.has(file)) checked.push(file);
   const status = findings.some(f => f.status === "red") ? "red" : "yellow";
   return { id: "build-config", category: "vercel", title: sv ? "Bygg- och hostingkonfiguration" : "Build and hosting configuration", status,
     explanation: findings.length ? `${findings.length} ${sv ? "konfigurationsfynd. Bygget kördes inte." : "configuration findings. The build was not executed."}` : (sv ? "Inga fel hittades av dessa begränsade konfigurationsregler. Kompilering, runtime och hosting verifierades inte." : "No issues found by these limited configuration rules. Compilation, runtime and hosting were not verified."),
     fix: findings[0]?.fix ?? (sv ? "Kör projektets riktiga produktionsbuild och tester i dess målmiljö." : "Run the project's actual production build and tests in its target environment."),
-    findings, evidence: checked.map(f => `${f}: configuration read`), evaluatedRules: ["invalid-toml", ...(cargo ? ["rust-edition-msrv", "rust-toolchain-msrv", "rust-target-path", "rust-locked-build"] : []), ...(netlify ? ["netlify-functions-publish", "netlify-missing-script"] : [])] };
+    findings, evidence: [...new Set(checked)].map(f => `${f}: configuration read`), evaluatedRules: [...hosting.evaluatedRules, "invalid-toml", ...(cargo ? ["rust-edition-msrv", "rust-toolchain-msrv", "rust-target-path", "rust-locked-build"] : []), ...(netlify ? ["netlify-functions-publish", "netlify-missing-script"] : [])] };
 }
 
 export function portableEnvironment(s: RepositorySnapshot, lang: Lang): CheckResult {

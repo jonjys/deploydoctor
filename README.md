@@ -177,3 +177,7 @@ Saved reports include Launch Readiness: blockers, review findings, evidence, nex
 ### PR Change Review
 
 Paste a same-repository GitHub PR URL into the scanner. DeployDoctor compares the PR head with its merge base using the existing static checks: newly detected findings first, already-present findings separately, and observations no longer detected. Both commits and source locations are pinned. Partial scans and unmatched coverage go to review, not a new/fixed verdict. One comparison uses one existing scan allowance; private PRs retain paid owner authorization. It does not build or simulate the merged app. [Contract and accuracy rules](docs/pr-change-review.md).
+
+### Cloudflare, Netlify and other deployment targets
+
+The same scanner now reads Cloudflare Wrangler TOML/JSON/JSONC and extends Netlify checks across build bases, contexts and routing. It also reviews committed legacy Railway config and explicit environment-file copies in Dockerfiles. Existing Vercel and Rust/Cargo checks remain. Findings include rule IDs, files, lines and specific fixes; generated output, dashboard state and unknown behavior stay explicitly unverified. [Coverage](https://deploydoctor.nyttolabs.com/platforms) · [Detection inventory and limitations](docs/multi-host-scanning.md).

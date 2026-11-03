@@ -1,3 +1,4 @@
+import { hostingPlatforms } from "@/lib/hosting-targets";
 import type { Category } from "@/types/report";
 import { t, type Lang } from "@/lib/i18n";
 
@@ -42,7 +43,7 @@ export function detectStack(input: { packageJson?: string | null; envText?: stri
   const files = new Set(input.files ?? []);
   const languages = [...(input.cargoToml || files.has("Cargo.toml") || [...files].some(f => /\.rs$/.test(f)) ? ["Rust"] : []), ...(files.has("go.mod") ? ["Go"] : []), ...(files.has("pyproject.toml") || files.has("requirements.txt") ? ["Python"] : []), ...(input.packageJson ? ["JavaScript / TypeScript"] : [])];
   for (const [name, extension] of [["Java", /\.java$/], ["C#", /\.cs$/], ["Ruby", /\.rb$/], ["PHP", /\.php$/], ["Swift", /\.swift$/], ["Kotlin", /\.kt$/], ["C / C++", /\.(?:c|cpp|h)$/]] as const) if ([...files].some(f => extension.test(f))) languages.push(name);
-  const platforms = [...(files.has("vercel.json") ? ["Vercel"] : []), ...(files.has("netlify.toml") ? ["Netlify"] : []), ...(files.has("wrangler.toml") || files.has("wrangler.jsonc") ? ["Cloudflare"] : []), ...(files.has("Dockerfile") ? ["Docker"] : [])];
+  const platforms = hostingPlatforms(files);
   const manifest = parseManifest(input.packageJson);
   const packages: Record<string, string> = { ...manifest?.devDependencies, ...manifest?.dependencies };
   const names = Object.keys(packages);
