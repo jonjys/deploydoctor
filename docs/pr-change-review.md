@@ -54,3 +54,11 @@ Private PRs require the existing paid allowance and an owner-authorized GitHub c
 ## Regression evidence
 
 `tests/pr-impact.test.ts` exercises real analyzer snapshots (new casing break vs an existing env risk), ignored commented imports, duplicate occurrences, moving lines, renames, partial scans, changed applicability/language, immutable revisions, API JSON compatibility, merge-base resolution, fork rejection and stale-head rejection. `tests/pr-report-route.test.ts` drives the real POST handler through free, paid, private, token, origin and OIDC flows with fake external adapters; allowances are reserved once and failed comparisons release their reservation. No test performs a real purchase or modifies a customer repo.
+
+## Marketplace Action
+
+The merged Action release is `jonjys/deploydoctor-action@ef4c69e41868bf712b6dab3ccc1ea123eb4037c0`. Copy the workflow on [/ci](https://deploydoctor.nyttolabs.com/ci). It requests the comparison only for a matching same-repository PR event/head. Its single comment separates comparison findings from the full-head scan. The existing `fail-on` gate still applies to the full head scan.
+
+This immutable SHA can be installed independently of `v1`. GitHub-hosted workflow jobs currently fail before executing any steps, so moving `v1` and an actual bot-posted comment are not verified. Local Action tests cover 15 passing cases. Do not advertise those remote outcomes as completed.
+
+Private PR metadata additionally needs GitHub Pull requests: read permission, beyond the Contents: read permission used by ordinary scans. Existing GitHub App installations are not silently granted extra permissions by this release. A credential without that access can still scan repository content but cannot perform a private PR comparison. The mocked tests establish owner/entitlement behavior, not the current scopes of a live installation.
