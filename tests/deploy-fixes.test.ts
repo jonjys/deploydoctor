@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { RepositorySnapshot } from "../src/lib/analyzer";
@@ -113,9 +114,12 @@ test("nothing verifiable and no instruction produces no paid patch", () => {
   assert.equal(plan.fixes.length, 0);
 });
 
-test("the landing hero states the fix promise", () => {
-  assert.equal(t("en", "home.h1"), "Paste your broken deploy. Get a fix PR in 60 seconds.");
-  assert.match(t("en", "home.copy"), /^No fix, no pay\. First 50 free\./);
-  assert.match(t("sv", "home.h1"), /60 sekunder/);
-  assert.match(t("sv", "home.copy"), /Ingen fix, ingen betalning/);
+test("the landing hero states the fix promise only when Fix pull requests are switched on", () => {
+  assert.equal(t("en", "home.h1.fix"), "Paste your broken deploy. Get a fix PR in 60 seconds.");
+  assert.match(t("en", "home.copy.fix"), /^No fix, no pay\. First 50 free\./);
+  assert.match(t("sv", "home.h1.fix"), /60 sekunder/);
+  assert.match(t("sv", "home.copy.fix"), /Ingen fix, ingen betalning/);
+  const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /t\(fixOn \? "home\.h1\.fix" : "home\.h1"\)/);
+  assert.match(page, /const fixOn = fixPullRequestsEnabled\(\)/);
 });

@@ -55,7 +55,7 @@ export async function prepareRepositoryFix(repo: string, token?: string): Promis
   }, signingSecret());
   return {
     eligible: true, repoUrl: analyzed.canonicalUrl, isPrivate: analyzed.isPrivate, headline, items,
-    fixes: publicFixes(plan), quoteToken, commitSha, errorSummary,
+    fixes: publicFixes(plan.fixes), quoteToken, commitSha, errorSummary,
   };
 }
 
