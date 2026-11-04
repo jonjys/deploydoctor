@@ -14,6 +14,7 @@ const quoteSchema = z.object({
   reportId: z.string().uuid(), repoUrl: z.string().url(), commitSha: z.string().regex(/^[a-f0-9]{40}$/),
   files: z.array(z.string().max(220)).min(1).max(20), fixes: z.number().int().positive(), patch: z.string().max(24_000),
   sourceHashes: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/)).optional(),
+  notes: z.string().max(2_000).optional(),
   accessKey: z.string().regex(/^[a-f0-9]{64}$/), nonce: z.string().regex(/^[a-f0-9]{32}$/),
 });
 export type PatchQuote = z.infer<typeof quoteSchema>;
