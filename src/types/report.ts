@@ -2,6 +2,7 @@ import type { DeploymentInventory } from "@/lib/deploy-handoff";
 import type { HostingAudit } from "@/lib/hosting-config";
 import type { Stack } from "@/lib/stack";
 import type { Improvement } from "@/lib/improvements";
+import type { LaunchFacts } from "@/lib/launch-plan";
 import type { PullRequestImpact } from "@/lib/pr-impact";
 
 export type CheckStatus = "red" | "yellow" | "green";
@@ -54,6 +55,8 @@ export type ReportResults = {
   checks: CheckResult[];
   /** Things the scan can see are missing that are not errors. Absent on reports saved before improvements existed. */
   improvements?: Improvement[];
+  /** Payment, sign-in, legal page and monitoring facts for the launch plan. Absent on older reports. */
+  launchFacts?: LaunchFacts;
   /** Optional PR comparison; legacy and ordinary repository reports are unchanged. */
   pullRequest?: PullRequestImpact;
 };

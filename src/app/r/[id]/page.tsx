@@ -31,6 +31,8 @@ import { neutralReport, reportLabel } from "@/lib/report-summary";
 import { activePlan, customerSession } from "@/lib/access";
 import { frameworkName } from "@/lib/stack";
 import { ReportImprovements, ShareOnX } from "@/components/report-improvements";
+import { LaunchPlanSection } from "@/components/launch-plan";
+import { buildLaunchPlan } from "@/lib/launch-plan";
 
 const statusLabelKeys: Record<CheckStatus, MessageKey> = {
   red: "report.fail",
@@ -135,6 +137,8 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
   const fixFirst = neutral ? [] : fixFirstItems(results.checks);
   const since = sinceDiff(previous, results);
   const improvements = (results.improvements ?? []).filter(item => !(report.is_private && item.id === "readme-badge"));
+  // Only reports scanned with launch facts get a plan; older ones would otherwise claim missing pages they never checked.
+  const launchPlan = results.launchFacts ? buildLaunchPlan(results, repoName) : null;
   // Private reports are never shared; a public one gets a pre-filled X post with its own share image.
   const share = report.is_private ? null : <ShareOnX repo={repoName} url={`${SITE_URL}/r/${id}`} summary={results.summary} improvements={improvements.length} lang={lang} />;
   return (
@@ -261,7 +265,9 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
       </section>
 
       {/* The $2 pass is offered right under the findings, for every visitor without a pass, whether or not a check failed. */}
-      {!plan && <ScanPassCta t={t} repoUrl={report.repo_url} />}
+      {launchPlan && <LaunchPlanSection plan={launchPlan} unlocked={Boolean(plan)} lang={lang} reportId={id} repoUrl={report.repo_url} />}
+
+      {!plan && !launchPlan && <ScanPassCta t={t} repoUrl={report.repo_url} />}
 
       <ReportImprovements items={improvements} lang={lang} isPrivate={Boolean(report.is_private)} share={share} />
 

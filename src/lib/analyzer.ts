@@ -2,6 +2,7 @@ import { auditHosting, hasAlternativeHost, hostingPlatforms } from "@/lib/hostin
 import { checkPortableBuild, portableEnvironment } from "@/lib/portable-build";
 import { checkProductionSafety } from "@/lib/production-safety";
 import { findImprovements } from "@/lib/improvements";
+import { launchFacts } from "@/lib/launch-plan";
 import path from "node:path";
 import { deploymentInventory } from "@/lib/deploy-handoff";
 import type { Category, CheckResult, CheckStatus, ReportResults, Finding } from "@/types/report";
@@ -1380,6 +1381,7 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
   );
 
   const nextApp = locateNextApp(snapshot, stack);
+  const facts = launchFacts(snapshot, stack);
   return {
     repository: {
       owner: snapshot.owner,
@@ -1403,5 +1405,6 @@ export function analyzeSnapshot(snapshot: RepositorySnapshot, options: { checks?
     overall: summary.red ? "red" : summary.yellow ? "yellow" : "green",
     checks,
     improvements: findImprovements(snapshot, stack, nextApp),
+    ...(facts ? { launchFacts: facts } : {}),
   };
 }

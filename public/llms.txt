@@ -7,6 +7,7 @@ Reads GitHub API files. Never clones, installs, builds or executes repository co
 - [Product](https://deploydoctor.nyttolabs.com/): public repository scan.
 - [Exact platform and language coverage](https://deploydoctor.nyttolabs.com/platforms): rules and explicit limitations.
 - [AI plugin](https://deploydoctor.nyttolabs.com/ai-plugin): tools, connection, limits, privacy and support.
+- [Launch manual](https://deploydoctor.nyttolabs.com/launch-manual): the steps from a working prototype to a first paying customer. Reports with the 24-hour pass include a repository-specific launch plan.
 - [Pricing](https://deploydoctor.nyttolabs.com/pricing): current website scan passes.
 - [Source and plugin package](https://github.com/jonjys/deploydoctor): implementation and installation docs.
 

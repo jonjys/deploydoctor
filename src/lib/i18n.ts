@@ -346,7 +346,7 @@ const en = {
   "pricing.cta.week": "Get 7 days",
   "pricing.cta.choose": "Choose plan",
   "pricing.notesTitle": "Good to know",
-  "pricing.capacity": "Scanning and AI diagnosis are subject to rate and service capacity limits. Diagnosis has no daily visitor cap. Retries may be required when the shared daily capacity is reached.",
+  "pricing.capacity": "Scanning and AI diagnosis are subject to rate and service capacity limits. Free AI diagnosis is limited to 3 a day per visitor. Retries may be required when the shared daily capacity is reached.",
   "pricing.note2": "Only an email address is required at Stripe Checkout. Card, PayPal, Alipay and Amazon Pay appear when supported for your payment. Paid access is remembered in the browser where you complete checkout. Prices are in US dollars; if your card uses another currency, your bank converts it.",
   "pricing.note3": "Unlimited scans do not remove GitHub’s limits or the scanner’s per-repository file and time limits; incomplete scans are clearly marked.",
 
@@ -891,7 +891,7 @@ const sv: Record<MessageKey, string> = {
   "pricing.cta.week": "Köp 7 dagar",
   "pricing.cta.choose": "Välj plan",
   "pricing.notesTitle": "Bra att veta",
-  "pricing.capacity": "Skanning och AI-diagnos omfattas av anrops- och kapacitetsgränser. Diagnosen har ingen dagsgräns per besökare. Vid full gemensam kapacitet kan du behöva försöka senare.",
+  "pricing.capacity": "Skanning och AI-diagnos omfattas av anrops- och kapacitetsgränser. Gratis AI-diagnos är begränsad till 3 per dag och besökare. Vid full gemensam kapacitet kan du behöva försöka senare.",
   "pricing.note2": "Bara en e-postadress krävs i Stripe Checkout. Kort, PayPal, Alipay och Amazon Pay visas när de stöds för din betalning. Betald åtkomst kommer ihåg i webbläsaren där du slutförde köpet. Stripe drar dollarbeloppet som står vid varje pris; kronorna är en avrundad riktlinje och din bank sätter den exakta kursen.",
   "pricing.note3": "Obegränsade skanningar tar inte bort GitHubs gränser eller skannerns fil- och tidsgränser per repo; ofullständiga skanningar markeras tydligt.",
 
