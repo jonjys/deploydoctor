@@ -104,7 +104,50 @@ export function unifiedDiff(filePath: string, before: string, after: string): st
   return diff;
 }
 
-const gitBlobHash = (source: string) => createHash("sha1").update(`blob ${Buffer.byteLength(source)}\0`).update(source).digest("hex");
+/** Full-file diff that may add or remove lines. The result is checked by applyVerifiedDiff before it is returned. */
+export function verifiedFileDiff(filePath: string, before: string, after: string): string {
+  if (before === after) return "";
+  if (before.includes("\r") || after.includes("\r") || before.includes("\0") || after.includes("\0"))
+    throw new PatchError("The file uses Windows line endings or binary data.", 422, "crlf");
+  if ((before !== "" && !before.endsWith("\n")) || !after.endsWith("\n"))
+    throw new PatchError("The patch keeps a trailing newline.", 422, "crlf");
+  const split = (text: string) => {
+    if (text === "") return [] as string[];
+    const lines = text.split("\n");
+    lines.pop();
+    return lines;
+  };
+  const oldLines = split(before);
+  const newLines = split(after);
+  const ops = lineOps(oldLines, newLines);
+  const rows = ops.map((op) => `${op.kind}${op.text}`);
+  const diff = `diff --git a/${filePath} b/${filePath}\nindex ${gitBlobHash(before)}..${gitBlobHash(after)}\n--- a/${filePath}\n+++ b/${filePath}\n@@ -1,${oldLines.length} +1,${newLines.length} @@\n${rows.join("\n")}\n`;
+  if (applyVerifiedDiff(filePath, before, diff) !== after) throw new PatchError("Patch verification failed.", 500, "verify");
+  return diff;
+}
+
+function lineOps(oldLines: string[], newLines: string[]): Array<{ kind: " " | "-" | "+"; text: string }> {
+  const n = oldLines.length;
+  const m = newLines.length;
+  if (n * m > 250_000) {
+    return [...oldLines.map((text) => ({ kind: "-" as const, text })), ...newLines.map((text) => ({ kind: "+" as const, text }))];
+  }
+  const dp: number[][] = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i -= 1) for (let j = m - 1; j >= 0; j -= 1) dp[i][j] = oldLines[i] === newLines[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const ops: Array<{ kind: " " | "-" | "+"; text: string }> = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (oldLines[i] === newLines[j]) { ops.push({ kind: " ", text: oldLines[i] }); i += 1; j += 1; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ kind: "-", text: oldLines[i] }); i += 1; }
+    else { ops.push({ kind: "+", text: newLines[j] }); j += 1; }
+  }
+  while (i < n) ops.push({ kind: "-", text: oldLines[i++] });
+  while (j < m) ops.push({ kind: "+", text: newLines[j++] });
+  return ops;
+}
+
+export const gitBlobHash = (source: string) => createHash("sha1").update(`blob ${Buffer.byteLength(source)}\0`).update(source).digest("hex");
 export const sourceHash = (source: string) => createHash("sha256").update(source).digest("hex");
 
 /** Strict application of our full-context, single-file diff. Pure text processing; never executes repo code. */
@@ -130,7 +173,7 @@ export function applyVerifiedDiff(filePath: string, source: string, diff: string
     if (![" ", "-", "+"].includes(kind)) throw new PatchError("Invalid patch body.", 422, "verify");
     previous = kind;
   }
-  const original = oldLines.join("\n") + (oldNewline ? "\n" : "");
+  const original = oldLines.length === 0 ? "" : oldLines.join("\n") + (oldNewline ? "\n" : "");
   if (oldLines.length !== Number(header[1]) || newLines.length !== Number(header[2]) || original !== source)
     throw new PatchError("Source changed; rescan instead of forcing the patch.", 409, "version");
   const after = newLines.join("\n") + (newNewline ? "\n" : "");

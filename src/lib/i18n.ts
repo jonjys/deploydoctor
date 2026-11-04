@@ -31,8 +31,8 @@ const en = {
   "nav.guides": "Guides",
 
   "home.eyebrow": "GITHUB DEPLOYMENT PREFLIGHT",
-  "home.h1": "Find deployment risks before you push.",
-  "home.copy": "Cloudflare, Netlify, Vercel, Fly.io, Render and container configuration. Check supported source risks in Rust, JavaScript, TypeScript, Python, Go and more without running your code. One free scan a day per IP. More scans and private repos: $2 for 24 hours.",
+  "home.h1": "Paste your broken deploy. Get a fix PR in 60 seconds.",
+  "home.copy": "No fix, no pay. First 50 free. Cloudflare, Netlify, Vercel, Fly.io, Render and container configuration. Check supported source risks in Rust, JavaScript, TypeScript, Python, Go and more without running your code. One free scan a day per IP. More scans and private repos: $2 for 24 hours.",
   "home.trust.aria": "Scanner characteristics",
   "home.trust.unlimited": "Unlimited scans",
   "home.trust.free": "1 free scan / day",
@@ -576,8 +576,8 @@ const sv: Record<MessageKey, string> = {
   "nav.guides": "Guider",
 
   "home.eyebrow": "KONTROLLERA REPOT FÖRE DEPLOY",
-  "home.h1": "Hitta risker före din nästa deploy.",
-  "home.copy": "Cloudflare, Netlify, Vercel, Fly.io, Render och containerkonfiguration. Kontrollera stödda kodrisker i Rust, JavaScript, TypeScript, Python, Go och fler utan att köra koden. En gratis skanning per dag och IP. Fler skanningar och privata repon: 19 kr för 24 timmar.",
+  "home.h1": "Klistra in den trasiga deployn. Få en fix-PR på 60 sekunder.",
+  "home.copy": "Ingen fix, ingen betalning. De första 50 är gratis. Cloudflare, Netlify, Vercel, Fly.io, Render och containerkonfiguration. Kontrollera stödda kodrisker i Rust, JavaScript, TypeScript, Python, Go och fler utan att köra koden. En gratis skanning per dag och IP. Fler skanningar och privata repon: 19 kr för 24 timmar.",
   "home.trust.aria": "Skannerns egenskaper",
   "home.trust.unlimited": "Obegränsat med skanningar",
   "home.trust.free": "1 gratis skanning / dag",

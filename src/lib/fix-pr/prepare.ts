@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { RepositorySnapshot } from "@/lib/analyzer";
 import { analyzeGitHubRepository, githubRequest, GitHubApiError, parseGitHubRepoUrl, type GitBlob, type GitTree } from "@/lib/github";
 import { MAX_PATCH_SOURCE_BYTES } from "@/lib/patch/case-patch";
-import { planCasePatch } from "@/lib/patch/plan";
+import { planDeployFixes } from "@/lib/fix-pr/deploy-fixes";
 import { sealQuote } from "@/lib/patch/quote";
 import { signingSecret } from "@/lib/session-token";
 import type { ReportResults } from "@/types/report";
@@ -46,12 +46,12 @@ export async function prepareRepositoryFix(repo: string, token?: string): Promis
     return { eligible: false, repoUrl: analyzed.canonicalUrl, isPrivate: analyzed.isPrivate, headline, items, fixes: [], commitSha, errorSummary };
   }
   const plan = await planAtCommit(owner, name, analyzed.results.repository.defaultBranch, commitSha, analyzed.results, token);
-  if (!plan.fixes.length) {
+  if (!plan.fixes.length || !plan.patch) {
     return { eligible: false, repoUrl: analyzed.canonicalUrl, isPrivate: analyzed.isPrivate, headline, items, fixes: [], commitSha, errorSummary };
   }
   const { token: quoteToken } = sealQuote({
     reportId: randomUUID(), repoUrl: analyzed.canonicalUrl, commitSha, files: plan.files,
-    fixes: plan.fixes.length, patch: plan.patch, sourceHashes: plan.sourceHashes,
+    fixes: plan.fixes.length, patch: plan.patch, sourceHashes: plan.sourceHashes, notes: plan.notes.slice(0, 2_000),
   }, signingSecret());
   return {
     eligible: true, repoUrl: analyzed.canonicalUrl, isPrivate: analyzed.isPrivate, headline, items,
@@ -60,14 +60,12 @@ export async function prepareRepositoryFix(repo: string, token?: string): Promis
 }
 
 async function planAtCommit(owner: string, name: string, defaultBranch: string, commitSha: string, results: ReportResults, token?: string) {
-  const imports = results.checks.find((check) => check.id === "imports");
-  const flagged = [...new Set((imports?.status === "red" ? imports.findings ?? [] : []).map((finding) => finding.file))].slice(0, MAX_FILES);
-  if (!flagged.length) return planCasePatch(emptySnapshot(owner, name, defaultBranch));
   const repoPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
   const tree = await githubRequest<GitTree>(`${repoPath}/git/trees/${commitSha}?recursive=1`, token, Boolean(token));
-  if (tree.truncated || tree.tree.length > 30_000) return planCasePatch(emptySnapshot(owner, name, defaultBranch));
-  const configs = tree.tree.filter((entry) => entry.type === "blob" && /(?:^|\/)(?:tsconfig|jsconfig)\.json$/.test(entry.path)).map((entry) => entry.path);
-  const wanted = new Set([...flagged, ...configs, "package.json", ".gitignore"]);
+  if (tree.truncated || tree.tree.length > 30_000) return planDeployFixes(emptySnapshot(owner, name, defaultBranch));
+  const flagged = results.checks.flatMap((check) => [...(check.findings ?? []).map((finding) => finding.file), check.suggestedFile?.path ?? ""]).filter(Boolean);
+  const configs = tree.tree.filter((entry) => entry.type === "blob" && /^(?:next|vite)\.config\.[cm]?[jt]s$|(?:^|\/)(?:tsconfig|jsconfig)\.json$|^supabase\/config\.toml$/.test(entry.path)).map((entry) => entry.path);
+  const wanted = new Set([...flagged.slice(0, MAX_FILES), ...configs, "package.json", ".gitignore", ".env.example", ".nvmrc", "vercel.json", "supabase/config.toml"]);
   const blobs = tree.tree.filter((entry) => entry.type === "blob" && entry.mode !== "120000" && wanted.has(entry.path) && (entry.size ?? 0) <= MAX_PATCH_SOURCE_BYTES);
   const contents = new Map<string, string>();
   await Promise.all(blobs.map(async (entry) => {
@@ -82,7 +80,7 @@ async function planAtCommit(owner: string, name: string, defaultBranch: string, 
   const snapshot: RepositorySnapshot = {
     owner, name, defaultBranch, entries, contents, sourceFilesFound: contents.size, sourceFilesRead: contents.size, partial: false,
   };
-  return planCasePatch(snapshot);
+  return planDeployFixes(snapshot);
 }
 
 function emptySnapshot(owner: string, name: string, defaultBranch: string): RepositorySnapshot {

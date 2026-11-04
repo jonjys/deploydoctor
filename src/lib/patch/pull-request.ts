@@ -4,7 +4,8 @@ import { statusRepository } from "@/lib/repo-status";
 export type PrOrder = { repoUrl: string; commitSha: string; patch: string; files: string[]; sourceHashes?: Record<string, string>; reportId: string };
 export type GitRequest = <T>(path: string, method?: "GET" | "POST", body?: unknown) => Promise<T>;
 const SHA = /^[a-f0-9]{40}$/;
-const safeFile = (path: string) => /^[\w./@()[\]$+~-]{1,220}\.[cm]?[jt]sx?$/.test(path) && !path.startsWith("/") && path.split("/").every(part => part && part !== "." && part !== "..");
+const EXTRA_FILE = /^(?:package\.json|vercel\.json|\.env\.example|\.nvmrc|\.gitignore|deploydoctor-fix\.md)$/;
+const safeFile = (path: string) => (EXTRA_FILE.test(path) || /^[\w./@()[\]$+~-]{1,220}\.[cm]?[jt]sx?$/.test(path)) && !path.startsWith("/") && path.split("/").every(part => part && part !== "." && part !== "..");
 
 /** The same fresh payment/owner gate as downloading. No GitHub request precedes authorization. */
 export async function openPaidPatchPullRequest(sessionId: string, keys: string[], branchKey: string,
@@ -24,7 +25,7 @@ export function paidPatchFiles(order: PrOrder, originals: Map<string, string>) {
     const file = order.files.find(path => diff.startsWith(`diff --git a/${path} b/${path}\n`));
     if (!file || used.has(file)) throw new PatchError("The patch paths do not match the order.", 422, "verify");
     used.add(file);
-    const source = originals.get(file);
+    const source = originals.has(file) ? originals.get(file)! : order.sourceHashes?.[file] === sourceHash("") ? "" : undefined;
     if (source === undefined || Buffer.byteLength(source) > MAX_PATCH_SOURCE_BYTES || !order.sourceHashes?.[file] || sourceHash(source) !== order.sourceHashes[file])
       throw new PatchError("Source changed or the order is too old. Download the patch for manual review.", 409, "version");
     return { file, content: applyVerifiedDiff(file, source, diff) };
@@ -72,11 +73,13 @@ export async function openPatchPullRequest(order: PrOrder, branchKey: string, ap
   const originals = new Map<string, string>();
   const entries = order.files.map(file => {
     const entry = tree.tree.find(item => item.path === file);
+    if (!entry && order.sourceHashes?.[file] === sourceHash("")) return { path: file, type: "blob" as const, mode: "100644", sha: "new", size: 0 };
     if (!entry || entry.type !== "blob" || !["100644", "100755"].includes(entry.mode) || !SHA.test(entry.sha) || (entry.size ?? Infinity) > MAX_PATCH_SOURCE_BYTES)
       throw new PatchError("A source file could not be verified.", 409, "version");
     return entry;
   });
   await Promise.all(entries.map(async entry => {
+    if (entry.sha === "new") { originals.set(entry.path, ""); return; }
     const blob = await api<{ encoding: string; content: string }>(`${root}/git/blobs/${entry.sha}`);
     if (blob.encoding !== "base64" || blob.content.length > MAX_PATCH_SOURCE_BYTES * 1.5) throw new PatchError("Unexpected file encoding.", 422, "size");
     const bytes = Buffer.from(blob.content, "base64");
