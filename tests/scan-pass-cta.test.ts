@@ -21,7 +21,10 @@ test("the report offers the 24-hour pass with its real price and the existing ch
 test("the report page shows the pass offer to every visitor without a pass, not only after a failed check", () => {
   const page = readFileSync(new URL("../src/app/r/[id]/page.tsx", import.meta.url), "utf8");
   assert.match(page, /import \{ ScanPassCta \} from "@\/components\/scan-pass-cta";/);
-  assert.match(page, /\{!plan && <ScanPassCta t=\{t\} repoUrl=\{report\.repo_url\} \/>\}/);
+  // Reports with a launch plan offer the same pass inside the plan's unlock box instead.
+  assert.match(page, /\{!plan && !launchPlan && <ScanPassCta t=\{t\} repoUrl=\{report\.repo_url\} \/>\}/);
+  assert.match(page, /<LaunchPlanSection plan=\{launchPlan\} unlocked=\{Boolean\(plan\)\}/);
+  assert.match(readFileSync(new URL("../src/components/launch-plan.tsx", import.meta.url), "utf8"), /<ScanCheckoutButton plan="day"/);
   // It sits under the findings and above the coverage details.
   assert.ok(page.indexOf("<ScanPassCta") > page.indexOf('id="checks"'));
   assert.ok(page.indexOf("<ScanPassCta") < page.indexOf(`<summary>{t("report.coverageDetails")}`));
