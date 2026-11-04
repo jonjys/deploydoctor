@@ -13,10 +13,12 @@ import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { fixesConfirmed, reposScanned } from "@/lib/stats";
 import { formatCount } from "@/lib/format-count";
 import { RecentScans } from "@/components/solved-prompt";
+import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
 
 export default async function Home() {
   const [plan, scanned, fixed] = await Promise.all([customerSession().then(activePlan), reposScanned(), fixesConfirmed()]);
   const { lang, t } = await getT();
+  const fixOn = fixPullRequestsEnabled();
   const { titles } = analysisText(lang);
   // The same titles the analyzer prints, in report order. Supabase and Prisma only run when the stack uses them.
   const checks: Array<{ title: string; whenUsed?: boolean; note?: string }> = [
@@ -35,8 +37,9 @@ export default async function Home() {
           <span className="eyebrow-icon">✦</span>
           {t("home.eyebrow")}
         </div>
-        <h1>{t("home.h1")}</h1>
-        <p className="hero-copy">{t("home.copy")}</p>
+        {/* The fix promise only once Fix pull requests can actually be bought. */}
+        <h1>{t(fixOn ? "home.h1.fix" : "home.h1")}</h1>
+        <p className="hero-copy">{t(fixOn ? "home.copy.fix" : "home.copy")}</p>
 
         <div id="scan-repository" className="scan-entry">
         <Suspense fallback={null}>

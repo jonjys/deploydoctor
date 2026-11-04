@@ -4,5 +4,5 @@ import { readFileSync } from "node:fs";
 
 test("nav links to the Site check tool", () => {
   const src = readFileSync("src/components/site-nav.tsx", "utf8");
-  assert.match(src, /href="https:\/\/sellscore\.nyttolabs\.com"[^>]*>Site check</);
+  assert.match(src, /href="https:\/\/sellscore\.nyttolabs\.com"[^>]*>\{t\("nav.siteCheck"\)\}</);
 });

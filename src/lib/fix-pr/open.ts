@@ -16,7 +16,7 @@ export function fixPullRequestText(branchKey: string, order: PrOrder, summary: s
     title: "Fix the failed deploy",
     draft: false,
     allowPrivate: true,
-    body: `## DeployDoctor fix\n\n${summary.slice(0, 500)}\n\nThis pull request changes ${order.files.length} file(s) on commit ${order.commitSha}. The patch was checked against that commit. Repository code was not executed.\n\nNo fix, no pay: if this pull request does not make the build pass, the $5 charge is refunded. Review the diff before you merge. Opening the pull request does not guarantee a successful deployment.\n`,
+    body: `## DeployDoctor fix\n\n${summary.slice(0, 1500)}\n\nThis pull request changes ${order.files.length} file(s) on commit ${order.commitSha}. Each verified change was checked against that commit. Instructions are labeled and do not pretend to edit the build. Repository code was not executed.\n\nNo fix, no pay: if this pull request does not make the build pass, the $5 charge is refunded. Review the diff before you merge.\n`,
   };
 }
 
@@ -62,6 +62,7 @@ export async function openGatedFixPullRequest(input: {
   const paid = !input.promoReceipt;
   const order = quoteToOrder(quote);
   const branchKey = tokenHash(input.session?.id ?? input.promoReceipt ?? input.quoteToken).slice(0, 24);
-  const opened = await openPatchPullRequest(order, branchKey, input.api, fixPullRequestText(branchKey, order, input.summary));
+  const summary = [input.summary, quote.notes].filter(Boolean).join("\n\n");
+  const opened = await openPatchPullRequest(order, branchKey, input.api, fixPullRequestText(branchKey, order, summary));
   return { ...opened, paid };
 }
