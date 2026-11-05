@@ -2,15 +2,17 @@ import type { Metadata } from "next";
 import { SiteNav } from "@/components/site-nav";
 import { DiagnoseForm } from "@/components/diagnose-form";
 import { activePlan, customerSession } from "@/lib/access";
+import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
 import { getT } from "@/lib/lang";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT();
+  const description = t(fixPullRequestsEnabled() ? "diag.sub" : "diag.leadOff");
   return {
     title: t("diag.title"),
-    description: t("diag.sub"),
+    description,
     alternates: { canonical: "/diagnose" },
-    openGraph: { siteName: "DeployDoctor", url: "/diagnose", title: t("diag.title"), description: t("diag.sub") },
+    openGraph: { siteName: "DeployDoctor", url: "/diagnose", title: t("diag.title"), description },
   };
 }
 
@@ -24,7 +26,7 @@ export default async function DiagnosePage() {
       <article className="guide diag-page">
         <p className="section-kicker">{t("diag.kicker")}</p>
         <h1>{t("diag.h1")}</h1>
-        <p className="guide-lead">{t("diag.sub")}</p>
+        <p className="guide-lead">{t(fixPullRequestsEnabled() ? "diag.sub" : "diag.leadOff")}</p>
         <DiagnoseForm hasPass={Boolean(plan)} />
       </article>
     </main>

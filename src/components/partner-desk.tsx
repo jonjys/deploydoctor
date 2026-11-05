@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { CopyTextButton } from "@/components/copy-text-button";
-import { partnerAuditUrl, partnerMailto } from "@/lib/human-audit";
+import { partnerMailto, partnerSlugQuery } from "@/lib/human-audit";
 
 export type PartnerDeskLabels = {
   slug: string;
@@ -29,7 +29,10 @@ export function PartnerDesk({ labels }: { labels: PartnerDeskLabels }) {
   const [website, setWebsite] = useState("");
   const [error, setError] = useState("");
 
-  const tracked = useMemo(() => (slug.trim() ? partnerAuditUrl(slug) : null), [slug]);
+  const tracked = useMemo(() => {
+    const query = slug.trim() ? partnerSlugQuery(slug) : null;
+    return query ? `?${query}` : null;
+  }, [slug]);
   const slugTouched = slug.trim().length > 0;
   const mailto = useMemo(() => partnerMailto({ agency, email, website, slug }), [agency, email, website, slug]);
 

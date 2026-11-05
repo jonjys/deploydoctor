@@ -14,7 +14,6 @@ import { fixesConfirmed, reposScanned } from "@/lib/stats";
 import { formatCount } from "@/lib/format-count";
 import { RecentScans } from "@/components/solved-prompt";
 import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
-import { HUMAN_AUDIT_PAYMENT_URL } from "@/lib/human-audit";
 
 export default async function Home() {
   const [plan, scanned, fixed] = await Promise.all([customerSession().then(activePlan), reposScanned(), fixesConfirmed()]);
@@ -49,7 +48,7 @@ export default async function Home() {
         </div>
         <div className="entry-paths" aria-label={lang === "sv" ? "Välj vad du behöver hjälp med" : "Choose what you need help with"}>
           <a className="entry-path" href="#scan-repository"><span className="section-kicker">{lang === "sv" ? "INNAN DU PUSHAR" : "BEFORE YOU PUSH"}</span><h2>{lang === "sv" ? "Skanna ett repo" : "Scan repository"} <span aria-hidden="true">↘</span></h2><p>{lang === "sv" ? "Hitta risker i koden. Se fil, rad och nästa steg." : "Find risks in your code. See the file, line and next step."}</p></a>
-          <Link className="entry-path entry-path-log" href="/fix"><span className="section-kicker">{lang === "sv" ? "BYGGET HAR REDAN MISSLYCKATS" : "BUILD ALREADY FAILED"}</span><h2>{lang === "sv" ? "Fixa en misslyckad build" : "Fix a failed build"} <span aria-hidden="true">→</span></h2><p>{lang === "sv" ? "Klistra in repot. Diagnosen är gratis. Pull requesten kostar 49 kr." : "Paste the repo. Diagnosis is free. The pull request is $5."}</p><span className="entry-allowance">{lang === "sv" ? "3 gratis diagnoser per dag" : "3 free diagnoses a day"}</span></Link>
+          <Link className="entry-path entry-path-log" href="/fix"><span className="section-kicker">{lang === "sv" ? "BYGGET HAR REDAN MISSLYCKATS" : "BUILD ALREADY FAILED"}</span><h2>{lang === "sv" ? "Fixa en misslyckad build" : "Fix a failed build"} <span aria-hidden="true">→</span></h2><p>{fixOn ? (lang === "sv" ? "Klistra in repot. Diagnosen är gratis. Pull requesten kostar 49 kr." : "Paste the repo. Diagnosis is free. The pull request is $5.") : (lang === "sv" ? "Klistra in repot. Diagnosen är gratis. Pull requesten kommer snart." : "Paste the repo. Diagnosis is free. The pull request is coming soon.")}</p><span className="entry-allowance">{lang === "sv" ? "3 gratis diagnoser per dag" : "3 free diagnoses a day"}</span></Link>
         </div>
         <p className="plugin-line"><Link href="/leak-check">{lang === "sv" ? "Nytt: ligger din API-nyckel i din live-JavaScript? Gratis läckkoll →" : "New: is your API key in your live JavaScript? Free leak check →"}</Link></p>
         <p className="plugin-line"><Link href="/launch-manual">{lang === "sv" ? "Nytt: lanseringsplanen, från ditt repo till din första betalande kund →" : "New: your launch plan, from this repo to your first paying customer →"}</Link></p>
@@ -140,12 +139,12 @@ export default async function Home() {
       <section className="human-audit" aria-labelledby="human-audit-heading">
         <h2 id="human-audit-heading">{lang === "sv" ? "Vill du att en människa granskar ditt repo?" : "Want a human to review your repo?"}</h2>
         <p>
-          <a href={HUMAN_AUDIT_PAYMENT_URL} target="_blank" rel="noopener noreferrer">
-            {lang === "sv" ? "Mänsklig granskning av ett repo inom 48 timmar, €49" : "Human-reviewed audit of one repo within 48 hours, €49"}
+          <a href="https://buy.stripe.com/bJe9ASculcZgcKQ52R8og2w" target="_blank" rel="noopener noreferrer">
+            {lang === "sv" ? "Mänsklig granskning av ett repo, €149" : "Human-reviewed audit of one repo, €149"}
             <span className="sr-only"> ({lang === "sv" ? "öppnas i en ny flik" : "opens in a new tab"})</span>
           </a>
         </p>
-        <p><Link href="/partners">{lang === "sv" ? "Byrå? Tjäna 30 % när en kund köper granskningen." : "Agency? Earn 30% when a client buys the audit."}</Link></p>
+        <p><Link href="/partners">{lang === "sv" ? "Byråpartner" : "Agency partners"}</Link></p>
       </section>
 
       <footer className="footer">

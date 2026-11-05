@@ -10,7 +10,7 @@ Reads GitHub API files. Never clones, installs, builds or executes repository co
 - [Live leak check](https://deploydoctor.nyttolabs.com/leak-check): reads the HTML and same-origin JavaScript of a public https site and reports secret-shaped keys (masked) that build-time variables put in the browser bundle.
 - [Launch manual](https://deploydoctor.nyttolabs.com/launch-manual): the steps from a working prototype to a first paying customer. Reports with the 24-hour pass include a repository-specific launch plan.
 - [Pricing](https://deploydoctor.nyttolabs.com/pricing): current website scan passes.
-- [Agency partners](https://deploydoctor.nyttolabs.com/partners): share the €49 human-audit Payment Link. The agency earns 30 percent, paid manually offline. Scan-pass prices are unchanged.
+- [Agency partners](https://deploydoctor.nyttolabs.com/partners): how an agency slug is added with client_reference_id. This page does not publish a price. Scan-pass prices are unchanged.
 - [Source and plugin package](https://github.com/jonjys/deploydoctor): implementation and installation docs.
 
 MCP Streamable HTTP endpoint: https://deploydoctor.nyttolabs.com/api/mcp

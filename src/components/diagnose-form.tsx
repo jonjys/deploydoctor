@@ -21,6 +21,7 @@ export function DiagnoseForm({ hasPass = false }: { hasPass?: boolean }) {
   const [result, setResult] = useState<Diagnosis | null>(null);
   const [resultId, setResultId] = useState("");
   const [fixHref, setFixHref] = useState("");
+  const [fixSoon, setFixSoon] = useState(false);
 
   // Back from Stripe: show the diagnosis again, or the log the paywall stopped, instead of an empty form.
   useEffect(() => {
@@ -32,12 +33,12 @@ export function DiagnoseForm({ hasPass = false }: { hasPass?: boolean }) {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    setBusy(true); setError(""); setPaywall(false); setResult(null); setFixHref("");
+    setBusy(true); setError(""); setPaywall(false); setResult(null); setFixHref(""); setFixSoon(false);
     // What this tab kept belongs to the log before, so a failed request must not bring it back.
     clearDiagnosis();
     try {
       const response = await fetch("/api/diagnose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ log }) });
-      const data = await response.json() as { diagnosis?: Diagnosis; error?: string; paywall?: boolean; fix?: { href?: string; paywalled?: boolean } | null };
+      const data = await response.json() as { diagnosis?: Diagnosis; error?: string; paywall?: boolean; fix?: { href?: string; paywalled?: boolean; comingSoon?: boolean } | null };
       if (!response.ok || !data.diagnosis) {
         setPaywall(Boolean(data.paywall));
         // The paywall's pass buttons leave for Stripe in this tab: the log waits to be diagnosed on the way back.
@@ -48,6 +49,7 @@ export function DiagnoseForm({ hasPass = false }: { hasPass?: boolean }) {
       setResultId(id);
       setResult(data.diagnosis);
       if (data.fix?.paywalled) setFixHref(data.fix.href || "/fix");
+      if (data.fix?.comingSoon) setFixSoon(true);
       saveDiagnosis({ id, log, diagnosis: data.diagnosis });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("diag.failed"));
@@ -84,6 +86,7 @@ export function DiagnoseForm({ hasPass = false }: { hasPass?: boolean }) {
           <p>{t("diag.patchLocked")}{result.patch.file ? ` ${result.patch.file}` : ""}</p>
           <Link className="cta-button" href={repo ? `${fixHref}?repo=${encodeURIComponent(repo)}` : fixHref}>{t("fix.pay")}</Link>
         </div>}
+        {fixSoon && <p className="diag-box">{t("fix.soon")}</p>}
         {result.verify && <>
           <h3>{t("diag.verify")}</h3>
           <p>{result.verify}</p>
