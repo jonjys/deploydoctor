@@ -14,6 +14,7 @@ import { fixesConfirmed, reposScanned } from "@/lib/stats";
 import { formatCount } from "@/lib/format-count";
 import { RecentScans } from "@/components/solved-prompt";
 import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
+import { HUMAN_AUDIT_PAYMENT_URL } from "@/lib/human-audit";
 
 export default async function Home() {
   const [plan, scanned, fixed] = await Promise.all([customerSession().then(activePlan), reposScanned(), fixesConfirmed()]);
@@ -139,11 +140,12 @@ export default async function Home() {
       <section className="human-audit" aria-labelledby="human-audit-heading">
         <h2 id="human-audit-heading">{lang === "sv" ? "Vill du att en människa granskar ditt repo?" : "Want a human to review your repo?"}</h2>
         <p>
-          <a href="https://buy.stripe.com/bJe9ASculcZgcKQ52R8og2w" target="_blank" rel="noopener noreferrer">
-            {lang === "sv" ? "Mänsklig granskning av ett repo, €149" : "Human-reviewed audit of one repo, €149"}
+          <a href={HUMAN_AUDIT_PAYMENT_URL} target="_blank" rel="noopener noreferrer">
+            {lang === "sv" ? "Mänsklig granskning av ett repo inom 48 timmar, €49" : "Human-reviewed audit of one repo within 48 hours, €49"}
             <span className="sr-only"> ({lang === "sv" ? "öppnas i en ny flik" : "opens in a new tab"})</span>
           </a>
         </p>
+        <p><Link href="/partners">{lang === "sv" ? "Byrå? Tjäna 30 % när en kund köper granskningen." : "Agency? Earn 30% when a client buys the audit."}</Link></p>
       </section>
 
       <footer className="footer">

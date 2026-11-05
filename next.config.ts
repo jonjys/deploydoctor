@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [{ source: "/partner", destination: "/partners", permanent: false }];
+  },
   async headers() {
     const rules: Awaited<ReturnType<NonNullable<NextConfig["headers"]>>> = [
       // API responses are not documents. noindex here, and robots.txt disallows /api/.

@@ -19,6 +19,8 @@ const RESERVED = new Set([
   // Public folders, so a path below one of their files never starts a scan.
   "rescue-kit", "stats", "growth", "badge", "score", "launch-readiness", "webhook-replay-lab", "platforms", "deploy-handoff",
   "fix", "rescue",
+  // Agency partner page. /partner redirects here; neither segment is a GitHub owner.
+  "partner", "partners",
 ]);
 
 /** Where a path that names no repository is sent: one segment matches no route, so it renders the app's not-found page. */

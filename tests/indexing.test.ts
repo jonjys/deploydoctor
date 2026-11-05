@@ -91,13 +91,16 @@ test("private reports keep noindex and the homepage audit is a static new-tab li
 
   const page = read("src/app/page.tsx");
   assert.match(page, /Want a human to review your repo\?/);
-  assert.match(page, /Human-reviewed audit of one repo, €149/);
-  assert.match(page, /href="https:\/\/buy\.stripe\.com\/bJe9ASculcZgcKQ52R8og2w"/);
+  assert.match(page, /Human-reviewed audit of one repo within 48 hours, €49/);
+  assert.match(page, /href=\{HUMAN_AUDIT_PAYMENT_URL\}/);
   assert.match(page, /target="_blank"/);
   assert.match(page, /rel="noopener noreferrer"/);
+  assert.doesNotMatch(page, /€149|bJe9ASculcZgcKQ52R8og2w/);
   assert.doesNotMatch(page, /billing-events|create-checkout|planPrice/);
 
   for (const file of ["src/lib/plans.ts", "src/lib/billing-events.ts", "src/app/api/stripe/create-checkout/route.ts"]) {
-    assert.doesNotMatch(read(file), /buy\.stripe\.com\/bJe9ASculcZgcKQ52R8og2w/);
+    const source = read(file);
+    assert.doesNotMatch(source, /buy\.stripe\.com\/bJe9ASculcZgcKQ52R8og2w/);
+    assert.doesNotMatch(source, /buy\.stripe\.com\/cNi7sKbqh6ASh169j78og2L/);
   }
 });

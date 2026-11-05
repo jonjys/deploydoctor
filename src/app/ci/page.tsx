@@ -108,7 +108,7 @@ export default function CiPage() {
           <p><strong>Deploy Handoff:</strong> Compare a PR to get a manual release checklist for newly referenced environment names, migration files, deployment configuration, build commands and endpoint source changes. Each task links to its pinned commit. Copy it to your release issue or coding assistant; actual production setup and runtime still need verification.</p>
           <p>Comments are supported for same-repository pull requests on the scanned head commit. Forks, Dependabot, closed PRs, other events and ref overrides are not commented. Do not use <code>pull_request_target</code> to bypass these restrictions.</p>
           <p>The built-in GitHub token stays in the runner and is used only for GitHub comments. A missing write permission produces a warning; scan results remain in the job summary. Private reports retain their existing authentication.</p>
-          <p>Set <code>comment: false</code> to disable conversation comments, or <code>audit-link: false</code> to remove the discreet link to the existing optional €149 human audit. No new price or subscription is introduced.</p>
+          <p>Set <code>comment: false</code> to disable conversation comments, or <code>audit-link: false</code> to remove the discreet link to the existing optional €49 human audit. No new price or subscription is introduced.</p>
           <p>Workflow concurrency prevents competing runs. The Action rechecks the live PR head before writing, but GitHub does not provide an atomic head condition for comment updates. Each comment always identifies its exact analyzed commit.</p>
         </section>
 
