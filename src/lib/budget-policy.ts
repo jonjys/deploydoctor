@@ -28,3 +28,8 @@ export function patchRules(identity: string, stage: "prepare" | "checkout" | "re
   return [{ key: `patch:${stage}:${identity}`, limit: limits[stage][0], seconds: 60 },
     { key: `patch:${stage}:site`, limit: limits[stage][1], seconds: 60 }];
 }
+/** Live leak checks fetch a stranger's site: few per visitor, a cap per day, and a site-wide ceiling. */
+export function leakCheckRules(identity: string): BudgetRule[] {
+  return [{ key: `leak:${identity}:minute`, limit: 3, seconds: 60 }, { key: `leak:${identity}:day`, limit: 20, seconds: 86400 },
+    { key: "leak:site:minute", limit: 40, seconds: 60 }];
+}
