@@ -107,8 +107,8 @@ export function legalLinks(rawHtml: string): Record<LegalKey, boolean> {
   };
 }
 
-const BUY_WORDS = /(?<![\p{L}])(?:checkout|pricing|prices|buy|shop now|cart|basket|order now|subscribe|plans|köp|kassa|priser|beställ|varukorg|warenkorb|kaufen|panier|acheter|comprar|carrito)(?![\p{L}])/iu;
-const BUY_PATHS = /(?:^|\/)(?:checkout|cart|basket|pricing|prices|products?|shop|store|kassa|varukorg|priser)(?:\/|$)/i;
+const BUY_WORDS = /(?<![\p{L}])(?:checkout|pricing|prices|buy|shop|shop now|cart|basket|order now|subscribe|plans|köp|handla|kassa|priser|beställ|varukorg|warenkorb|kaufen|panier|acheter|comprar|carrito)(?![\p{L}])/iu;
+const BUY_PATHS = /(?:^|\/)(?:checkout|cart|basket|pricing|prices|products?|collections|shop|store|kassa|varukorg|priser)(?:\/|$)/i;
 
 /** A shop: buy wording in a link or button's text, a shop path in a link, or a live Stripe publishable key. Class names and attributes are ignored. */
 export function sellsOnline(rawHtml: string, hasStripeKey: boolean): boolean {
