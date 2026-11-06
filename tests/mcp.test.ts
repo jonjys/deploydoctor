@@ -21,12 +21,12 @@ async function rpc(backend: DeployBackend, method: string, params: unknown = {},
 const call = (backend: DeployBackend, name: string, args: unknown) => rpc(backend, "tools/call", { name, arguments: args });
 const fail = async () => { throw new Error("must-not-be-called"); };
 
-test("MCP initializes and lists four tools without external calls", async () => {
+test("MCP initializes and lists five tools without external calls", async () => {
   const backend = { scan: fail, report: fail };
   const init = await rpc(backend, "initialize", { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "test", version: "1" } });
   assert.equal(init.data.result.serverInfo.name, "deploydoctor");
   const list = await rpc(backend, "tools/list");
-  assert.deepEqual(list.data.result.tools.map(t => t.name), ["diagnose_build_log", "scan_public_repository", "get_public_report", "get_deploydoctor_plans"]);
+  assert.deepEqual(list.data.result.tools.map(t => t.name), ["diagnose_build_log", "scan_public_repository", "get_public_report", "check_live_site", "get_deploydoctor_plans"]);
   assert.equal(list.response.headers.get("cache-control"), "private, no-store");
 });
 test("scan preserves trusted quota IP, strips credentials and returns saved evidence", async () => {

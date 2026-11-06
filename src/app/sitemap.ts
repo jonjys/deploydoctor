@@ -6,6 +6,7 @@ import { errorPages } from "@/lib/error-pages";
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },
+    { url: `${SITE_URL}/site-check`, lastModified: "2026-11-06", changeFrequency: "monthly", priority: 0.9 },
     { url: `${SITE_URL}/leak-check`, lastModified: "2026-11-05", changeFrequency: "monthly", priority: 0.9 },
     { url: `${SITE_URL}/launch-manual`, lastModified: "2026-11-04", changeFrequency: "monthly", priority: 0.9 },
     { url: `${SITE_URL}/deploy-handoff`, changeFrequency: "monthly", priority: 0.8 },

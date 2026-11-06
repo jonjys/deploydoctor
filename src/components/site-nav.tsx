@@ -34,7 +34,7 @@ export async function SiteNav({ current, note }: { current?: NavPage; note?: Rea
         <Link href="/guides" {...active("guides")}>{t("nav.guides")}</Link>
         <Link href="/ci" {...active("ci")}>{t("nav.ci")}</Link>
         <Link href="/ai-plugin">AI plugin</Link>
-        <a href="https://sellscore.nyttolabs.com" title="Free site score: email, link preview, Google, checkout">{t("nav.siteCheck")}</a>
+        <Link href="/site-check" title="Live site check: leaked keys, EU rules, VAT number, AI search">{t("nav.siteCheck")}</Link>
         <Link href="/account" {...active("account")}>{t("nav.myScans")}</Link>
         <Link href="/stats" {...active("stats")}>{t("nav.stats")}</Link>
       </div>

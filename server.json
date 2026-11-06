@@ -3,7 +3,7 @@
   "name": "io.github.jonjys/deploydoctor",
   "title": "DeployDoctor",
   "description": "Static deployment checks for Cloudflare, Netlify, Vercel, Fly.io, Render and containers.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "websiteUrl": "https://deploydoctor.nyttolabs.com/ai-plugin",
   "repository": {
     "url": "https://github.com/jonjys/deploydoctor",

@@ -150,6 +150,7 @@ export default async function Home() {
         <span>DeployDoctor</span>
         <span>{t("home.footerNote")} <Link href="/guides">{t("nav.guides")}</Link></span>
         <a href="https://github.com/jonjys/deploydoctor/blob/master/LICENSE" rel="noopener">{t("footer.license")}</a>
+        <a href="mailto:support@nyttolabs.com">support@nyttolabs.com</a>
       </footer>
     </main>
   );

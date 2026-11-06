@@ -26,6 +26,7 @@ export default function LeakCheckPage() {
     <p>Public keys such as Stripe <code>pk_live_</code> and the Supabase anon key are listed as fine: they are meant to be in the browser.</p>
     <h2>How it works</h2>
     <p>DeployDoctor fetches your page over https and the JavaScript files on the same site, the same files a browser loads. It does not log in, click, submit forms or call your APIs. Found values are masked to their type and last four characters, and nothing about the site is saved.</p>
+    <p>Want the rest too? The <Link href="/site-check">live site check</Link> runs this leak check plus privacy, terms, returns and contact pages, your VAT number in VIES, and whether AI search can read you.</p>
     <p>Building the next launch? <Link href="/launch-manual">The vibe coder&apos;s launch manual</Link> covers environment variables, Stripe live mode and Supabase RLS step by step.</p>
   </article></main>;
 }
