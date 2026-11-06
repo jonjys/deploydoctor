@@ -36,6 +36,20 @@ test("the legal pages name the operator the way Nytto Labs does elsewhere and pu
 test("the refund policy states the 14-day withdrawal right and matches the fix refund rules in code", () => {
   const refunds = read("src/app/refunds/page.tsx");
   assert.match(refunds, /14 days/);
-  assert.match(refunds, /Vercel&apos;s build of the fix commit fails/);
+  assert.match(refunds, /Vercel reports that its build of the commit DeployDoctor made has failed/);
+  assert.match(refunds, /Only Vercel&apos;s result on that commit counts/);
   assert.match(read("src/lib/fix-pr/outcome.ts").concat(read("src/lib/fix-pr/refund.ts")), /Vercel/);
+});
+
+test("what the terms promise is what checkout does: passes and subscriptions are charged in US dollars", async () => {
+  const { checkoutSessionParams } = await import("../src/lib/checkout-guard");
+  for (const plan of ["day", "week", "public", "private"] as const) {
+    const params = checkoutSessionParams({ plan, lang: "sv", reportId: "", checkId: "", context: "", browser: "digest", origin: "https://deploydoctor.example",
+      lineItem: { quantity: 1, price: "price_x" }, integrationIdentifier: "deploydoctor-abcdefgh" });
+    assert.deepEqual(params.adaptive_pricing, { enabled: false }, plan);
+  }
+});
+
+test("a suggested .env.example in a public report never republishes a committed key", () => {
+  assert.match(read("src/lib/analyzer.ts"), /content: maskAllSecrets\(completeEnvExample\(/);
 });

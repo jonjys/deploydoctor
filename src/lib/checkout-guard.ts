@@ -90,6 +90,9 @@ export function checkoutSessionParams(input: {
     mode: plans[input.plan].mode,
     line_items: [input.lineItem],
     locale: input.lang,
+    // Charge the US dollar price the site, the terms and the refund policy state, as fix and patch checkouts do.
+    // Adaptive Pricing would charge in the buyer's currency at Stripe's rate.
+    adaptive_pricing: { enabled: false },
     ...(input.customerId
       ? { customer: input.customerId }
       : plans[input.plan].mode === "payment"

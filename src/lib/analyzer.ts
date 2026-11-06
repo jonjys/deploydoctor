@@ -12,7 +12,7 @@ import { analysisText, forHosting, type AnalysisText } from "@/lib/analysis-text
 import type { Lang } from "@/lib/i18n";
 import { ignoringRule } from "@/lib/gitignore";
 import { nodeRangeAllowsMajor } from "@/lib/node-range";
-import { findSecrets } from "@/lib/secrets";
+import { findSecrets, maskAllSecrets } from "@/lib/secrets";
 import { auditMigrations, grantSql, MIGRATION_FILE } from "@/lib/supabase-sql";
 import { dailyVersion, parseVercelCron, runsMoreThanOnceADay } from "@/lib/vercel-cron";
 import { lockfileMentions, manifestSpecifiers, moduleImports, npmMissingLinuxBinaries, npmRootSpecifiers, packageName, pnpmOverrides, pnpmRootSpecifiers, stripComments,
@@ -1156,7 +1156,8 @@ function checkEnvironment(snapshot: RepositorySnapshot, x: AnalysisText): CheckR
   const withEnvExample = (check: CheckResult) => {
     if (missing.length || optional.length) {
       const existing = snapshot.contents.get(".env.example") ?? (misnamed ? assignmentsOnly(snapshot.contents.get(misnamed) ?? "") : undefined);
-      check.suggestedFile = { path: ".env.example", content: completeEnvExample(existing, missing, optional), command: "git add -- .env.example" };
+      // A public report is indexable: never republish a key someone committed into the template.
+      check.suggestedFile = { path: ".env.example", content: maskAllSecrets(completeEnvExample(existing, missing, optional)), command: "git add -- .env.example" };
     }
     return check;
   };
