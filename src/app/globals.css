@@ -906,3 +906,6 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .site-findings li.is-warn .site-mark { background: #f2b53a; border-color: #f2b53a; color: #1d1d1d; }
 .site-findings li.is-pass .site-mark { border-color: var(--ink); color: var(--ink); }
 .site-findings li.is-info .site-mark { color: var(--muted); }
+.legal-page ul li { margin-bottom: 8px; }
+.legal-page .footer { margin-top: 40px; }
+.legal-links { display: inline-flex; flex-wrap: wrap; gap: 4px 0; }

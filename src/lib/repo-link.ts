@@ -9,7 +9,7 @@ const NAME = /^[A-Za-z0-9_.-]{1,100}$/;
  * /api/x/y or /r/id/x still 404, and GitHub's own pages, so /orgs/vercel/repositories is not scanned as a repo.
  */
 const RESERVED = new Set([
-  "account", "ai-plugin", "api", "checkout", "ci", "diagnose", "errors", "guides", "launch-manual", "leak-check", "site-check", "patch", "pricing", "r", "restore", "social",
+  "account", "ai-plugin", "api", "checkout", "ci", "diagnose", "errors", "guides", "launch-manual", "leak-check", "site-check", "privacy", "terms", "refunds", "patch", "pricing", "r", "restore", "social",
   "about", "advisories", "apps", "codespaces", "collections", "contact", "customer-stories", "enterprise", "enterprises",
   "explore", "features", "issues", "login", "marketplace", "new", "notifications", "orgs", "organizations", "pulls",
   "readme", "search", "security", "sessions", "settings", "signup", "site", "solutions", "sponsors", "stars", "topics",

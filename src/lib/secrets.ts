@@ -51,3 +51,22 @@ export function maskSecrets(text: string): string {
   }
   return out;
 }
+
+/**
+ * Formats that are not repository findings but must never leave this server in a build log: model API keys,
+ * Stripe test keys and JWTs (Supabase anon and service_role alike). Bodies are bounded, so the cost stays linear.
+ */
+const EXTRA_MASKS: RegExp[] = [
+  /\b(sk-(?:proj|svcacct|admin)-)([A-Za-z0-9_-]{20,400})/g,
+  /\b(sk-)([A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20})\b/g,
+  /\b(sk-ant-[a-z]{2,10}\d{2}-)([A-Za-z0-9_-]{20,400})/g,
+  /\b((?:sk|rk)_test_)([0-9A-Za-z]{16,200})\b/g,
+];
+const JWT = /\beyJ[A-Za-z0-9_-]{5,2000}\.eyJ[A-Za-z0-9_-]{5,4000}\.([A-Za-z0-9_-]{10,1000})/g;
+
+/** maskSecrets plus the formats above. Use it on any text sent to a third party, such as a build log sent to a model. */
+export function maskAllSecrets(text: string): string {
+  let out = maskSecrets(text);
+  for (const regex of EXTRA_MASKS) out = out.replace(regex, (_whole, prefix: string, body: string) => `${prefix}…${body.slice(-4)}`);
+  return out.replace(JWT, (_whole, signature: string) => `eyJ…${signature.slice(-4)}`);
+}

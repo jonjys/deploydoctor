@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LegalLinks } from "@/components/legal-links";
 import { SiteNav } from "@/components/site-nav";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { planPrice } from "@/lib/plans";
@@ -32,5 +33,6 @@ export default async function Pricing() {
     <p>{t("pricing.capacity")}</p>
     <p>{t("pricing.note2")}</p>
     <p>{t("pricing.note3")}</p>
+    <p><LegalLinks /></p>
   </section></main>;
 }

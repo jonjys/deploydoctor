@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { SiteCheckForm } from "./site-check-form";
+import { LegalLinks } from "@/components/legal-links";
 
 export const metadata: Metadata = {
   title: "Live site check: leaked keys, EU rules, VAT number, AI search | DeployDoctor",
@@ -27,5 +28,6 @@ export default async function SiteCheckPage() {
     <p>DeployDoctor fetches your homepage over https, the JavaScript files on the same site, robots.txt and, for pages the homepage does not link, a few well-known policy addresses one at a time, all on your own host. It does not log in, click, submit forms or call your APIs. Secrets are masked to their type and last four characters, and nothing about the site is saved.</p>
     <p>Limits: pages rendered only by JavaScript in the browser are not run, so a footer built that way is looked for at the usual addresses instead. A VAT number VIES cannot answer for right now is reported as not checked, never as invalid. This is a checklist, not legal advice.</p>
     <p>Email deliverability (SPF, DKIM, DMARC), link previews and Google basics are checked by our sister tool <a href="https://sellscore.nyttolabs.com">SellScore</a>. The repository behind the site: <Link href="/#scan-repository">scan it here</Link>.</p>
+    <footer className="footer"><span>DeployDoctor</span><LegalLinks /></footer>
   </article></main>;
 }
