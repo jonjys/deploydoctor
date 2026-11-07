@@ -89,7 +89,7 @@ test("without a pass only the first section is in the HTML: no prompt, no checkl
       for (const step of section.steps) assert.ok(!html.includes(step.detail.slice(0, 60).replace(/'/g, "&#x27;")), `${lang}: ${section.id} step hidden`);
     }
     assert.doesNotMatch(html, /never write a real secret|data:text\/markdown|STRIPE_WEBHOOK_SECRET\nNEXT/);
-    if (lang === "sv") { assert.match(html, /19 kr/); assert.doesNotMatch(html, /\$/); }
+    if (lang === "sv") { assert.match(html, /\$2 \(ca 19 kr\)/); }
     else { assert.match(html, /\$2/); assert.doesNotMatch(html, /\bkr\b/); }
   }
 });

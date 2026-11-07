@@ -133,11 +133,11 @@ test("free allowance copy: the numbers match the limits and the $2 pass is the n
   }
   // The limit message says the free one is used and that the pass continues right away; the paywall below repeats it.
   assert.match(t("en", "err.dailyLimit"), /^You have used today's free scan\. Get 24 hours for \$2 and scan again right away/);
-  assert.match(t("sv", "err.dailyLimit"), /^Du har använt dagens gratis skanning\. Köp 24 timmar för 19 kr och skanna igen direkt/);
+  assert.match(t("sv", "err.dailyLimit"), /^Du har använt dagens gratis skanning\. Köp 24 timmar för \$2 \(ca 19 kr\) och skanna igen direkt/);
   assert.match(t("en", "diag.limit"), /^You have used today's free diagnosis\. Get 24 hours for \$2 and diagnose again right away/);
-  assert.match(t("sv", "diag.limit"), /^Du har använt dagens gratis diagnos\. Köp 24 timmar för 19 kr och diagnostisera igen direkt/);
+  assert.match(t("sv", "diag.limit"), /^Du har använt dagens gratis diagnos\. Köp 24 timmar för \$2 \(ca 19 kr\) och diagnostisera igen direkt/);
   assert.equal(t("en", "paywall.title"), "Continue right away for $2");
-  assert.equal(t("sv", "paywall.title"), "Fortsätt direkt för 19 kr");
+  assert.equal(t("sv", "paywall.title"), "Fortsätt direkt för $2 (ca 19 kr)");
   const changed: MessageKey[] = ["home.copy", "home.trust.free", "pricing.freeDiag", "err.actionLimit", "diag.sub", "diag.limit",
     "paywall.title", "paywall.body", "err.dailyLimit", "pricing.freeScans", "account.noPlan"];
   for (const key of changed) {
@@ -145,9 +145,9 @@ test("free allowance copy: the numbers match the limits and the $2 pass is the n
       assert.ok(messages[lang][key], `${lang} ${key}`);
       assert.doesNotMatch(messages[lang][key], /[–—"“”„]/, `${lang} ${key}`);
     }
-    // Dollars in English, the kronor guide in Swedish, never the other one.
+    // Stripe charges dollars: English shows dollars only; Swedish shows the dollar price with a kronor guide, never kronor alone.
     assert.doesNotMatch(t("en", key), /\bkr\b/, `en ${key}`);
-    assert.doesNotMatch(t("sv", key), /\$/, `sv ${key}`);
+    assert.doesNotMatch(t("sv", key), /(?<!ca )\b\d+ kr\b/, `sv ${key}`);
   }
   for (const key of ["home.copy", "diag.sub", "diag.limit", "paywall.title", "err.dailyLimit", "account.noPlan", "err.actionLimit"] as const) {
     assert.ok(t("en", key).includes(planPrice("day", "en")), `en ${key}`);
