@@ -47,14 +47,14 @@ export function normalizeSiteUrl(input: string): URL {
   return url;
 }
 
-async function assertPublicHost(host: string) {
+export async function assertPublicHost(host: string) {
   let addresses: Array<{ address: string }>;
   try { addresses = await lookup(host, { all: true, verbatim: true }); } catch { throw new LeakCheckError("That site address does not resolve.", 422); }
   if (!addresses.length || !addresses.every(entry => isPublicAddress(entry.address))) throw new LeakCheckError("That address is not a public website.", 422);
 }
 
-type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
-type Resolver = (host: string) => Promise<void>;
+export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
+export type Resolver = (host: string) => Promise<void>;
 
 async function readBounded(response: Response, limit: number): Promise<string> {
   if (!response.body) return "";
@@ -72,7 +72,7 @@ async function readBounded(response: Response, limit: number): Promise<string> {
 }
 
 /** GET with manual redirects, each hop on https and re-checked, staying on the first host's site. */
-async function fetchPublic(start: URL, limit: number, fetcher: Fetcher, resolve: Resolver): Promise<{ url: URL; body: string; type: string } | null> {
+export async function fetchPublic(start: URL, limit: number, fetcher: Fetcher, resolve: Resolver): Promise<{ url: URL; body: string; type: string } | null> {
   let url = start;
   for (let hop = 0; hop <= LIMITS.hops; hop++) {
     await resolve(url.hostname);
@@ -141,6 +141,11 @@ export function scanText(text: string, file: string): { leaks: Leak[]; publicKey
 const shortPath = (url: string, host: string) => { const parsed = new URL(url); return parsed.hostname === host ? parsed.pathname : url; };
 
 export async function checkSite(input: string, deps: { fetcher?: Fetcher; resolve?: Resolver } = {}): Promise<LeakReport> {
+  return (await inspectSite(input, deps)).report;
+}
+
+/** The leak report plus the homepage it was read from, for checks that need the HTML (see site-check.ts). Never sent to a client as-is. */
+export async function inspectSite(input: string, deps: { fetcher?: Fetcher; resolve?: Resolver } = {}): Promise<{ report: LeakReport; page: { url: URL; body: string } }> {
   const fetcher = deps.fetcher ?? fetch, resolve = deps.resolve ?? assertPublicHost;
   const start = normalizeSiteUrl(input);
   const page = await fetchPublic(start, LIMITS.htmlBytes, fetcher, resolve).catch(error => { if (error instanceof LeakCheckError) throw error; throw new LeakCheckError("The site could not be reached.", 422); });
@@ -160,7 +165,8 @@ export async function checkSite(input: string, deps: { fetcher?: Fetcher; resolv
     record(result.value.body, shortPath(scripts[index], host));
   }
   const unique = <T,>(items: T[], key: (item: T) => string) => [...new Map(items.map(item => [key(item), item])).values()];
-  return { url: `https://${host}${start.pathname === "/" ? "" : start.pathname}`, host, files, bytes, partial,
+  const report: LeakReport = { url: `https://${host}${start.pathname === "/" ? "" : start.pathname}`, host, files, bytes, partial,
     leaks: unique(leaks, leak => `${leak.kind}:${leak.masked}`).sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "critical" ? -1 : 1)),
     publicKeys: unique(publicKeys, key => key.kind) };
+  return { report, page: { url: page.url, body: page.body } };
 }

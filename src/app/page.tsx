@@ -3,10 +3,11 @@ import { ScanActivitySection } from "@/components/scan-activity-section";
 import { CommunityReviews } from "@/components/community-reviews";
 import Link from "next/link";
 import { RepoForm } from "@/components/repo-form";
-import { EXAMPLE_REPORTS } from "@/lib/site";
+import { EXAMPLE_REPORTS, SITE_URL } from "@/lib/site";
 import { allowsPrivate } from "@/lib/plans";
 import { activePlan, customerSession } from "@/lib/access";
 import { SiteNav } from "@/components/site-nav";
+import { LegalLinks } from "@/components/legal-links";
 import { analysisText } from "@/lib/analysis-text";
 import { getT } from "@/lib/lang";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
@@ -14,6 +15,15 @@ import { fixesConfirmed, reposScanned } from "@/lib/stats";
 import { formatCount } from "@/lib/format-count";
 import { RecentScans } from "@/components/solved-prompt";
 import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
+
+/** Who runs DeployDoctor and what it is, for Google and AI assistants. No prices, so it cannot go stale. */
+const SCHEMA = { "@context": "https://schema.org", "@graph": [
+  { "@type": "Organization", "@id": "https://nyttolabs.com/#org", name: "Nytto Labs", url: "https://nyttolabs.com", email: "support@nyttolabs.com",
+    address: { "@type": "PostalAddress", addressCountry: "SE" } },
+  { "@type": "SoftwareApplication", name: "DeployDoctor", url: SITE_URL, applicationCategory: "DeveloperApplication", operatingSystem: "Web",
+    description: "Finds what will break a deploy before the host builds it, and checks a live site for leaked keys, EU rules, VAT number and AI search.",
+    publisher: { "@id": "https://nyttolabs.com/#org" }, offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free daily scan and free live site check." } },
+] };
 
 export default async function Home() {
   const [plan, scanned, fixed] = await Promise.all([customerSession().then(activePlan), reposScanned(), fixesConfirmed()]);
@@ -28,6 +38,7 @@ export default async function Home() {
   ];
   return (
     <main className="site-shell home-page">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(SCHEMA).replace(/</g, "\\u003c") }} />
       <SiteNav current="scan" />
 
       <RecentScans />
@@ -150,6 +161,7 @@ export default async function Home() {
         <span>DeployDoctor</span>
         <span>{t("home.footerNote")} <Link href="/guides">{t("nav.guides")}</Link></span>
         <a href="https://github.com/jonjys/deploydoctor/blob/master/LICENSE" rel="noopener">{t("footer.license")}</a>
+        <LegalLinks />
       </footer>
     </main>
   );
