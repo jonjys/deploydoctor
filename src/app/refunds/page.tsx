@@ -28,7 +28,7 @@ export default function RefundsPage() {
     </ul>
 
     <h2>Your 14-day right of withdrawal</h2>
-    <p>If you are a consumer in the EU, you can withdraw from any purchase (passes, subscriptions, patches, fix pull requests and the Vercel Deploy Audit) within 14 days of buying it. Email {support} from the address you paid with, or include your payment reference, and say that you withdraw. The full amount is refunded within 14 days of your message. If you withdraw from a subscription, it is cancelled at the same time and its access ends. Once a patch or fix pull request is refunded, it can no longer be downloaded or opened from DeployDoctor.</p>
+    <p>If you are a consumer in the EU, you can withdraw from any purchase (passes, subscriptions, patches, fix pull requests and the human-reviewed repository audit) within 14 days of buying it. Email {support} from the address you paid with, or include your payment reference, and say that you withdraw. The full amount is refunded within 14 days of your message. If you withdraw from a subscription, it is cancelled at the same time and its access ends. Once a patch or fix pull request is refunded, it can no longer be downloaded or opened from DeployDoctor.</p>
 
     <h2>Subscriptions after 14 days</h2>
     <p>Cancel at any time with &quot;Manage / cancel subscription&quot; on <Link href="/account">your account page</Link>, which opens Stripe&apos;s billing portal. In another browser, <Link href="/restore">restore access</Link> first with your checkout email and payment reference, or email {support} and we will cancel it for you. Cancelling stops the next payment and keeps access until the end of the period already paid for, which is not refunded.</p>
@@ -37,7 +37,7 @@ export default function RefundsPage() {
     <p>If you were charged and a pass did not activate, a patch did not apply to the commit it was made for, or anything else did not work as described, email {support} with the payment reference or order ID. It will be put right or refunded.</p>
 
     <h2>How refunds are paid</h2>
-    <p>Refunds go back to the card or payment method you used, through Stripe, in the currency you were charged: US dollars, or euros for the audit. They usually appear within 5 to 10 business days. Kronor amounts on the Swedish pages are a rounded guide: you get back the amount you were charged, and if your card is in another currency your bank sets the exchange rate, so the amount on your statement can differ.</p>
+    <p>Refunds go back to the card or payment method you used, through Stripe, in the currency you were charged: US dollars for everything bought in DeployDoctor&apos;s own checkout, and for the audit the currency its payment link charged. They usually appear within 5 to 10 business days. Kronor amounts on the Swedish pages are a rounded guide: you get back the amount you were charged, and if your card is in another currency your bank sets the exchange rate, so the amount on your statement can differ.</p>
 
     <h2>Not covered here</h2>
     <p>The Rescue Kit is sold on Gumroad, under the terms shown there. See also the <Link href="/terms">terms</Link>.</p>

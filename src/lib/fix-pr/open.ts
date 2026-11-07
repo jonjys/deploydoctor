@@ -17,7 +17,7 @@ export function fixPullRequestText(branchKey: string, order: PrOrder, summary: s
     title: "Fix the failed deploy",
     draft: false,
     allowPrivate: true,
-    body: `## DeployDoctor fix\n\n${summary.slice(0, 1500)}\n\nThis pull request changes ${order.files.length} file(s) on commit ${order.commitSha}. Each verified change was checked against that commit. Instructions are labeled and do not pretend to edit the build. Repository code was not executed.\n\n${paid ? "No fix, no pay: if this pull request does not make the build pass, the $5 charge is refunded." : "This fix is one of the free launch fixes: nothing was charged."} Review the diff before you merge.\n`,
+    body: `## DeployDoctor fix\n\n${summary.slice(0, 1500)}\n\nThis pull request changes ${order.files.length} file(s) on commit ${order.commitSha}. Each verified change was checked against that commit. Instructions are labeled and do not pretend to edit the build. Repository code was not executed.\n\n${paid ? "No fix, no pay: if Vercel's build of this pull request's commit fails, the $5 charge is refunded." : "This fix is one of the free launch fixes: nothing was charged."} Review the diff before you merge.\n`,
   };
 }
 
