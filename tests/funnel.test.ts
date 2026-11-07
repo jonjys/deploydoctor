@@ -102,15 +102,15 @@ test("new funnel copy exists in both languages, prices match, and has no dashes 
   assert.match(t("en", "gh.maybePrivate"), /\$2/);
   assert.match(t("sv", "gh.maybePrivate"), /19 kr/);
   assert.match(t("sv", "paywall.privateTitle"), /19 kr/);
-  // The 24-hour pass offers name its price: dollars in English, the kronor guide in Swedish, never the other one.
+  // The 24-hour pass offers name the dollar price Stripe charges; Swedish adds a kronor guide, never kronor alone.
   for (const key of ["diag.rescue.body", "diag.rescue.cta", "report.dayCta"] as const) {
     assert.ok(t("en", key).includes(planPrice("day", "en")), `en ${key}`);
     assert.ok(t("sv", key).includes(planPrice("day", "sv")), `sv ${key}`);
     assert.doesNotMatch(t("en", key), /\bkr\b/, `en ${key}`);
-    assert.doesNotMatch(t("sv", key), /\$/, `sv ${key}`);
+    assert.doesNotMatch(t("sv", key), /(?<!ca )\b\d+ kr\b/, `sv ${key}`);
   }
   assert.match(t("en", "diag.rescue.body"), /\$2 once/);
-  assert.match(t("sv", "diag.rescue.body"), /19 kr en gång/);
+  assert.match(t("sv", "diag.rescue.body"), /\$2 \(ca 19 kr\) en gång/);
   assert.equal(t("en", "confirm.scanNow", { repo: "a/b" }), "Scan a/b now");
   assert.doesNotMatch(`${messages.en["pricing.badge.week"]} ${messages.sv["pricing.badge.week"]}`, /POPULAR|POPULÄR/);
 });

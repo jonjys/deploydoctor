@@ -10,7 +10,7 @@ export async function generateMetadata() {
   return { title: t("pricing.title") };
 }
 export default async function Pricing() {
-  const { t, lang } = await getT();
+  const { t } = await getT();
   return <main className="site-shell"><SiteNav current="pricing" /><header className="pricing-header">
     <p className="section-kicker">{t("pricing.kicker")}</p>
     <h1>{t("pricing.h1a")}<br />{t("pricing.h1b")}</h1>
@@ -20,7 +20,7 @@ export default async function Pricing() {
       <p className="price">$0</p><p>{t("pricing.freeScans")}</p><ul><li>{t("pricing.freeDiag")}</li><li>{t("pricing.free1")}</li><li>{t("pricing.free2")}</li><li>{t("pricing.free3")}</li><li>{t("pricing.free4")}</li><li>{t("pricing.freeCi")}</li></ul><Link className="cta-button" href="/">{t("pricing.scanFree")}</Link></article>
     {(["day", "week", "public"] as const).map((key) => <article className={`price-card ${key === "week" ? "featured" : ""}`} key={key}>
       <span className="plan-badge">{t(`pricing.badge.${key}`)}</span>
-      <h2>{t(`plan.${key}.name`)}</h2><p className="price">{planPrice(key, lang)}<small>{t(`plan.${key}.cadence`)}</small></p>
+      <h2>{t(`plan.${key}.name`)}</h2><p className="price">{planPrice(key, "en")}<small>{t(`plan.${key}.cadence`)}</small></p>
       <ul><li>{t("pricing.unlimited")}</li><li>{t("pricing.shareable")}</li>{key !== "week" && key !== "day" && <li>{t("pricing.history")}</li>}
         <li>{t("pricing.privateRepos")}</li><li className="plan-note">{t("pricing.privateToken")}</li><li className="plan-note">{t("pricing.privateSession")}</li>
         <li>{t("pricing.diag")}</li>
