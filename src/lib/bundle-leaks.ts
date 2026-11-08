@@ -72,7 +72,7 @@ async function readBounded(response: Response, limit: number): Promise<string> {
 }
 
 /** GET with manual redirects, each hop on https and re-checked, staying on the first host's site. */
-export async function fetchPublic(start: URL, limit: number, fetcher: Fetcher, resolve: Resolver): Promise<{ url: URL; body: string; type: string } | null> {
+export async function fetchPublic(start: URL, limit: number, fetcher: Fetcher, resolve: Resolver): Promise<{ url: URL; body: string; type: string; headers: Headers } | null> {
   let url = start;
   for (let hop = 0; hop <= LIMITS.hops; hop++) {
     await resolve(url.hostname);
@@ -87,7 +87,7 @@ export async function fetchPublic(start: URL, limit: number, fetcher: Fetcher, r
       continue;
     }
     if (!response.ok) { await response.body?.cancel().catch(() => undefined); return null; }
-    return { url, body: await readBounded(response, limit), type: response.headers.get("content-type") ?? "" };
+    return { url, body: await readBounded(response, limit), type: response.headers.get("content-type") ?? "", headers: response.headers };
   }
   throw new LeakCheckError("The site redirects too many times.", 422);
 }
@@ -145,7 +145,7 @@ export async function checkSite(input: string, deps: { fetcher?: Fetcher; resolv
 }
 
 /** The leak report plus the homepage it was read from, for checks that need the HTML (see site-check.ts). Never sent to a client as-is. */
-export async function inspectSite(input: string, deps: { fetcher?: Fetcher; resolve?: Resolver } = {}): Promise<{ report: LeakReport; page: { url: URL; body: string } }> {
+export async function inspectSite(input: string, deps: { fetcher?: Fetcher; resolve?: Resolver } = {}): Promise<{ report: LeakReport; page: { url: URL; body: string; headers: Headers }; texts: Array<{ file: string; body: string }> }> {
   const fetcher = deps.fetcher ?? fetch, resolve = deps.resolve ?? assertPublicHost;
   const start = normalizeSiteUrl(input);
   const page = await fetchPublic(start, LIMITS.htmlBytes, fetcher, resolve).catch(error => { if (error instanceof LeakCheckError) throw error; throw new LeakCheckError("The site could not be reached.", 422); });
@@ -153,7 +153,8 @@ export async function inspectSite(input: string, deps: { fetcher?: Fetcher; reso
   const host = page.url.hostname;
   const leaks: Leak[] = [], publicKeys: PublicKey[] = [];
   let bytes = page.body.length, files = 1, partial = false;
-  const record = (text: string, file: string) => { const found = scanText(text, file); leaks.push(...found.leaks); publicKeys.push(...found.publicKeys); };
+  const texts: Array<{ file: string; body: string }> = [];
+  const record = (text: string, file: string) => { texts.push({ file, body: text }); const found = scanText(text, file); leaks.push(...found.leaks); publicKeys.push(...found.publicKeys); };
   record(page.body, shortPath(page.url.toString(), host));
   const scripts = scriptUrls(page.body, page.url);
   if (scripts.length >= LIMITS.scripts) partial = true;
@@ -168,5 +169,5 @@ export async function inspectSite(input: string, deps: { fetcher?: Fetcher; reso
   const report: LeakReport = { url: `https://${host}${start.pathname === "/" ? "" : start.pathname}`, host, files, bytes, partial,
     leaks: unique(leaks, leak => `${leak.kind}:${leak.masked}`).sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "critical" ? -1 : 1)),
     publicKeys: unique(publicKeys, key => key.kind) };
-  return { report, page: { url: page.url, body: page.body } };
+  return { report, page: { url: page.url, body: page.body, headers: page.headers }, texts };
 }

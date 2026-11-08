@@ -927,3 +927,25 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .legal-page ul li { margin-bottom: 8px; }
 .legal-page .footer { margin-top: 40px; }
 .legal-links { display: inline-flex; flex-wrap: wrap; gap: 4px 0; }
+
+/* Is my app safe? */
+.safe-result { margin: 24px 0 8px; }
+.safe-verdict { padding: 26px 28px; border-radius: 16px; border: 2px solid var(--ink); margin-bottom: 18px; }
+.safe-verdict h2 { margin: 4px 0 6px; font-size: clamp(36px, 7vw, 56px); letter-spacing: -0.04em; line-height: 1; }
+.safe-verdict p { margin: 0; }
+.safe-verdict.is-bad { background: #d23c2a; border-color: #d23c2a; color: #fff; }
+.safe-verdict.is-good { background: var(--acid); border-color: var(--acid); color: #10231c; }
+.safe-verdict.is-mid { background: var(--panel); }
+.safe-verdict .section-kicker { color: inherit; opacity: .85; }
+.safe-counts { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px !important; font-weight: 700; font-size: 15px; }
+.safe-findings { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 10px; }
+.safe-findings li { padding: 14px 16px 14px 18px; border: 1px solid var(--line); border-left: 6px solid var(--line); border-radius: 10px; background: var(--panel); overflow-wrap: anywhere; }
+.safe-findings li.is-fail { border-left-color: #d23c2a; }
+.safe-findings li.is-warn { border-left-color: #e0a100; }
+.safe-findings li.is-pass { border-left-color: #2f9e44; }
+.safe-findings p { margin: 4px 0 0; font-size: 15px; line-height: 1.5; }
+.safe-area { display: block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.safe-fix { color: var(--ink); font-weight: 600; }
+.safe-verify { padding: 20px 22px; border: 2px dashed var(--ink); border-radius: 14px; margin-bottom: 18px; }
+.safe-code code { overflow-wrap: anywhere; }
+.safe-verify .action-buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
