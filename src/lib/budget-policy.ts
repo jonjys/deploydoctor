@@ -38,3 +38,8 @@ export function siteCheckRules(identity: string): BudgetRule[] {
   return [{ key: `site:${identity}:minute`, limit: 2, seconds: 60 }, { key: `site:${identity}:day`, limit: 15, seconds: 86400 },
     { key: "site:site:minute", limit: 20, seconds: 60 }];
 }
+/** "Is my app safe?" reads a site and, for its verified owner, probes their Supabase project: a few per visitor. */
+export function appSafetyRules(identity: string): BudgetRule[] {
+  return [{ key: `safe:${identity}:minute`, limit: 3, seconds: 60 }, { key: `safe:${identity}:day`, limit: 20, seconds: 86400 },
+    { key: "safe:site:minute", limit: 30, seconds: 60 }];
+}
