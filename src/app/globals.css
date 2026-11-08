@@ -198,7 +198,24 @@ a.cta-button[aria-busy="true"]:hover { transform: none; background: var(--acid);
   letter-spacing: -0.02em;
 }
 .human-audit p { margin: 0; font-size: 14px; }
+.human-audit p + p { margin-top: 8px; }
 .human-audit a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.partner-form { display: grid; gap: 12px; max-width: 520px; margin-top: 28px; }
+.partner-form h2 { margin-top: 0; }
+.partner-form label { display: grid; gap: 6px; font-weight: 650; font-size: 14px; }
+.partner-form input {
+  width: 100%;
+  padding: 12px 14px;
+  font: inherit;
+  font-weight: 450;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.partner-form input:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+.partner-form .cta-button { justify-self: start; margin-top: 4px; }
+.partner-hint { color: var(--muted); font-size: 13px; font-weight: 450; }
 .footer {
   min-height: 80px;
   display: flex;
@@ -479,6 +496,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .badge-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
 .badge-row code { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; font-family: var(--font-geist-mono), monospace; font-size: 11px; overflow-wrap: anywhere; max-width: 100%; }
 .copy-text textarea { display: block; width: 100%; margin-top: 8px; font-size: 12px; }
+.copy-text-compact textarea { min-height: 0; max-height: 5.5em; padding: 8px 10px; font-family: var(--font-geist-mono), monospace; line-height: 1.45; }
 
 /* Report: severity tag on failed checks and the partial-scan notice. */
 .severity { display: inline-block; margin: 8px 0 0 10px; padding: 3px 9px; border-radius: 999px; font-family: var(--font-geist-mono), monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; vertical-align: middle; }
@@ -525,7 +543,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   .check-list li > span, .result-number { color: var(--muted); }
   .evidence-list li { color: var(--muted); }
   .fix-box { background: #1f2d27; }
-  .suggested-file, .badge-row code, .checkout-form input, .private-input input, .restore-form input, .copy-button + textarea { background: #0f1a16; color: var(--ink); }
+  .suggested-file, .badge-row code, .checkout-form input, .private-input input, .restore-form input, .partner-form input, .copy-button + textarea { background: #0f1a16; color: var(--ink); }
   .report-actions { background: #050b09; border-color: var(--line); }
   .report-actions .copy-button { color: var(--ink); border-color: var(--line); }
   .copy-button.file-copy-button { color: var(--ink); }

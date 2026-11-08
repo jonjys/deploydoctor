@@ -122,4 +122,6 @@ test("the landing hero states the fix promise only when Fix pull requests are sw
   const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
   assert.match(page, /t\(fixOn \? "home\.h1\.fix" : "home\.h1"\)/);
   assert.match(page, /const fixOn = fixPullRequestsEnabled\(\)/);
+  assert.match(page, /The pull request is coming soon/);
+  assert.match(page, /fixOn \? \(lang === "sv" \? "Klistra in repot\. Diagnosen är gratis\. Pull requesten kostar \$5 \(ca 49 kr\)\." : "Paste the repo\. Diagnosis is free\. The pull request is \$5\."\)/);
 });

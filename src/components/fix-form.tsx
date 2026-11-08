@@ -11,7 +11,7 @@ type Offer = {
   message?: string; error?: string; commitSha?: string | null;
 };
 
-export function FixForm({ initialTarget, github }: { initialTarget: string; github: string | null }) {
+export function FixForm({ initialTarget, github, purchasesEnabled }: { initialTarget: string; github: string | null; purchasesEnabled: boolean }) {
   const t = useT();
   const [target, setTarget] = useState(initialTarget);
   const [busy, setBusy] = useState(false);
@@ -70,10 +70,10 @@ export function FixForm({ initialTarget, github }: { initialTarget: string; gith
       <form className="diag-form" onSubmit={diagnose}>
         <label htmlFor="fix-target">{t("fix.label")}</label>
         <input id="fix-target" value={target} onChange={(event) => setTarget(event.target.value)} placeholder={t("fix.placeholder")} required maxLength={20000} />
-        <p className="diag-note">{t("fix.promise")}</p>
+        <p className="diag-note">{purchasesEnabled ? t("fix.promise") : t("fix.leadOff")}</p>
         <button className="cta-button" type="submit" disabled={busy || target.trim().length < 3}>{busy ? t("fix.working") : t("fix.submit")}</button>
-        <p><Link href={`/api/fix/github/install?repo=${encodeURIComponent(repoQuery)}`}>{t("fix.connect")}</Link>
-          {" · "}<Link href={`/api/fix/github/connect?repo=${encodeURIComponent(repoQuery)}`}>{t("fix.connect")} OAuth</Link></p>
+        {purchasesEnabled && <p><Link href={`/api/fix/github/install?repo=${encodeURIComponent(repoQuery)}`}>{t("fix.connect")}</Link>
+          {" · "}<Link href={`/api/fix/github/connect?repo=${encodeURIComponent(repoQuery)}`}>{t("fix.connect")} OAuth</Link></p>}
         {github === "connected" && <p role="status">GitHub connected.</p>}
         {github === "failed" && <p className="form-error" role="alert">GitHub could not be connected. Try again.</p>}
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -82,7 +82,7 @@ export function FixForm({ initialTarget, github }: { initialTarget: string; gith
         <section className="diag-result" aria-live="polite">
           <h2>{offer.headline}</h2>
           <ul>{(offer.items ?? []).map((item, index) => <li key={`${item.file ?? item.title}-${index}`}><strong>{item.title}</strong>{item.file ? ` · ${item.file}${item.line ? `:${item.line}` : ""}` : ""}<br />{item.problem}</li>)}</ul>
-          {offer.eligible && offer.fixes && offer.fixes.length > 0 && <>
+          {purchasesEnabled && offer.eligible && offer.fixes && offer.fixes.length > 0 && <>
             <h3>{t("fix.kicker")}</h3>
             <ul>{offer.fixes.map((fix) => <li key={`${fix.file}:${fix.line}`}>{fix.file}:{fix.line}. {fix.problem}</li>)}</ul>
             <label><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /> {t("fix.consent")}</label>

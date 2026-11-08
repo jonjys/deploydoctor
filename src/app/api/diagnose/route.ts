@@ -3,6 +3,7 @@ import { acquireWork, releaseWork, workLimitResponse } from "@/lib/work-budget";
 import Anthropic from "@anthropic-ai/sdk";
 import { activePlan, hashRequestIp, requestCustomer } from "@/lib/access";
 import { DiagnoseUnavailable, diagnoseConfigured, diagnoseWithClaude, MAX_LOG_CHARS } from "@/lib/ai-diagnose";
+import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
 import { sameOrigin } from "@/lib/stripe";
 import { langFromRequest, t } from "@/lib/i18n";
 
@@ -40,11 +41,13 @@ export async function POST(request: Request) {
     const { diagnosis, usage } = await diagnoseWithClaude(log, lang);
     console.log("dd-diagnose-usage", JSON.stringify({ ...usage, paid: Boolean(plan), verdict: diagnosis.verdict }));
     console.log("dd-funnel", JSON.stringify({ step: "diagnosis_completed", paid: Boolean(plan) }));
-    // Pass holders and CLI token users already paid: they keep the patch text. Free visitors get the $5 fix PR offer.
+    // Pass holders and CLI token users already paid: they keep the patch text. Free visitors are offered a fix
+    // pull request only when the Fix GitHub App can open one. Otherwise the patch stays withheld and nothing is sold.
     const patchWithheld = !plan && Boolean(diagnosis.patch.code.trim());
+    const sellFix = patchWithheld && fixPullRequestsEnabled();
     return Response.json({
       diagnosis: patchWithheld ? { ...diagnosis, patch: { file: diagnosis.patch.file, code: "" } } : diagnosis,
-      fix: patchWithheld ? { paywalled: true, priceUsd: 5, href: "/fix" } : null,
+      fix: sellFix ? { paywalled: true, priceUsd: 5, href: "/fix" } : patchWithheld ? { paywalled: false, comingSoon: true } : null,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const limited = workLimitResponse(error, lang);

@@ -95,6 +95,7 @@ test("private reports keep noindex and the homepage audit is a static new-tab li
   assert.match(page, /href="https:\/\/buy\.stripe\.com\/bJe9ASculcZgcKQ52R8og2w"/);
   assert.match(page, /target="_blank"/);
   assert.match(page, /rel="noopener noreferrer"/);
+  assert.doesNotMatch(page, /€49|cNi7sKbqh6ASh169j78og2L|00w5kC9i91gybGMgLz8og2K/);
   assert.doesNotMatch(page, /billing-events|create-checkout|planPrice/);
 
   for (const file of ["src/lib/plans.ts", "src/lib/billing-events.ts", "src/app/api/stripe/create-checkout/route.ts"]) {

@@ -18,6 +18,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE_URL}/webhook-replay-lab`, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/stats`, changeFrequency: "daily", priority: 0.7 },
     { url: `${SITE_URL}/pricing`, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${SITE_URL}/partners`, lastModified: "2026-11-05", changeFrequency: "monthly", priority: 0.6 },
     { url: `${SITE_URL}/ai-plugin`, lastModified: "2026-10-04", changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/guides`, lastModified: "2026-10-21", changeFrequency: "weekly", priority: 0.8 },
     { url: `${SITE_URL}/diagnose`, lastModified: "2026-10-11", changeFrequency: "monthly", priority: 0.9 },
