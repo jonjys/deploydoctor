@@ -3,7 +3,7 @@ import { AI_MAX_OUTPUT_TOKENS } from "@/lib/budget-policy";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { maskSecrets } from "@/lib/secrets";
+import { maskAllSecrets } from "@/lib/secrets";
 import { diagnoseBuildLog } from "@/lib/build-log";
 import type { Lang } from "@/lib/i18n";
 
@@ -61,7 +61,7 @@ export class DiagnoseUnavailable extends Error {
 
 /** Masks secrets, strips terminal colour codes and runs Claude. The pattern matches from diagnoseBuildLog are passed as hints. */
 export async function diagnoseWithClaude(rawLog: string, lang: Lang): Promise<{ diagnosis: Diagnosis; usage: Record<string, number | null | undefined> }> {
-  const log = maskSecrets(rawLog.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")).slice(0, MAX_LOG_CHARS);
+  const log = maskAllSecrets(rawLog.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")).slice(0, MAX_LOG_CHARS);
   let hints = "";
   try {
     const triage = diagnoseBuildLog(log);

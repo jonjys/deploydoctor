@@ -3,10 +3,11 @@ import { ScanActivitySection } from "@/components/scan-activity-section";
 import { CommunityReviews } from "@/components/community-reviews";
 import Link from "next/link";
 import { RepoForm } from "@/components/repo-form";
-import { EXAMPLE_REPORTS } from "@/lib/site";
+import { EXAMPLE_REPORTS, SITE_URL } from "@/lib/site";
 import { allowsPrivate } from "@/lib/plans";
 import { activePlan, customerSession } from "@/lib/access";
 import { SiteNav } from "@/components/site-nav";
+import { LegalLinks } from "@/components/legal-links";
 import { analysisText } from "@/lib/analysis-text";
 import { getT } from "@/lib/lang";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
@@ -14,6 +15,15 @@ import { fixesConfirmed, reposScanned } from "@/lib/stats";
 import { formatCount } from "@/lib/format-count";
 import { RecentScans } from "@/components/solved-prompt";
 import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
+
+/** Who runs DeployDoctor and what it is, for Google and AI assistants. No prices, so it cannot go stale. */
+const SCHEMA = { "@context": "https://schema.org", "@graph": [
+  { "@type": "Organization", "@id": "https://nyttolabs.com/#org", name: "Nytto Labs", url: "https://nyttolabs.com", email: "support@nyttolabs.com",
+    address: { "@type": "PostalAddress", addressCountry: "SE" } },
+  { "@type": "SoftwareApplication", name: "DeployDoctor", url: SITE_URL, applicationCategory: "DeveloperApplication", operatingSystem: "Web",
+    description: "Finds what will break a deploy before the host builds it, and checks a live site for leaked keys, EU rules, VAT number and AI search.",
+    publisher: { "@id": "https://nyttolabs.com/#org" }, offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free daily scan and free live site check." } },
+] };
 
 export default async function Home() {
   const [plan, scanned, fixed] = await Promise.all([customerSession().then(activePlan), reposScanned(), fixesConfirmed()]);
@@ -28,6 +38,7 @@ export default async function Home() {
   ];
   return (
     <main className="site-shell home-page">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(SCHEMA).replace(/</g, "\\u003c") }} />
       <SiteNav current="scan" />
 
       <RecentScans />
@@ -48,7 +59,7 @@ export default async function Home() {
         </div>
         <div className="entry-paths" aria-label={lang === "sv" ? "Välj vad du behöver hjälp med" : "Choose what you need help with"}>
           <a className="entry-path" href="#scan-repository"><span className="section-kicker">{lang === "sv" ? "INNAN DU PUSHAR" : "BEFORE YOU PUSH"}</span><h2>{lang === "sv" ? "Skanna ett repo" : "Scan repository"} <span aria-hidden="true">↘</span></h2><p>{lang === "sv" ? "Hitta risker i koden. Se fil, rad och nästa steg." : "Find risks in your code. See the file, line and next step."}</p></a>
-          <Link className="entry-path entry-path-log" href="/fix"><span className="section-kicker">{lang === "sv" ? "BYGGET HAR REDAN MISSLYCKATS" : "BUILD ALREADY FAILED"}</span><h2>{lang === "sv" ? "Fixa en misslyckad build" : "Fix a failed build"} <span aria-hidden="true">→</span></h2><p>{fixOn ? (lang === "sv" ? "Klistra in repot. Diagnosen är gratis. Pull requesten kostar 49 kr." : "Paste the repo. Diagnosis is free. The pull request is $5.") : (lang === "sv" ? "Klistra in repot. Diagnosen är gratis. Pull requesten kommer snart." : "Paste the repo. Diagnosis is free. The pull request is coming soon.")}</p><span className="entry-allowance">{lang === "sv" ? "3 gratis diagnoser per dag" : "3 free diagnoses a day"}</span></Link>
+          <Link className="entry-path entry-path-log" href="/fix"><span className="section-kicker">{lang === "sv" ? "BYGGET HAR REDAN MISSLYCKATS" : "BUILD ALREADY FAILED"}</span><h2>{lang === "sv" ? "Fixa en misslyckad build" : "Fix a failed build"} <span aria-hidden="true">→</span></h2><p>{fixOn ? (lang === "sv" ? "Klistra in repot. Diagnosen är gratis. Pull requesten kostar $5 (ca 49 kr)." : "Paste the repo. Diagnosis is free. The pull request is $5.") : (lang === "sv" ? "Klistra in repot. Diagnosen är gratis. Pull requesten kommer snart." : "Paste the repo. Diagnosis is free. The pull request is coming soon.")}</p><span className="entry-allowance">{lang === "sv" ? "3 gratis diagnoser per dag" : "3 free diagnoses a day"}</span></Link>
         </div>
         <p className="plugin-line"><Link href="/leak-check">{lang === "sv" ? "Nytt: ligger din API-nyckel i din live-JavaScript? Gratis läckkoll →" : "New: is your API key in your live JavaScript? Free leak check →"}</Link></p>
         <p className="plugin-line"><Link href="/launch-manual">{lang === "sv" ? "Nytt: lanseringsplanen, från ditt repo till din första betalande kund →" : "New: your launch plan, from this repo to your first paying customer →"}</Link></p>
@@ -151,6 +162,7 @@ export default async function Home() {
         <span>DeployDoctor</span>
         <span>{t("home.footerNote")} <Link href="/guides">{t("nav.guides")}</Link></span>
         <a href="https://github.com/jonjys/deploydoctor/blob/master/LICENSE" rel="noopener">{t("footer.license")}</a>
+        <LegalLinks />
       </footer>
     </main>
   );

@@ -260,7 +260,7 @@ export function RepoForm({ privateAccess = false }: { privateAccess?: boolean })
       <p className="plugin-line">{pullRequestFromInput(repoUrl) ? (lang === "sv" ? "Jämför PR head med gemensam bas. Två fasta snapshots, en skanningskvot. Fork-PR stöds inte ännu." : "Compare PR head with its merge base. Two pinned snapshots, one scan allowance. Fork PRs are not supported yet.") : (lang === "sv" ? "Nytt: klistra in en PR-länk för att skilja nytillkomna fynd från gamla." : "New: paste a PR link to separate newly detected findings from existing ones.")}</p>
       {/* Shown to everyone: without a pass, a token scan answers with the $2 offer. */}
       <div className="private-input" hidden={!privateMode} ref={privateDetails}>
-        {!privateAccess && <><p>{t("form.private.needsPass")}</p><ScanCheckoutButton plan="day" context={repoUrlFromParam(repoUrl) || undefined}>{lang === "sv" ? "Aktivera privata skanningar · 19 kr" : "Unlock private scans · $2"}</ScanCheckoutButton></>}
+        {!privateAccess && <><p>{t("form.private.needsPass")}</p><ScanCheckoutButton plan="day" context={repoUrlFromParam(repoUrl) || undefined}>{lang === "sv" ? "Aktivera privata skanningar · $2 (ca 19 kr)" : "Unlock private scans · $2"}</ScanCheckoutButton></>}
         {privateAccess && <GitHubConnect repoUrl={repoUrl} onSelect={handleUrlChange} />}
         {searchParams.get("github") === "failed" && <p role="alert">{lang === "sv" ? "GitHub-anslutningen misslyckades. Försök ansluta igen." : "GitHub connection failed. Please connect again."}</p>}
         <details><summary>{lang === "sv" ? "Avancerat: tillfällig åtkomsttoken" : "Advanced: temporary access token"}</summary>

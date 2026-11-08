@@ -33,3 +33,8 @@ export function leakCheckRules(identity: string): BudgetRule[] {
   return [{ key: `leak:${identity}:minute`, limit: 3, seconds: 60 }, { key: `leak:${identity}:day`, limit: 20, seconds: 86400 },
     { key: "leak:site:minute", limit: 40, seconds: 60 }];
 }
+/** The live site check fetches the site, up to about 25 pages on it, and VIES once: tighter than the leak check, with its own site-wide ceiling. */
+export function siteCheckRules(identity: string): BudgetRule[] {
+  return [{ key: `site:${identity}:minute`, limit: 2, seconds: 60 }, { key: `site:${identity}:day`, limit: 15, seconds: 86400 },
+    { key: "site:site:minute", limit: 20, seconds: 60 }];
+}

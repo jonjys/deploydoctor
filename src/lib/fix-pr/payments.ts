@@ -26,8 +26,8 @@ export function fixCheckoutParams(token: string, secret: string, origin: string,
     line_items: [{ quantity: 1, price_data: { currency: FIX_CURRENCY, unit_amount: FIX_AMOUNT, product_data: {
       name: sv ? "DeployDoctor: fix som pull request" : "DeployDoctor: fix pull request",
       description: sv
-        ? "En pull request med den verifierade fixen. Återbetalas om bygget fortfarande fallerar."
-        : "A pull request with the verified fix. Refunded if the build still fails.",
+        ? "En pull request med den verifierade fixen. Återbetalas om Vercels bygge av fixen fallerar."
+        : "A pull request with the verified fix. Refunded if Vercel's build of the fix fails.",
     } } }],
     metadata,
     payment_intent_data: { metadata: { app: FIX_APP, quote_hash: tokenHash(token), report_id: quote.reportId } },

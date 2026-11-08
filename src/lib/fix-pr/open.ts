@@ -9,14 +9,15 @@ export function quoteToOrder(quote: PatchQuote): PrOrder {
   return { repoUrl: quote.repoUrl, commitSha: quote.commitSha, patch: quote.patch, files: quote.files, sourceHashes: quote.sourceHashes, reportId: quote.reportId };
 }
 
-export function fixPullRequestText(branchKey: string, order: PrOrder, summary: string): PullRequestText {
+/** `paid` false is a free launch-promo fix: no charge was made, so no refund is promised. */
+export function fixPullRequestText(branchKey: string, order: PrOrder, summary: string, paid = true): PullRequestText {
   return {
     branch: `deploydoctor/fix-${branchKey}`,
     commitMessage: "fix: repair the failed deploy",
     title: "Fix the failed deploy",
     draft: false,
     allowPrivate: true,
-    body: `## DeployDoctor fix\n\n${summary.slice(0, 1500)}\n\nThis pull request changes ${order.files.length} file(s) on commit ${order.commitSha}. Each verified change was checked against that commit. Instructions are labeled and do not pretend to edit the build. Repository code was not executed.\n\nNo fix, no pay: if this pull request does not make the build pass, the $5 charge is refunded. Review the diff before you merge.\n`,
+    body: `## DeployDoctor fix\n\n${summary.slice(0, 1500)}\n\nThis pull request changes ${order.files.length} file(s) on commit ${order.commitSha}. Each verified change was checked against that commit. Instructions are labeled and do not pretend to edit the build. Repository code was not executed.\n\n${paid ? "No fix, no pay: if Vercel's build of this pull request's commit fails, the $5 charge is refunded." : "This fix is one of the free launch fixes: nothing was charged."} Review the diff before you merge.\n`,
   };
 }
 
@@ -63,6 +64,6 @@ export async function openGatedFixPullRequest(input: {
   const order = quoteToOrder(quote);
   const branchKey = tokenHash(input.session?.id ?? input.promoReceipt ?? input.quoteToken).slice(0, 24);
   const summary = [input.summary, quote.notes].filter(Boolean).join("\n\n");
-  const opened = await openPatchPullRequest(order, branchKey, input.api, fixPullRequestText(branchKey, order, summary));
+  const opened = await openPatchPullRequest(order, branchKey, input.api, fixPullRequestText(branchKey, order, summary, paid));
   return { ...opened, paid };
 }

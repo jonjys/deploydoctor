@@ -12,6 +12,7 @@ This package is ready for direct installation; it is not a directory approval.
 - `scan_public_repository`: public HTTPS GitHub owner/repo URL and optional check categories.
   Saves a shareable public report and uses the existing daily scan allowance.
 - `get_public_report`: saved report UUID; no scan quota consumed. No private reports.
+- `check_live_site`: a public https site address. Reads the homepage, its same-site JavaScript, robots.txt and well-known policy addresses like any visitor, then reports leaked secret keys (masked), missing privacy/terms/returns/contact pages, whether the footer VAT number is valid in VIES, and AI-crawler blocks and schema.org data. Saves nothing; rate limited per source IP; not legal advice.
 - `get_deploydoctor_plans`: current website prices; never buys or charges.
 
 The free allowance is one scan/day per trusted source IP. AI platforms may

@@ -7,9 +7,9 @@ export const plans = {
   "fix-all": { name: "Fix all", price: "229 kr", usd: "$25", cadence: "one-time \u00b7 all failed checks \u00b7 $25", mode: "payment", amount: 2500, env: "" },
 } as const;
 export type Plan = keyof typeof plans;
-/** Stripe charges US dollars, so English visitors see the dollar amount; Swedish visitors see the rounded kronor guide. */
+/** Stripe charges US dollars, so the dollar amount is the price; Swedish visitors also see a rounded kronor guide. */
 export function planPrice(plan: Plan, lang: "en" | "sv"): string {
-  return lang === "sv" ? plans[plan].price : plans[plan].usd;
+  return lang === "sv" ? `${plans[plan].usd} (ca ${plans[plan].price})` : plans[plan].usd;
 }
 export function isPlan(value: unknown): value is Plan {
   return typeof value === "string" && Object.hasOwn(plans, value);
