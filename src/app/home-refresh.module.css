@@ -39,7 +39,7 @@
 .optionsTop { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
 .optionsTop h2 { margin-bottom:0; }
 .optionsTop>a { color:var(--acid); font-size:13px; }
-.offerGrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.offerGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .offer { background:#1f362c; border:1px solid #4c6057; border-radius:13px; padding:19px; display:flex; flex-direction:column; min-width:0; }
 .offer>span { font:700 10px var(--font-geist-mono),monospace; letter-spacing:.1em; color:#b5c4ba; }
 .offer>strong { margin:18px 0 4px; color:var(--acid); font-size:33px; letter-spacing:-.05em; }
