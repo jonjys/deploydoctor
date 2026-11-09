@@ -20,11 +20,12 @@ export function NextMove({ items, partial, rescanHref }: { items: FixFirstItem[]
   const available = items.filter(item => !ignored.has(item.checkId));
   const first = available[0];
 
+  const allHidden = !first && items.length > 0;
   if (!first) return <section className={nextStyles.panel} aria-labelledby="next-move-title">
     <span className={nextStyles.kicker}>{sv ? "DITT NÄSTA STEG" : "YOUR NEXT MOVE"}</span>
-    <h2 id="next-move-title">{partial ? (sv ? "Slutför skanningen först" : "Complete the scan first") : (sv ? "Inga öppna fynd i genomförda kontroller" : "No open findings in the completed checks")}</h2>
-    <p>{partial ? (sv ? "Delar av repot kunde inte läsas. Kör om skanningen innan du drar slutsatser." : "Some source files could not be read. Retry the scan before drawing conclusions.") : (sv ? "Det här är inte ett godkännande av produktionen. Testa din riktiga app och betalflöden separat." : "This is not a production approval. Test the live app and payment flows separately.")}</p>
-    <div className={nextStyles.actions}><Link href={rescanHref} className={nextStyles.primary}>{sv ? "Skanna igen" : "Rescan repo"} <span aria-hidden="true">↗</span></Link><Link href="/safe" className={nextStyles.secondary}>{sv ? "Kontrollera liveappen" : "Check the live app"}</Link></div>
+    <h2 id="next-move-title">{partial ? (sv ? "Slutför skanningen först" : "Complete the scan first") : allHidden ? (sv ? "Alla fynd dolda i den här webbläsaren" : "All findings hidden in this browser") : (sv ? "Inga öppna fynd i genomförda kontroller" : "No open findings in the completed checks")}</h2>
+    <p>{partial ? (sv ? "Delar av repot kunde inte läsas. Kör om skanningen innan du drar slutsatser." : "Some source files could not be read. Retry the scan before drawing conclusions.") : allHidden ? (sv ? "Dina val påverkar bara vyn här. Fynden finns kvar i rapporten och kan återställas nedan." : "This only changes your local view. Findings remain in the report and can be restored below.") : (sv ? "Det här är inte ett godkännande av produktionen. Testa din riktiga app och betalflöden separat." : "This is not a production approval. Test the live app and payment flows separately.")}</p>
+    <div className={nextStyles.actions}>{allHidden && <a href="#checks" className={nextStyles.primary}>{sv ? "Återställ fynd" : "Review hidden findings"}</a>}<Link href={rescanHref} className={nextStyles.primary}>{sv ? "Skanna igen" : "Rescan repo"} <span aria-hidden="true">↗</span></Link><Link href="/safe" className={nextStyles.secondary}>{sv ? "Kontrollera liveappen" : "Check the live app"}</Link></div>
   </section>;
 
   return <section className={`${nextStyles.panel} ${first.status === "red" ? nextStyles.urgent : nextStyles.review}`} aria-labelledby="next-move-title">
