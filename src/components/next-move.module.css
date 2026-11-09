@@ -1,0 +1,21 @@
+.panel { margin:24px 0 16px; padding:clamp(18px,3vw,30px); background:var(--ink); color:var(--paper); border-radius:17px; border:1px solid var(--ink); box-shadow:0 9px 30px rgba(16,35,28,.08); }
+.panel.urgent { border-left:6px solid #f08666; }
+.panel.review { border-left:6px solid #efc25b; }
+.top { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+.kicker { font:700 11px var(--font-geist-mono),monospace; color:var(--acid); letter-spacing:.1em; }
+.counter { font:700 12px var(--font-geist-mono),monospace; color:#d0d9d3; }
+.panel h2 { margin:12px 0 9px; max-width:780px; font-size:clamp(23px,3.5vw,34px); line-height:1.15; letter-spacing:-.045em; overflow-wrap:anywhere; }
+.panel p { margin:10px 0 0; max-width:780px; color:#d9e2dc; font-size:14px; line-height:1.58; overflow-wrap:anywhere; }
+.panel .file { padding:9px 11px; width:fit-content; max-width:100%; border:1px solid #51645a; border-radius:7px; color:#c2ef91; font:12px var(--font-geist-mono),monospace; }
+.fix { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }
+.actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:23px; }
+.actions>a,.actions button { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:10px 15px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:720; }
+.primary { background:var(--acid); border:1px solid var(--acid); color:var(--ink); gap:10px; }
+.primary:hover { background:#cffd64; }
+.secondary { background:transparent; color:var(--paper); border:1px solid #657569; }
+.secondary:hover { background:#35493d; }
+.actions button { background:transparent; color:var(--paper); border:1px solid #657569; }
+.why { margin-top:17px; padding-top:12px; border-top:1px solid #405448; color:#b7c4bb; }
+.why summary { width:fit-content; cursor:pointer; font-size:12px; }
+.why p { font-size:12px; }
+@media(max-width:600px) { .panel { padding:19px 15px; } .actions { align-items:stretch; flex-direction:column; } .actions>a,.actions button { width:100%; } }
