@@ -4,7 +4,7 @@ import { LangSwitch } from "@/components/lang";
 import { getT } from "@/lib/lang";
 import styles from "./site-nav.module.css";
 
-export type NavPage = "scan" | "diagnose" | "fix" | "rescue" | "pricing" | "guides" | "ci" | "account" | "stats";
+export type NavPage = "safe" | "scan" | "diagnose" | "fix" | "rescue" | "pricing" | "guides" | "ci" | "account" | "stats";
 
 export function PulseMark() {
   return <span className="logo-mark" aria-hidden="true"><span /><span /></span>;
