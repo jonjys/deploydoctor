@@ -1,20 +1,20 @@
 import { Suspense } from "react";
-import { ScanActivitySection } from "@/components/scan-activity-section";
-import { CommunityReviews } from "@/components/community-reviews";
 import Link from "next/link";
 import { RepoForm } from "@/components/repo-form";
+import { ScanActivitySection } from "@/components/scan-activity-section";
+import { CommunityReviews } from "@/components/community-reviews";
+import { RecentScans } from "@/components/solved-prompt";
+import { ScanCheckoutButton } from "@/components/scan-checkout-button";
+import { SiteNav } from "@/components/site-nav";
+import { LegalLinks } from "@/components/legal-links";
 import { EXAMPLE_REPORTS, SITE_URL } from "@/lib/site";
 import { allowsPrivate } from "@/lib/plans";
 import { activePlan, customerSession } from "@/lib/access";
-import { SiteNav } from "@/components/site-nav";
-import { LegalLinks } from "@/components/legal-links";
-import { analysisText } from "@/lib/analysis-text";
-import { getT } from "@/lib/lang";
-import { ScanCheckoutButton } from "@/components/scan-checkout-button";
-import { fixesConfirmed, reposScanned } from "@/lib/stats";
+import { reposScanned } from "@/lib/stats";
 import { formatCount } from "@/lib/format-count";
-import { RecentScans } from "@/components/solved-prompt";
+import { getT } from "@/lib/lang";
 import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
+import styles from "./home-refresh.module.css";
 
 /** Who runs DeployDoctor and what it is, for Google and AI assistants. No prices, so it cannot go stale. */
 const SCHEMA = { "@context": "https://schema.org", "@graph": [
@@ -26,146 +26,89 @@ const SCHEMA = { "@context": "https://schema.org", "@graph": [
 ] };
 
 export default async function Home() {
-  const [plan, scanned, fixed] = await Promise.all([customerSession().then(activePlan), reposScanned(), fixesConfirmed()]);
+  const [plan, scanned] = await Promise.all([customerSession().then(activePlan), reposScanned()]);
   const { lang, t } = await getT();
+  const sv = lang === "sv";
   const fixOn = fixPullRequestsEnabled();
-  const { titles } = analysisText(lang);
-  // The same titles the analyzer prints, in report order. Supabase and Prisma only run when the stack uses them.
-  const checks: Array<{ title: string; whenUsed?: boolean; note?: string }> = [
-    { title: titles.nextEntry }, { title: titles.imports }, { title: lang === "sv" ? "Server- och runtime-risker" : "Server and runtime risks" }, { title: titles.buildConfig, note: t("home.checkStacks") },
-    { title: titles.dependencies }, { title: lang === "sv" ? "Betalning och produktionsrisker" : "Payment and production safety" }, { title: titles.env }, { title: titles.secrets },
-    { title: titles.supabase, whenUsed: true }, { title: titles.prisma, whenUsed: true },
-  ];
-  return (
-    <main className="site-shell home-page">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(SCHEMA).replace(/</g, "\\u003c") }} />
-      <SiteNav current="scan" />
+  return <main className="site-shell home-page">
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(SCHEMA).replace(/</g, "\\u003c") }} />
+    <SiteNav current="scan" />
+    <section className={styles.hero} aria-labelledby="hero-title">
+      <div className={styles.pulse}><span aria-hidden="true">●</span> {sv ? "FÖR DIG SOM BYGGER OCH LANSERAR" : "FOR BUILDERS WHO SHIP"}</div>
+      <h1 id="hero-title">{sv ? <>Hitta problemet.<br /><em>Ta nästa steg.</em></> : <>Find the problem.<br /><em>Make the next move.</em></>}</h1>
+      <p className={styles.intro}>{sv ? "Skanna kod före deploy, kolla en liveapp eller felsök en misslyckad build. Börja där du är." : "Scan code before you deploy, check a live app, or diagnose a failed build. Start where you are."}</p>
 
-      <RecentScans />
-
-      <section className="hero">
-        <div className="eyebrow">
-          <span className="eyebrow-icon">✦</span>
-          {t("home.eyebrow")}
+      <div className={styles.scanner} id="scan-repository">
+        <div className={styles.scannerHead}>
+          <div><span className={styles.step}>01 / {sv ? "KOD" : "CODE"}</span><h2>{sv ? "Skanna ett GitHub repo" : "Scan a GitHub repo"}</h2></div>
+          <span className={styles.free}>{sv ? "GRATIS START" : "START FREE"}</span>
         </div>
-        {/* The fix promise only once Fix pull requests can actually be bought. */}
-        <h1>{t(fixOn ? "home.h1.fix" : "home.h1")}</h1>
-        <p className="hero-copy">{t(fixOn ? "home.copy.fix" : "home.copy")}</p>
+        <Suspense fallback={null}><RepoForm privateAccess={allowsPrivate(plan?.plan)} /></Suspense>
+        <p className={styles.scannerNote}>{sv ? "Läser koden utan att köra den. Resultat med bevis och förslag på nästa steg." : "Reads repository source without running it. Evidence and suggested next steps, not a deployment guarantee."}</p>
+      </div>
+      <div className={styles.paths} aria-label={sv ? "Andra sätt att börja" : "Other starting points"}>
+        <Link href="/safe" className={styles.path}>
+          <span className={styles.step}>02 / {sv ? "LIVEAPP" : "LIVE APP"}</span>
+          <span className={styles.pathTitle}>{sv ? "Är min app säker?" : "Is my app safe?"} <span aria-hidden="true">↗</span></span>
+          <span className={styles.pathCopy}>{sv ? "Kolla synliga säkerhetsrisker på en publik webbplats." : "Check publicly visible risks on a live website."}</span>
+        </Link>
+        <Link href="/fix" className={styles.path}>
+          <span className={styles.step}>03 / {sv ? "BYGGFEL" : "FAILED BUILD"}</span>
+          <span className={styles.pathTitle}>{sv ? "Fixa en build" : "Fix a failed build"} <span aria-hidden="true">↗</span></span>
+          <span className={styles.pathCopy}>{fixOn ? (sv ? "Diagnos gratis. Stödda pull request fixar kan köpas separat." : "Free diagnosis. Supported PR repairs offered separately.") : (sv ? "Gratis diagnos. Automatisk PR reparation kräver separat aktivering." : "Free diagnosis. Automated PR repair is not enabled yet.")}</span>
+        </Link>
+      </div>
+      <div className={styles.trust}>
+        <span>✓ {sv ? "Ingen kod körs vid repo skanning" : "No repository code executed"}</span>
+        <span>✓ {sv ? "Tydliga gränser" : "Clear scan limitations"}</span>
+        {scanned !== null && <span>{formatCount(lang, scanned)} {t("home.trust.scanned")}</span>}
+      </div>
+      <details className={styles.examples}>
+        <summary>{sv ? "Visa exempelrapporter" : "See sample scan reports"} <span aria-hidden="true">⌄</span></summary>
+        <div className={styles.exampleLinks}>{EXAMPLE_REPORTS.map(ex => <Link key={ex.id} href={`/r/${ex.id}`}>{t(ex.key)} ↗</Link>)}</div>
+      </details>
+    </section>
 
-        <div id="scan-repository" className="scan-entry">
-        <Suspense fallback={null}>
-          <RepoForm privateAccess={allowsPrivate(plan?.plan)} />
-        </Suspense>
-        </div>
-        <div className="entry-paths" aria-label={lang === "sv" ? "Välj vad du behöver hjälp med" : "Choose what you need help with"}>
-          <a className="entry-path" href="#scan-repository"><span className="section-kicker">{lang === "sv" ? "INNAN DU PUSHAR" : "BEFORE YOU PUSH"}</span><h2>{lang === "sv" ? "Skanna ett repo" : "Scan repository"} <span aria-hidden="true">↘</span></h2><p>{lang === "sv" ? "Hitta risker i koden. Se fil, rad och nästa steg." : "Find risks in your code. See the file, line and next step."}</p></a>
-          <Link className="entry-path entry-path-log" href="/fix"><span className="section-kicker">{lang === "sv" ? "BYGGET HAR REDAN MISSLYCKATS" : "BUILD ALREADY FAILED"}</span><h2>{lang === "sv" ? "Fixa en misslyckad build" : "Fix a failed build"} <span aria-hidden="true">→</span></h2><p>{fixOn ? (lang === "sv" ? "Klistra in repot. Diagnosen är gratis. Pull requesten kostar $5 (ca 49 kr)." : "Paste the repo. Diagnosis is free. The pull request is $5.") : (lang === "sv" ? "Klistra in repot. Diagnosen är gratis. Pull requesten kommer snart." : "Paste the repo. Diagnosis is free. The pull request is coming soon.")}</p><span className="entry-allowance">{lang === "sv" ? "3 gratis diagnoser per dag" : "3 free diagnoses a day"}</span></Link>
-        </div>
-        <p className="plugin-line"><Link href="/safe">{lang === "sv" ? "Nytt: är din app säker? Läckta nycklar, öppna Supabase-tabeller och publika .env-filer på 30 sekunder →" : "New: is your app safe? Leaked keys, open Supabase tables and public .env files in 30 seconds →"}</Link></p>
-        <p className="plugin-line"><Link href="/leak-check">{lang === "sv" ? "Nytt: ligger din API-nyckel i din live-JavaScript? Gratis läckkoll →" : "New: is your API key in your live JavaScript? Free leak check →"}</Link></p>
-        <p className="plugin-line"><Link href="/launch-manual">{lang === "sv" ? "Nytt: lanseringsplanen, från ditt repo till din första betalande kund →" : "New: your launch plan, from this repo to your first paying customer →"}</Link></p>
-        <p className="plugin-line"><Link href="/deploy-handoff">{lang === "sv" ? "Nytt: se vad som måste följa med koden till produktion — Deploy Handoff →" : "New: see what must ship with your code — Deploy Handoff →"}</Link></p>
-        <p className="plugin-line"><Link href="/platforms">{lang === "sv" ? "Se plattformar, språk och exakt vad som kontrolleras →" : "See supported platforms, languages and exactly what is checked →"}</Link></p>
-        <div className="example-chips" aria-label={t("home.examples")}>
-          <span>{t("home.examples")}</span>
-          {EXAMPLE_REPORTS.map((example) => (
-            <Link key={example.id} className={`example-chip is-${example.tone}`} href={`/r/${example.id}`}>
-              <span className="chip-dot" aria-hidden="true" />{t(example.key)}
-            </Link>
-          ))}
-        </div>
+    <div className={styles.returning}><RecentScans /></div>
 
-        <div className="trust-row" aria-label={t("home.trust.aria")}>
-          {scanned !== null && (
-            <span className="scan-count">
-              <strong>{formatCount(lang, scanned)}</strong> {t("home.trust.scanned")}
-            </span>
-          )}
-          {fixed !== null && (
-            <span className="scan-count">
-              <strong>{formatCount(lang, fixed)}</strong> {t("home.trust.fixed")}
-            </span>
-          )}
-          <span>
-            <span className="mini-check">✓</span> {plan ? t("home.trust.unlimited") : t("home.trust.free")}
-          </span>
-          <span>
-            <span className="mini-check">✓</span> {t("home.trust.noexec")}
-          </span>
-          <span>
-            <span className="mini-check">✓</span> {t("home.trust.share")}
-          </span>
-        </div>
-        <p className="plugin-line"><Link href="/diagnose">{t("home.diagLine")}</Link>{" · "}<a href="#reviews">{lang === "sv" ? "Betyg & feedback" : "Ratings & feedback"}</a></p>
-      </section>
+    <section className={styles.roadmap} aria-labelledby="steps-title">
+      <div><span className="section-kicker">{sv ? "EN TYDLIGARE PROCESS" : "A CLEARER WORKFLOW"}</span><h2 id="steps-title">{sv ? "Från problem till nästa åtgärd" : "From finding to next action"}</h2><p>{sv ? "Ingen oändlig lista med lika viktiga varningar." : "No wall of equally urgent warnings."}</p></div>
+      <ol>
+        <li><span>01</span><strong>{sv ? "Upptäck" : "Find"}</strong><p>{sv ? "Välj repo, liveapp eller bygglogg." : "Start with the repo, live app, or failed build."}</p></li>
+        <li><span>02</span><strong>{sv ? "Prioritera" : "Prioritize"}</strong><p>{sv ? "Rapporten lyfter nästa konkreta steg först." : "See one next move before the full report."}</p></li>
+        <li><span>03</span><strong>{sv ? "Verifiera" : "Verify"}</strong><p>{sv ? "Kör om kontrollen efter ändringen. Testa alltid riktiga driftsflöden själv." : "Rescan after a change. Verify real production behavior separately."}</p></li>
+      </ol>
+    </section>
 
+    <section className={styles.options} aria-labelledby="options-title">
+      <div className={styles.optionsTop}><div><span className="section-kicker">{sv ? "NÄR DU BEHÖVER MER" : "WHEN YOU NEED MORE"}</span><h2 id="options-title">{sv ? "Fortsätt på ditt sätt" : "Go further your way"}</h2></div><Link href="/pricing">{sv ? "Alla alternativ" : "See pricing"} ↗</Link></div>
+      <div className={styles.offerGrid}>
+        <div className={styles.offer}><span>{sv ? "FÖR FLER SKANNINGAR" : "FOR MORE SCANS"}</span><strong>$2</strong><h3>{sv ? "24 timmars pass" : "24 hour pass"}</h3><p>{sv ? "Fler skanningar under en dag. Engångsbetalning." : "More scans for one day. One time payment."}</p><ScanCheckoutButton plan="day">{sv ? "Se passet" : "Get a pass"} →</ScanCheckoutButton></div>
+        <div className={styles.offer}><span>{sv ? "GÖR DET SJÄLV" : "DIY DEBUGGING"}</span><strong>$19</strong><h3>Vercel Rescue Kit</h3><p>{sv ? "Guide, checklista och återanvändbara AI prompter." : "A playbook, editable checklist and reusable AI prompts."}</p><a className={styles.offerLink} href="https://fieldworkstudio.gumroad.com/l/vercel-deployment-rescue-kit" target="_blank" rel="noopener noreferrer">{sv ? "Se paketet" : "Explore the kit"} ↗</a></div>
+        <div className={styles.offer}><span>{sv ? "PERSONLIG HJÄLP" : "HUMAN SECOND OPINION"}</span><strong>€149</strong><h3>{sv ? "Manuell repogranskning" : "One repo audit"}</h3><p>{sv ? "Ett repo granskat av en människa. Ingen garanti om lyckad deploy." : "A human review of one repo. No guaranteed deployment outcome."}</p><a className={styles.offerLink} href="https://buy.stripe.com/bJe9ASculcZgcKQ52R8og2w" target="_blank" rel="noopener noreferrer">{sv ? "Se erbjudandet" : "Explore the audit"} ↗</a></div>
+      </div>
+    </section>
 
-      <p className="plugin-line"><Link href="/launch-readiness">{lang === "sv" ? "Ska du lansera? Se din tekniska checklista inför trafiken →" : "Launching a campaign? Check your deployment before the traffic arrives →"}</Link></p>
-      <p className="plugin-line"><Link href="/webhook-replay-lab">{lang === "sv" ? "Nytt: klistra in din webhookkod och ladda ner regressionstester →" : "New: paste your webhook code and get a regression-test scaffold →"}</Link></p>
-      <section className="checks-panel" aria-labelledby="checks-heading">
-        <div>
-          <p className="section-kicker">{t("home.preflight")}</p>
-          <h2 id="checks-heading">{t("home.checksHeading")}</h2>
-        </div>
-        <ol className="check-list">
-          {checks.map((check, index) => (
-            <li key={check.title}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <div>
-                {check.title}
-                {check.whenUsed && <small className="check-when-used">{t("home.checkWhenUsed")}</small>}
-                {check.note && <small className="check-when-used">{check.note}</small>}
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      {!plan && (
-        <section className="pass-strip" aria-labelledby="pass-heading">
-          <div>
-            <p className="section-kicker">{t("home.pass.kicker")}</p>
-            <h2 id="pass-heading">{t("home.pass.h2")}</h2>
-            <p>{t("home.pass.copy")}</p>
-          </div>
-          <div className="pass-actions">
-            <ScanCheckoutButton plan="day">{t("home.pass.cta")}</ScanCheckoutButton>
-            <Link href="/pricing">{t("home.pass.more")}</Link>
-          </div>
-        </section>
-      )}
-
-      <section className="checks-panel" aria-label="Developer tools">
-        <div><h2>{lang === "sv" ? "Använd där du bygger" : "Use it where you build"}</h2></div>
-        <div>
-          <p><Link href="/ci">GitHub Action →</Link></p>
-          <p><Link href="/ai-plugin">Claude / Cursor MCP →</Link></p>
-          <p>{t("home.urlTrick")}</p>
-          <p><a href="https://fieldworkstudio.gumroad.com/l/vercel-deployment-rescue-kit">{lang === "sv" ? "Föredrar du en nedladdningsbar guide? Rescue Kit · $19 →" : "Prefer a downloadable guide? Rescue Kit · $19 →"}</a></p>
-        </div>
-      </section>
-
+    <details className={styles.moreTools}>
+      <summary><span><strong>{sv ? "Fler verktyg och resurser" : "More tools and resources"}</strong><small>{sv ? "CI, AI plugin, diagnoser, guider och statistik" : "CI, AI plugin, diagnosis, guides and statistics"}</small></span><span aria-hidden="true">+</span></summary>
+      <div className={styles.resourceGrid}>
+        <Link href="/site-check">Site Check ↗</Link>
+        <Link href="/webhook-replay-lab">Webhook Replay Lab ↗</Link>
+        <Link href="/launch-readiness">Launch Readiness ↗</Link>
+        <Link href="/launch-manual">Launch Manual ↗</Link>
+        <Link href="/ci">GitHub Action ↗</Link>
+        <Link href="/ai-plugin">AI / MCP ↗</Link>
+        <Link href="/guides">{t("nav.guides")} ↗</Link>
+        <Link href="/stats">{t("nav.stats")} ↗</Link>
+        <Link href="/platforms">{sv ? "Plattformar och täckning" : "Platforms and coverage"} ↗</Link>
+        <Link href="/partners">{sv ? "Partners" : "Partners"} ↗</Link>
+      </div>
+    </details>
+    <details className={styles.moreTools}>
+      <summary><span><strong>{sv ? "Community och aktivitet" : "Community and recent activity"}</strong><small>{sv ? "Öppen statistik och användarfeedback" : "Public statistics and user feedback"}</small></span><span aria-hidden="true">+</span></summary>
       <Suspense fallback={null}><ScanActivitySection /></Suspense>
       <Suspense fallback={null}><CommunityReviews /></Suspense>
-
-      <section className="human-audit" aria-labelledby="human-audit-heading">
-        <h2 id="human-audit-heading">{lang === "sv" ? "Vill du att en människa granskar ditt repo?" : "Want a human to review your repo?"}</h2>
-        <p>
-          <a href="https://buy.stripe.com/bJe9ASculcZgcKQ52R8og2w" target="_blank" rel="noopener noreferrer">
-            {lang === "sv" ? "Mänsklig granskning av ett repo, €149" : "Human-reviewed audit of one repo, €149"}
-            <span className="sr-only"> ({lang === "sv" ? "öppnas i en ny flik" : "opens in a new tab"})</span>
-          </a>
-        </p>
-        <p><Link href="/partners">{lang === "sv" ? "Byråpartner" : "Agency partners"}</Link></p>
-      </section>
-
-      <footer className="footer">
-        <span>DeployDoctor</span>
-        <span>{t("home.footerNote")} <Link href="/guides">{t("nav.guides")}</Link></span>
-        <a href="https://github.com/jonjys/deploydoctor/blob/master/LICENSE" rel="noopener">{t("footer.license")}</a>
-        <LegalLinks />
-      </footer>
-    </main>
-  );
+    </details>
+    <footer className={styles.footer}><Link href="/">DeployDoctor</Link><span>{sv ? "Av NyttoLabs · Läs mer om begränsningarna i varje rapport." : "By NyttoLabs · Each report explains its limitations."}</span><LegalLinks /></footer>
+  </main>;
 }
-

@@ -123,3 +123,9 @@ export function FixFirst({ items, limit = 5 }: { items: FixFirstItem[]; limit?: 
     </nav>
   );
 }
+
+
+/** Read only the local view preference, never mutate stored scan results. */
+export function useIgnoredCheckIds(): ReadonlySet<string> {
+  return useContext(IgnoreContext).ignored;
+}

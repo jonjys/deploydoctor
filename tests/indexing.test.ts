@@ -90,8 +90,9 @@ test("private reports keep noindex and the homepage audit is a static new-tab li
   assert.doesNotMatch(report, /robots: \{ index: false, follow: false \}/);
 
   const page = read("src/app/page.tsx");
-  assert.match(page, /Want a human to review your repo\?/);
-  assert.match(page, /Human-reviewed audit of one repo, €149/);
+  assert.match(page, /HUMAN SECOND OPINION/);
+  assert.match(page, /One repo audit/);
+  assert.match(page, /€149/);
   assert.match(page, /href="https:\/\/buy\.stripe\.com\/bJe9ASculcZgcKQ52R8og2w"/);
   assert.match(page, /target="_blank"/);
   assert.match(page, /rel="noopener noreferrer"/);

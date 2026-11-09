@@ -6,7 +6,7 @@ import { contextualFindings } from "@/lib/pr-impact";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CopyFixes, FixFirst, IgnoreProvider, IssueCard, ScoreCard, WhenOpenRed } from "@/components/report-ignore";
+import { CopyFixes, IgnoreProvider, IssueCard, ScoreCard, WhenOpenRed } from "@/components/report-ignore";
 import { getPreviousReport, getReport } from "@/lib/reports";
 import type { Category, CheckId, CheckStatus, ReportResults, StoredReport } from "@/types/report";
 import { diffReports, hasChanges, fixFirstItems, isPartialPlaceholder, severityOf, showsLocalWhy, type ReportDiff } from "@/lib/report-insights";
@@ -14,6 +14,7 @@ import { SinceLastScan } from "@/components/report-since";
 import { freeFixParts } from "@/lib/fix-instructions";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { SiteNav } from "@/components/site-nav";
+import { NextMove } from "@/components/next-move";
 import { CopyFixesButton } from "@/components/copy-fixes-button";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { ReadmeBadges } from "@/components/readme-badges";
@@ -169,7 +170,7 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
         </div>
 
         {results.pullRequest?.handoff ? <DeployHandoffPanel handoff={results.pullRequest.handoff} repoUrl={report.repo_url} reportUrl={`${SITE_URL}/r/${id}`} lang={lang} /> : null}
-        {results.pullRequest ? <PrImpact impact={results.pullRequest} repoUrl={report.repo_url} lang={lang} /> : <FixFirst items={fixFirst} limit={3} />}
+        {results.pullRequest ? <PrImpact impact={results.pullRequest} repoUrl={report.repo_url} lang={lang} /> : <NextMove items={fixFirst} partial={results.scan.partial} rescanHref={rescanHref} />}
         <div className="report-meta">
           <a className="report-repo" href={report.repo_url} target="_blank" rel="noreferrer">
             {report.repo_url} ↗
@@ -181,11 +182,12 @@ export default async function ReportPage({ params }: PageProps<"/r/[id]">) {
           <Link className="rescan-link" href={rescanHref}>{t("report.scanAgain")} ↻</Link>
           {share}
         </div>
-        <p className="scope-line">
-          <strong>{t("report.scanned")}</strong> {scanned.map((category) => t(`cat.${category}`)).join(", ") || "—"}
-          {ignoredCategories.length > 0 && <> | <strong>{t("report.ignored")}</strong> {ignoredCategories.map((category) => t(`cat.${category}`)).join(", ")}</>}
-        </p>
-        {!!results.hosting?.platforms.length && <p className="scope-line">Detected deployment configuration: <strong>{results.hosting.platforms.join(", ")}</strong>{" · "}<Link href="/platforms">Coverage and limitations →</Link></p>}
+        <details className="report-supporting">
+          <summary>{lang === "sv" ? "Vad kontrollerades?" : "What was checked?"} · {scanned.length} {lang === "sv" ? "kategorier" : "categories"}</summary>
+          <p className="scope-line"><strong>{t("report.scanned")}</strong> {scanned.map((category) => t(`cat.${category}`)).join(", ") || "—"}</p>
+          {ignoredCategories.length > 0 && <p className="scope-line"><strong>{t("report.ignored")}</strong> {ignoredCategories.map((category) => t(`cat.${category}`)).join(", ")}</p>}
+          {!!results.hosting?.platforms.length && <p className="scope-line">Detected deployment configuration: <strong>{results.hosting.platforms.join(", ")}</strong>{" · "}<Link href="/platforms">Coverage and limitations →</Link></p>}
+        </details>
         {results.scan.partial && (
           <aside className="partial-notice" role="note">
             <strong>{t("report.partialTitle")}</strong>

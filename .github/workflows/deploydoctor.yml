@@ -25,7 +25,10 @@ jobs:
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
   deploydoctor:
-    if: github.event_name == 'pull_request'
+    # The free OIDC-based Action only supports public repositories. For this private
+    # source repo, skip rather than reporting a misleading red 402 as a code failure.
+    # Validation still runs. To scan a private repo, configure a paid API token.
+    if: github.event_name == 'pull_request' && !github.event.repository.private
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default function SafePage() {
-  return <main className="site-shell"><SiteNav /><article className="guide leak-page">
+  return <main className="site-shell"><SiteNav current="safe" /><article className="guide leak-page">
     <p className="section-kicker">IS MY APP SAFE?</p>
     <h1>Is my app safe?</h1>
     <p className="guide-lead">One answer for your live app: secret keys in the JavaScript, Supabase tables anyone can read, public <code>.env</code> and <code>.git</code> files, source maps, and browser protection. Made for apps built with Lovable, Bolt, v0, Cursor and Claude Code.</p>
