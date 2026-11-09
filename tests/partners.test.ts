@@ -55,9 +55,9 @@ test("the partners page documents tracking and does not publish a price or payme
   assert.doesNotMatch(desk, /buy\.stripe\.com|€49|€149/);
   assert.doesNotMatch(`${page}\n${desk}\n${read("src/lib/human-audit.ts")}`, new RegExp(DRAFT_HUMAN_AUDIT_PAYMENT_URL.replace(/[/.]/g, "\\$&")));
   assert.doesNotMatch(`${page}\n${desk}\n${home}`, /00w5kC9i91gybGMgLz8og2K/);
-  assert.match(home, /One repo audit/);
-  assert.match(home, /€149/);
-  assert.match(home, new RegExp(PUBLIC_AUDIT.replace(/[/.]/g, "\\$&")));
+  assert.match(home, /Deploy Rescue/);
+  assert.match(home, /buy\.stripe\.com\/bJebJ0eCt0cu3ag2UJ8og2I/);
+  assert.doesNotMatch(home, new RegExp(PUBLIC_AUDIT.replace(/[/.]/g, "\\$&")));
   assert.match(home, /Automated PR repair is not enabled yet/);
   assert.match(read("src/app/fix/page.tsx"), /fixPullRequestsEnabled\(\)/);
   assert.match(read("src/app/fix/page.tsx"), /fix\.leadOff/);
