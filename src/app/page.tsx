@@ -85,7 +85,6 @@ export default async function Home() {
       <div className={styles.offerGrid}>
         <div className={styles.offer}><span>{sv ? "FÖR FLER SKANNINGAR" : "FOR MORE SCANS"}</span><strong>$2</strong><h3>{sv ? "24 timmars pass" : "24 hour pass"}</h3><p>{sv ? "Fler skanningar under en dag. Engångsbetalning." : "More scans for one day. One time payment."}</p><ScanCheckoutButton plan="day">{sv ? "Se passet" : "Get a pass"} →</ScanCheckoutButton></div>
         <div className={styles.offer}><span>{sv ? "GÖR DET SJÄLV" : "DIY DEBUGGING"}</span><strong>$19</strong><h3>Vercel Rescue Kit</h3><p>{sv ? "Guide, checklista och återanvändbara AI prompter." : "A playbook, editable checklist and reusable AI prompts."}</p><a className={styles.offerLink} href="https://fieldworkstudio.gumroad.com/l/vercel-deployment-rescue-kit" target="_blank" rel="noopener noreferrer">{sv ? "Se paketet" : "Explore the kit"} ↗</a></div>
-        <div className={styles.offer}><span>{sv ? "PERSONLIG HJÄLP" : "HUMAN SECOND OPINION"}</span><strong>€149</strong><h3>{sv ? "Manuell repogranskning" : "One repo audit"}</h3><p>{sv ? "Ett repo granskat av en människa. Ingen garanti om lyckad deploy." : "A human review of one repo. No guaranteed deployment outcome."}</p><a className={styles.offerLink} href="https://buy.stripe.com/bJe9ASculcZgcKQ52R8og2w" target="_blank" rel="noopener noreferrer">{sv ? "Se erbjudandet" : "Explore the audit"} ↗</a></div>
       </div>
     </section>
 
