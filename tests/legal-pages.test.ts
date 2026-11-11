@@ -53,3 +53,9 @@ test("what the terms promise is what checkout does: passes and subscriptions are
 test("a suggested .env.example in a public report never republishes a committed key", () => {
   assert.match(read("src/lib/analyzer.ts"), /content: maskAllSecrets\(completeEnvExample\(/);
 });
+
+test("the seller is located by town and country, without street address or VAT number", () => {
+  const operator = read("src/lib/operator.ts");
+  assert.match(operator, /city: "Tullinge"/);
+  assert.doesNotMatch(operator, /Oxelvägen|SE\d{10}01/);
+});
