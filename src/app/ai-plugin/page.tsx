@@ -1,14 +1,10 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { SITE_URL } from "@/lib/site";
 import { plans } from "@/lib/plans";
+import { pageMetadata, pages } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "DeployDoctor MCP plugin — source-backed deployment checks",
-  description: "Paste a build log in your AI chat: investigate missing modules, npm ERESOLVE and hydration mismatches with official docs and verification steps. Public repo scans also available.",
-  alternates: { canonical: "/ai-plugin" },
-};
+export const metadata = pageMetadata(pages.ai);
 export default function PluginPage() {
   const endpoint = `${SITE_URL}/api/mcp`;
   const schema = { "@context": "https://schema.org", "@type": "SoftwareApplication", name: "DeployDoctor",

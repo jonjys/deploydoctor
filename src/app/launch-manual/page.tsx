@@ -1,13 +1,8 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
+import { pageMetadata, pages } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "The vibe coder's launch manual: from localhost to your first paying customer | DeployDoctor",
-  description: "Built your app with Cursor, Lovable, Bolt, v0 or Claude Code? The steps that come after 'it works on my machine': deploy, environment variables, Stripe live mode, Supabase RLS, sign-in, legal pages, monitoring and launch day.",
-  alternates: { canonical: "/launch-manual" },
-  openGraph: { title: "The vibe coder's launch manual", description: "From 'it works on my machine' to your first paying customer, in nine steps.", url: "/launch-manual", type: "article" },
-};
+export const metadata = pageMetadata(pages.launch);
 
 const STEPS: Array<{ title: string; why: string; items: string[] }> = [
   { title: "Make the deploy pass", why: "Nothing else matters until Vercel builds it.", items: [

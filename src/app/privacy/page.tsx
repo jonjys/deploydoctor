@@ -1,14 +1,10 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { LegalLinks } from "@/components/legal-links";
 import { LEGAL_UPDATED, OPERATOR, OPERATOR_LINE } from "@/lib/operator";
+import { pageMetadata, pages } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Privacy policy | DeployDoctor",
-  description: "What DeployDoctor stores, who else receives it, how long it is kept and how to have it deleted.",
-  alternates: { canonical: "/privacy" },
-};
+export const metadata = pageMetadata(pages.privacy);
 
 const privacy = <a href={`mailto:${OPERATOR.email.privacy}`}>{OPERATOR.email.privacy}</a>;
 

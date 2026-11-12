@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { SiteNav } from "@/components/site-nav";
 import { getT } from "@/lib/lang";
+import { pageMetadata } from "@/lib/seo";
 import { listRescueWall } from "@/lib/fix-pr/store";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT();
-  return { title: `${t("fix.wallTitle")} | DeployDoctor`, description: t("fix.wallLead"), alternates: { canonical: "/rescue" } };
+  return pageMetadata({ title: t("fix.wallSeoTitle"), description: t("fix.wallMeta"), path: "/rescue" });
 }
 
 export default async function RescuePage() {

@@ -1,14 +1,10 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { LegalLinks } from "@/components/legal-links";
 import { LEGAL_UPDATED, OPERATOR } from "@/lib/operator";
+import { pageMetadata, pages } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Refund policy | DeployDoctor",
-  description: "When DeployDoctor refunds a fix automatically, your 14-day right of withdrawal, and how to ask for money back.",
-  alternates: { canonical: "/refunds" },
-};
+export const metadata = pageMetadata(pages.refunds);
 
 const support = <a href={`mailto:${OPERATOR.email.support}`}>{OPERATOR.email.support}</a>;
 

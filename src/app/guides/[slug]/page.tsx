@@ -5,6 +5,7 @@ import { SiteNav } from "@/components/site-nav";
 import { GuideText } from "@/components/guide-text";
 import { guideBySlug, guides, relatedGuides } from "@/lib/guides";
 import { SITE_URL } from "@/lib/site";
+import { documentTitle, pageMetadata } from "@/lib/seo";
 
 export function generateStaticParams() {
   return guides.map((guide) => ({ slug: guide.slug }));
@@ -15,13 +16,13 @@ type GuideProps = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: GuideProps): Promise<Metadata> {
   const { slug } = await params;
   const guide = guideBySlug(slug);
-  if (!guide) return { title: "Guide not found | DeployDoctor" };
-  return {
-    title: `${guide.title} | DeployDoctor`,
+  if (!guide) return { title: "Guide not found | DeployDoctor", robots: { index: false, follow: false } };
+  return pageMetadata({
+    title: documentTitle(guide.title),
     description: guide.description,
-    alternates: { canonical: `/guides/${guide.slug}` },
-    openGraph: { type: "article", siteName: "DeployDoctor", url: `/guides/${guide.slug}`, title: guide.title, description: guide.description },
-  };
+    path: `/guides/${guide.slug}`,
+    type: "article",
+  });
 }
 
 export default async function GuidePage({ params }: GuideProps) {

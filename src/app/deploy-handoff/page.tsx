@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
-export const metadata: Metadata = { title:"Deploy Handoff — what must ship with your code? | DeployDoctor", description:"Compare a GitHub pull request and get a commit-pinned manual deployment checklist for new environment references, migrations, hosting settings, build commands and endpoint changes.", alternates:{canonical:"/deploy-handoff"} };
+import { pageMetadata, pages } from "@/lib/seo";
+export const metadata = pageMetadata(pages.handoff);
 export default function HandoffPage(){
  return <main className="site-shell"><SiteNav /><article className="guide">
   <p className="section-kicker">DEPLOY HANDOFF</p><h1>Your PR merged. Did the production setup move with it?</h1>

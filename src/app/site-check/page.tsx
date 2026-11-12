@@ -1,15 +1,10 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { SiteCheckForm } from "./site-check-form";
 import { LegalLinks } from "@/components/legal-links";
+import { pageMetadata, pages } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Live site check: leaked keys, EU rules, VAT number, AI search | DeployDoctor",
-  description: "Paste your live site. DeployDoctor finds secret keys in the JavaScript every visitor downloads, checks the privacy, terms, returns and contact pages EU buyers expect, verifies your VAT number in VIES and tells you whether ChatGPT, Claude and Perplexity can read you.",
-  alternates: { canonical: "/site-check" },
-  openGraph: { title: "Is your live site ready for buyers?", description: "Leaked keys, EU rules, VAT number and AI search in one free check. Values masked, nothing saved.", url: "/site-check", type: "website" },
-};
+export const metadata = pageMetadata(pages.siteCheck);
 
 export default async function SiteCheckPage() {
   return <main className="site-shell"><SiteNav /><article className="guide leak-page">

@@ -1,19 +1,13 @@
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
+import { pageMetadata, pages } from "@/lib/seo";
 import { WebhookReviewForm } from "./webhook-review";
 import { ReplayLab } from "./replay-lab";
 import styles from "./replay-lab.module.css";
 
-const title = "Your webhook. Five failure cases. | DeployDoctor";
-const description = "Review pasted Stripe webhook code with line evidence and download a regression-test scaffold. Explore retries and crash recovery in a free simulation.";
-export const metadata = {
-  title: "Stripe Webhook Code Review & Regression Tests | DeployDoctor",
-  description,
-  alternates: { canonical: "/webhook-replay-lab" },
-  openGraph: { title, description, url: "/webhook-replay-lab", type: "website", images: [{ url: "/webhook-replay-lab/opengraph-image", width: 1200, height: 630 }] },
-  twitter: { card: "summary_large_image", title, description, images: ["/webhook-replay-lab/opengraph-image"] },
-};
+// The image comes from opengraph-image.tsx in this folder.
+export const metadata = pageMetadata({ ...pages.webhook, image: null });
 
 export default function ReplayLabPage() {
   return <main className={`site-shell ${styles.page}`} lang="en">

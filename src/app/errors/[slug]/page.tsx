@@ -8,6 +8,7 @@ import { errorPageBySlug, errorPages, otherErrorPages } from "@/lib/error-pages"
 import { guideBySlug } from "@/lib/guides";
 import { plans } from "@/lib/plans";
 import { SITE_URL } from "@/lib/site";
+import { documentTitle, pageMetadata } from "@/lib/seo";
 
 export function generateStaticParams() {
   return errorPages.map((page) => ({ slug: page.slug }));
@@ -18,13 +19,13 @@ type ErrorPageProps = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: ErrorPageProps): Promise<Metadata> {
   const { slug } = await params;
   const page = errorPageBySlug(slug);
-  if (!page) return { title: "Error page not found | DeployDoctor" };
-  return {
-    title: `${page.title} | DeployDoctor`,
+  if (!page) return { title: "Error page not found | DeployDoctor", robots: { index: false, follow: false } };
+  return pageMetadata({
+    title: documentTitle(page.title),
     description: page.description,
-    alternates: { canonical: `/errors/${page.slug}` },
-    openGraph: { type: "article", siteName: "DeployDoctor", url: `/errors/${page.slug}`, title: page.title, description: page.description },
-  };
+    path: `/errors/${page.slug}`,
+    type: "article",
+  });
 }
 
 export default async function ErrorReferencePage({ params }: ErrorPageProps) {

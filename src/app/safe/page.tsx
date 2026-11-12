@@ -1,14 +1,9 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
+import { pageMetadata, pages } from "@/lib/seo";
 import { SafeForm } from "./safe-form";
 
-export const metadata: Metadata = {
-  title: "Is my app safe? Check your live app in 30 seconds | DeployDoctor",
-  description: "Paste your live app. DeployDoctor checks for secret keys in your JavaScript, Supabase tables anyone can read, public .env and .git files, source maps and browser protection headers. Built for apps made with Lovable, Bolt, v0, Cursor and Claude Code.",
-  alternates: { canonical: "/safe" },
-  openGraph: { title: "Is my app safe?", description: "Leaked keys, open Supabase tables, public .env files. One answer for your live app.", url: "/safe", type: "website" },
-};
+export const metadata = pageMetadata(pages.safe);
 
 export default function SafePage() {
   return <main className="site-shell"><SiteNav current="safe" /><article className="guide leak-page">

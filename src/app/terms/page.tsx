@@ -1,16 +1,12 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { LegalLinks } from "@/components/legal-links";
 import { LEGAL_UPDATED, OPERATOR, OPERATOR_LINE } from "@/lib/operator";
 import { plans } from "@/lib/plans";
 import { FREE_SCANS_PER_DAY } from "@/lib/limits";
+import { pageMetadata, pages } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Terms of sale and use | DeployDoctor",
-  description: "What DeployDoctor sells, how passes, subscriptions, patches and fix pull requests work, and what is and is not promised.",
-  alternates: { canonical: "/terms" },
-};
+export const metadata = pageMetadata(pages.terms);
 
 const usd = (cents: number) => `$${cents / 100}`;
 const support = <a href={`mailto:${OPERATOR.email.support}`}>{OPERATOR.email.support}</a>;

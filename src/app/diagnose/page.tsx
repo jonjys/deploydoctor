@@ -4,16 +4,11 @@ import { DiagnoseForm } from "@/components/diagnose-form";
 import { activePlan, customerSession } from "@/lib/access";
 import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
 import { getT } from "@/lib/lang";
+import { pageMetadata } from "@/lib/seo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT();
-  const description = t(fixPullRequestsEnabled() ? "diag.sub" : "diag.leadOff");
-  return {
-    title: t("diag.title"),
-    description,
-    alternates: { canonical: "/diagnose" },
-    openGraph: { siteName: "DeployDoctor", url: "/diagnose", title: t("diag.title"), description },
-  };
+  return pageMetadata({ title: t("diag.title"), description: t("diag.meta"), path: "/diagnose" });
 }
 
 export default async function DiagnosePage() {

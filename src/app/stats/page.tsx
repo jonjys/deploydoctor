@@ -1,9 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
+import { FindingStats } from "@/components/finding-stats";
 import { getLang } from "@/lib/lang";
 import { scanInsights } from "@/lib/scan-insights-store";
-import { FindingStats } from "@/components/finding-stats";
-export const metadata = { title: "DeployDoctor stats — common deployment findings", description: "Anonymous statistics from recent public repository scans. See common findings, review warnings and how the numbers are calculated.", alternates: { canonical: "/stats" } };
+import { pageMetadata, statsMeta } from "@/lib/seo";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const lang = await getLang();
+  return pageMetadata({ ...statsMeta[lang], path: "/stats" });
+}
 export const dynamic = "force-dynamic";
 export default async function StatsPage() {
   const [data, lang] = await Promise.all([scanInsights(), getLang()]);
