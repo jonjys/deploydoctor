@@ -58,6 +58,7 @@ export default async function Home() {
           <span className={styles.pathCopy}>{fixOn ? (sv ? "Diagnos gratis. Stödda pull request fixar kan köpas separat." : "Free diagnosis. Supported PR repairs offered separately.") : (sv ? "Gratis diagnos. Automatisk PR reparation kräver separat aktivering." : "Free diagnosis. Automated PR repair is not enabled yet.")}</span>
         </Link>
       </div>
+      <p className={styles.scannerNote}>{sv ? "Builden failar och du måste skeppa i dag? Vi fixar den inom 24 timmar eller så får du pengarna tillbaka. " : "Build failing and you need to ship today? We fix it within 24 hours or you get a full refund. "}<a href="https://buy.stripe.com/bJebJ0eCt0cu3ag2UJ8og2I" target="_blank" rel="noopener noreferrer">{sv ? "Deploy Rescue, €49" : "Deploy Rescue, €49"} ↗</a></p>
       <div className={styles.trust}>
         <span>✓ {sv ? "Ingen kod körs vid repo skanning" : "No repository code executed"}</span>
         <span>✓ {sv ? "Tydliga gränser" : "Clear scan limitations"}</span>
@@ -85,6 +86,7 @@ export default async function Home() {
       <div className={styles.offerGrid}>
         <div className={styles.offer}><span>{sv ? "FÖR FLER SKANNINGAR" : "FOR MORE SCANS"}</span><strong>$2</strong><h3>{sv ? "24 timmars pass" : "24 hour pass"}</h3><p>{sv ? "Fler skanningar under en dag. Engångsbetalning." : "More scans for one day. One time payment."}</p><ScanCheckoutButton plan="day">{sv ? "Se passet" : "Get a pass"} →</ScanCheckoutButton></div>
         <div className={styles.offer}><span>{sv ? "GÖR DET SJÄLV" : "DIY DEBUGGING"}</span><strong>$19</strong><h3>Vercel Rescue Kit</h3><p>{sv ? "Guide, checklista och återanvändbara AI prompter." : "A playbook, editable checklist and reusable AI prompts."}</p><a className={styles.offerLink} href="https://fieldworkstudio.gumroad.com/l/vercel-deployment-rescue-kit" target="_blank" rel="noopener noreferrer">{sv ? "Se paketet" : "Explore the kit"} ↗</a></div>
+        <div className={styles.offer}><span>{sv ? "FIXAT PÅ 24 TIMMAR" : "FIXED IN 24 HOURS"}</span><strong>€49</strong><h3>Deploy Rescue</h3><p>{sv ? "En människa hittar orsaken och skickar fixen som pull request eller patch. Fortfarande rött efter fixen? Full återbetalning." : "A human finds the cause and sends the fix as a pull request or patch. Still failing after the fix? Full refund."}</p><a className={styles.offerLink} href="https://buy.stripe.com/bJebJ0eCt0cu3ag2UJ8og2I" target="_blank" rel="noopener noreferrer">{sv ? "Fixa min build" : "Get my build fixed"} ↗</a></div>
       </div>
     </section>
 

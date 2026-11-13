@@ -84,21 +84,26 @@ test("X-Robots-Tag noindex covers /api always and the whole host only outside pr
   }
 });
 
-test("private reports keep noindex and the deactivated audit payment link is unpublished", () => {
+test("private reports keep noindex, the deactivated audit stays unpublished, and Deploy Rescue is a static new-tab link", () => {
   const report = read("src/app/r/[id]/page.tsx");
   assert.match(report, /report\.is_private \? \{ robots: privateNoindex \}/);
   assert.doesNotMatch(report, /robots: \{ index: false, follow: false \}/);
 
   const page = read("src/app/page.tsx");
   const deadAudit = /buy\.stripe\.com\/bJe9ASculcZgcKQ52R8og2w/;
+  const rescue = "https://buy.stripe.com/bJebJ0eCt0cu3ag2UJ8og2I";
   assert.match(page, /id="scan-repository"/);
   assert.match(page, /START FREE/);
+  assert.match(page, /FIXED IN 24 HOURS/);
+  assert.match(page, /Deploy Rescue/);
+  assert.match(page, /€49/);
+  assert.equal(page.split(rescue).length - 1, 2);
   assert.match(page, /target="_blank"/);
   assert.match(page, /rel="noopener noreferrer"/);
   assert.doesNotMatch(page, /HUMAN SECOND OPINION|One repo audit|Manuell repogranskning/);
-  assert.doesNotMatch(page, /€149|€49/);
+  assert.doesNotMatch(page, /€149/);
   assert.doesNotMatch(page, deadAudit);
-  assert.doesNotMatch(page, /cNi7sKbqh6ASh169j78og2L|00w5kC9i91gybGMgLz8og2K|bJebJ0eCt0cu3ag2UJ8og2I/);
+  assert.doesNotMatch(page, /cNi7sKbqh6ASh169j78og2L|00w5kC9i91gybGMgLz8og2K/);
   assert.doesNotMatch(page, /billing-events|create-checkout|planPrice/);
 
   for (const file of ["src/lib/plans.ts", "src/lib/billing-events.ts", "src/app/api/stripe/create-checkout/route.ts", "src/app/page.tsx"]) {
