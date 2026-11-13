@@ -19,7 +19,7 @@ import styles from "./home-refresh.module.css";
 /** Who runs DeployDoctor and what it is, for Google and AI assistants. No prices, so it cannot go stale. */
 const SCHEMA = { "@context": "https://schema.org", "@graph": [
   { "@type": "Organization", "@id": "https://nyttolabs.com/#org", name: "Nytto Labs", url: "https://nyttolabs.com", email: "support@nyttolabs.com",
-    address: { "@type": "PostalAddress", addressCountry: "SE" } },
+    address: { "@type": "PostalAddress", addressLocality: "Tullinge", addressCountry: "SE" } },
   { "@type": "SoftwareApplication", name: "DeployDoctor", url: SITE_URL, applicationCategory: "DeveloperApplication", operatingSystem: "Web",
     description: "Finds what will break a deploy before the host builds it, and checks a live site for leaked keys, EU rules, VAT number and AI search.",
     publisher: { "@id": "https://nyttolabs.com/#org" }, offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free daily scan and free live site check." } },
