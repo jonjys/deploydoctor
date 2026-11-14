@@ -7,13 +7,18 @@ import { latestPublicRepoReport } from "@/lib/repo-status-store";
 import { liveBadgeMarkdown, repoStatus, statusRepository } from "@/lib/repo-status";
 import { SITE_URL } from "@/lib/site";
 import { getLang } from "@/lib/lang";
+import { documentTitle, pageMetadata, scoreDescription } from "@/lib/seo";
 
 type Props = { params: Promise<{ owner: string; repo: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { owner, repo } = await params;
-  if (!statusRepository(owner, repo)) return { title: "Repository status" };
-  return { title: `${owner}/${repo}: latest scan | DeployDoctor`, description: "Latest public scan, checked commit and findings. Static checks do not guarantee a successful deployment.",
-    alternates: { canonical: `/score/${owner}/${repo}` }, robots: { index: false, follow: true } };
+  if (!statusRepository(owner, repo)) return { title: "Repository status", robots: { index: false, follow: false } };
+  return pageMetadata({
+    title: documentTitle(`${owner}/${repo} latest scan`),
+    description: scoreDescription,
+    path: `/score/${owner}/${repo}`,
+    robots: { index: false, follow: true },
+  });
 }
 
 export default async function RepoScore({ params }: Props) {

@@ -1,13 +1,9 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { guides } from "@/lib/guides";
+import { pageMetadata, pages } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Vercel deployment troubleshooting guides | DeployDoctor",
-  description: "Fix Vercel deployment issues with practical guides for Next.js, Vite, SvelteKit, pnpm, Supabase, build configuration and runtime errors.",
-  alternates: { canonical: "/guides" },
-};
+export const metadata = pageMetadata(pages.guides);
 
 export default function GuidesIndex() {
   return (

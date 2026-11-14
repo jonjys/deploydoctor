@@ -1,11 +1,14 @@
 import type { MetadataRoute } from "next";
-import { SITE_URL } from "@/lib/site";
+import { CANONICAL_ORIGIN } from "@/lib/seo";
+import { EXAMPLE_REPORTS } from "@/lib/site";
 import { guides } from "@/lib/guides";
 import { errorPages } from "@/lib/error-pages";
 
+const SITE_URL = CANONICAL_ORIGIN;
+
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
-    { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },
+    { url: SITE_URL, changeFrequency: "weekly", priority: 1 },
     { url: `${SITE_URL}/site-check`, lastModified: "2026-11-06", changeFrequency: "monthly", priority: 0.9 },
     { url: `${SITE_URL}/privacy`, lastModified: "2026-11-06", changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/terms`, lastModified: "2026-11-06", changeFrequency: "yearly", priority: 0.3 },
@@ -29,5 +32,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...guides.map((guide) => ({ url: `${SITE_URL}/guides/${guide.slug}`, lastModified: guide.updated, changeFrequency: "monthly" as const, priority: 0.7 })),
     { url: `${SITE_URL}/errors`, lastModified: "2026-10-28", changeFrequency: "monthly", priority: 0.8 },
     ...errorPages.map((page) => ({ url: `${SITE_URL}/errors/${page.slug}`, lastModified: page.updated, changeFrequency: "monthly" as const, priority: 0.7 })),
+    // Only the sample reports linked from the homepage. Other /r/ pages are user scans and stay out of the sitemap.
+    ...EXAMPLE_REPORTS.map((report) => ({ url: `${SITE_URL}/r/${report.id}`, changeFrequency: "monthly" as const, priority: 0.4 })),
   ];
 }

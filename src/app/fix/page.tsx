@@ -3,11 +3,11 @@ import { FixForm } from "@/components/fix-form";
 import { SiteNav } from "@/components/site-nav";
 import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
 import { getT } from "@/lib/lang";
+import { pageMetadata } from "@/lib/seo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT();
-  const purchases = fixPullRequestsEnabled();
-  return { title: t("fix.title"), description: t(purchases ? "fix.sub" : "fix.leadOff"), alternates: { canonical: "/fix" } };
+  return pageMetadata({ title: t("fix.title"), description: t("fix.meta"), path: "/fix" });
 }
 
 export default async function FixPage({ searchParams }: { searchParams: Promise<{ repo?: string; github?: string }> }) {

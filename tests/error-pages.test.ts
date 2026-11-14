@@ -136,5 +136,5 @@ test("the call to action is the existing 24-hour pass checkout and nothing new i
   // The index and the guides link to each other, so the pages are reachable without the sitemap.
   assert.match(read("src/app/guides/page.tsx"), /href="\/errors"/);
   assert.match(read("src/app/errors/page.tsx"), /href=\{`\/errors\/\$\{page\.slug\}`\}/);
-  assert.match(read("src/app/errors/[slug]/page.tsx"), /canonical: `\/errors\/\$\{page\.slug\}`/);
+  assert.match(read("src/app/errors/[slug]/page.tsx"), /path: `\/errors\/\$\{page\.slug\}`/);
 });

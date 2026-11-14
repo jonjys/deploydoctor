@@ -1,13 +1,9 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { errorPages } from "@/lib/error-pages";
+import { pageMetadata, pages } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Common Vercel deployment errors and fixes | DeployDoctor",
-  description: "One short page per common Vercel deployment error, with the fix from the official Vercel and Next.js documentation and a link to the source.",
-  alternates: { canonical: "/errors" },
-};
+export const metadata = pageMetadata(pages.errors);
 
 export default function ErrorsIndex() {
   return (

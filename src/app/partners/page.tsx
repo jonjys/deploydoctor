@@ -4,11 +4,10 @@ import { PartnerDesk, type PartnerDeskLabels } from "@/components/partner-desk";
 import { SiteNav } from "@/components/site-nav";
 import { CLIENT_REFERENCE_PARAM, PARTNER_SUPPORT_EMAIL, partnerFallbackMailto } from "@/lib/human-audit";
 import { getT } from "@/lib/lang";
+import { pageMetadata, partnerMeta } from "@/lib/seo";
 
 const copy = {
   en: {
-    title: "Agency partners | DeployDoctor",
-    description: "How an agency slug is added to an audit payment link with client_reference_id. This page does not publish a price.",
     kicker: "AGENCY PARTNERS",
     h1: "Send clients whose Vercel deploys break.",
     lead: "This page explains partner tracking. It does not publish a price, and it does not replace the audit link on the homepage.",
@@ -19,7 +18,7 @@ const copy = {
       { title: "Add the reference", detail: `Append ?${CLIENT_REFERENCE_PARAM}=YOUR_SLUG to that link. Stripe stores the value on the payment so the agency can be matched. It is not a coupon and it does not change the price.` },
     ],
     linkTitle: "The reference",
-    reference: `The query name is ${CLIENT_REFERENCE_PARAM}. A confirmed slug such as acme is added as ?${CLIENT_REFERENCE_PARAM}=acme. Use 2–64 characters: lowercase letters, numbers, and hyphens. Stripe allows up to 200 characters; a short slug is easier to match when the share is paid by hand.`,
+    reference: `The query name is client_reference_id. A confirmed slug such as acme is added as ?${CLIENT_REFERENCE_PARAM}=acme. Use 2–64 characters: lowercase letters, numbers, and hyphens. Stripe allows up to 200 characters; a short slug is easier to match when the share is paid by hand.`,
     share: "The agency share is 30% of what the client pays, paid manually offline. Nothing is transferred automatically, and this program does not use Stripe Connect.",
     separate: "Separate from scan pricing",
     separateItems: [
@@ -47,8 +46,6 @@ const copy = {
     } satisfies PartnerDeskLabels,
   },
   sv: {
-    title: "Byråpartner | DeployDoctor",
-    description: "Hur en byrås slug läggs till på en granskningslänk med client_reference_id. Sidan publicerar inget pris.",
     kicker: "BYRÅPARTNER",
     h1: "Skicka kunder vars Vercel-deploys går sönder.",
     lead: "Sidan förklarar partnerspårning. Den publicerar inget pris och ersätter inte granskningslänken på startsidan.",
@@ -90,13 +87,7 @@ const copy = {
 
 export async function generateMetadata(): Promise<Metadata> {
   const { lang } = await getT();
-  const text = copy[lang];
-  return {
-    title: text.title,
-    description: text.description,
-    alternates: { canonical: "/partners" },
-    openGraph: { title: text.title, description: text.description, url: "/partners", type: "website" },
-  };
+  return pageMetadata({ ...partnerMeta[lang], path: "/partners" });
 }
 
 export default async function PartnersPage() {

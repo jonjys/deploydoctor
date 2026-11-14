@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getT } from "@/lib/lang";
+import { notFoundMeta, pageMetadata } from "@/lib/seo";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { lang } = await getT();
+  return pageMetadata({ ...notFoundMeta[lang], path: "/", canonical: false, robots: { index: false, follow: false } });
+}
 
 export default async function NotFound() {
   const { t } = await getT();

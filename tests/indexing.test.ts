@@ -6,7 +6,7 @@ import nextConfig from "../next.config";
 import robots from "../src/app/robots";
 import sitemap from "../src/app/sitemap";
 import { isProductionDeployment, robotsPolicy, siteRobots } from "../src/lib/indexing";
-import { SITE_URL } from "../src/lib/site";
+import { EXAMPLE_REPORTS, SITE_URL } from "../src/lib/site";
 
 const read = (file: string) => readFileSync(join(process.cwd(), file), "utf8");
 
@@ -39,8 +39,10 @@ test("production robots.txt allows crawling and points at the sitemap", () => {
       assert.ok(!disallow.some((prefix) => path.startsWith(prefix)), `${path} stays crawlable`);
     }
     const urls = sitemap().map((entry) => entry.url);
-    assert.ok(urls.includes(`${SITE_URL}/`));
-    assert.ok(urls.every((url) => !url.includes("/api/") && !url.includes("/r/")));
+    assert.ok(urls.includes(SITE_URL));
+    const examples = EXAMPLE_REPORTS.map((item) => `${SITE_URL}/r/${item.id}`);
+    for (const url of examples) assert.ok(urls.includes(url), url);
+    assert.ok(urls.every((url) => !url.includes("/api/") && (!url.includes("/r/") || examples.includes(url))));
   });
 });
 

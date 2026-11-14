@@ -1,14 +1,9 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
+import { pageMetadata, pages } from "@/lib/seo";
 import { LeakCheckForm } from "./leak-check-form";
 
-export const metadata: Metadata = {
-  title: "Leak check: is your API key in your live JavaScript? | DeployDoctor",
-  description: "Paste your live site. DeployDoctor reads the JavaScript every visitor downloads and finds Stripe, Supabase service_role, OpenAI and Anthropic keys baked in by NEXT_PUBLIC_ or VITE_ variables. GitHub secret scanning cannot see these.",
-  alternates: { canonical: "/leak-check" },
-  openGraph: { title: "Is your API key in your live JavaScript?", description: "The leak GitHub secret scanning cannot see. Free check, values masked, nothing saved.", url: "/leak-check", type: "website" },
-};
+export const metadata = pageMetadata(pages.leak);
 
 export default function LeakCheckPage() {
   return <main className="site-shell"><SiteNav /><article className="guide leak-page">

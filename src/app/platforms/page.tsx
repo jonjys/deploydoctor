@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
-export const metadata: Metadata = { title: "Supported platforms and scan coverage | DeployDoctor", description: "Static source and deployment configuration checks for Cloudflare, Netlify, Vercel, Fly.io, Render, Railway legacy configs and Docker. See exactly what is checked and what remains unverified.", alternates: { canonical: "/platforms" } };
+import { pageMetadata, pages } from "@/lib/seo";
+export const metadata = pageMetadata(pages.platforms);
 export default function PlatformsPage() {
   const targets = [
     { name: "Cloudflare Workers and Pages", config: "wrangler.toml, wrangler.json, wrangler.jsonc", checks: "Configuration syntax, recorded compatibility dates, Worker entrypoint paths, source-backed Node compatibility risks, duplicate bindings, mixed Pages/Workers configuration and assets paths.", limit: "Generated entrypoints need build verification. Assets-only Workers do not require main. Node compatibility defaults depend on the recorded date. Dashboard bindings, secrets and deployed behavior are not verified." },

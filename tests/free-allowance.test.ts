@@ -88,7 +88,9 @@ test("free allowance copy: no visitor copy still offers 3 free scans or 3 free d
     assert.doesNotMatch(read(file), /every pull request/i, file);
   }
   assert.ok((read("src/lib/guides.ts").match(/or run it on your pull requests with the GitHub Action\./g) ?? []).length >= 4);
-  assert.equal((ci.match(/One free scan a day per public repository to try it, a pass scans every push/g) ?? []).length, 2);
+  // The page metadata is the short card. The allowance itself stays in the visible copy above.
+  assert.match(read("src/lib/seo.ts"), /undeclared packages and Edge mistakes on the changed files before Vercel builds/);
+  assert.doesNotMatch(read("src/lib/seo.ts"), /every pull request/i);
   const readme = read("README.md");
   assert.doesNotMatch(readme, /run on every pull request/);
   assert.match(readme, /gets one free scan a day to try it/);

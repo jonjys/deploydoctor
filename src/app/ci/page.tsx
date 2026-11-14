@@ -1,17 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { SITE_URL } from "@/lib/site";
 import { plans } from "@/lib/plans";
+import { pageMetadata, pages } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "DeployDoctor in CI: fail a pull request before Vercel builds it",
-  description: "A GitHub Action that scans a pull request for the mistakes that break a Vercel deploy: case-sensitive imports, missing env variables, undeclared packages, Prisma and Edge runtime mistakes, annotated on the changed files. One free scan a day per public repository to try it, a pass scans every push.",
-  alternates: { canonical: "/ci" },
-  openGraph: { type: "article", siteName: "DeployDoctor", url: "/ci", title: "DeployDoctor in CI: fail a pull request before Vercel builds it",
-    description: "Scan a pull request before Vercel builds it. One free scan a day per public repository to try it, a pass scans every push. Findings annotated on the changed files, a report link in the job summary." },
-};
+export const metadata = pageMetadata(pages.ci);
 
 const WORKFLOW = `name: DeployDoctor
 on:

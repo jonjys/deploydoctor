@@ -4,10 +4,11 @@ import { SiteNav } from "@/components/site-nav";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
 import { planPrice } from "@/lib/plans";
 import { getT } from "@/lib/lang";
+import { pageMetadata } from "@/lib/seo";
 
 export async function generateMetadata() {
   const { t } = await getT();
-  return { title: t("pricing.title") };
+  return pageMetadata({ title: t("pricing.title"), description: t("pricing.meta"), path: "/pricing" });
 }
 export default async function Pricing() {
   const { t } = await getT();
