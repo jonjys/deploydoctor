@@ -1,34 +1,38 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { SiteNav } from "@/components/site-nav";
 import { GuideText } from "@/components/guide-text";
 import { ScanCheckoutButton } from "@/components/scan-checkout-button";
-import { errorPageBySlug, errorPages, otherErrorPages } from "@/lib/error-pages";
+import { errorPageBySlug, activeErrorPages, otherErrorPages } from "@/lib/error-pages";
 import { guideBySlug } from "@/lib/guides";
 import { plans } from "@/lib/plans";
+import { consolidatedGuide, errorPagePath } from "@/lib/seo-routes";
 import { SITE_URL } from "@/lib/site";
 
 export function generateStaticParams() {
-  return errorPages.map((page) => ({ slug: page.slug }));
+  return activeErrorPages.map((page) => ({ slug: page.slug }));
 }
 
 type ErrorPageProps = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: ErrorPageProps): Promise<Metadata> {
   const { slug } = await params;
+  if (consolidatedGuide(slug)) permanentRedirect(errorPagePath(slug));
   const page = errorPageBySlug(slug);
   if (!page) return { title: "Error page not found | DeployDoctor" };
   return {
     title: `${page.title} | DeployDoctor`,
     description: page.description,
     alternates: { canonical: `/errors/${page.slug}` },
-    openGraph: { type: "article", siteName: "DeployDoctor", url: `/errors/${page.slug}`, title: page.title, description: page.description },
+    twitter: { card: "summary_large_image", title: page.title, description: page.description, images: ["/og.png"] },
+    openGraph: { type: "article", siteName: "DeployDoctor", url: `/errors/${page.slug}`, title: page.title, description: page.description, images: [{ url: "/og.png", width: 1200, height: 630, alt: page.title }] },
   };
 }
 
 export default async function ErrorReferencePage({ params }: ErrorPageProps) {
   const { slug } = await params;
+  if (consolidatedGuide(slug)) permanentRedirect(errorPagePath(slug));
   const page = errorPageBySlug(slug);
   if (!page) notFound();
   const schema = {

@@ -6,6 +6,8 @@ import { guides } from "@/lib/guides";
 export const metadata: Metadata = {
   title: "Vercel deployment troubleshooting guides | DeployDoctor",
   description: "Fix Vercel deployment issues with practical guides for Next.js, Vite, SvelteKit, pnpm, Supabase, build configuration and runtime errors.",
+  twitter: { card: "summary_large_image", title: "Vercel deployment troubleshooting guides | DeployDoctor", description: "Fix Vercel deployment issues with practical guides for Next.js, Vite, SvelteKit, pnpm, Supabase, build configuration and runtime errors.", images: ["/og.png"] },
+  openGraph: { type: "website", url: "/guides", title: "Vercel deployment troubleshooting guides | DeployDoctor", description: "Fix Vercel deployment issues with practical guides for Next.js, Vite, SvelteKit, pnpm, Supabase, build configuration and runtime errors.", images: ["/og.png"] },
   alternates: { canonical: "/guides" },
 };
 

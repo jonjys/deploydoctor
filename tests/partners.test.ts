@@ -75,5 +75,5 @@ test("the partners page documents tracking and does not publish a price or payme
 
 test("/partner redirects to /partners", async () => {
   const redirects = await nextConfig.redirects!();
-  assert.deepEqual(redirects, [{ source: "/partner", destination: "/partners", permanent: false }]);
+  assert.deepEqual(redirects.filter((rule) => rule.source === "/partner"), [{ source: "/partner", destination: "/partners", permanent: false }]);
 });

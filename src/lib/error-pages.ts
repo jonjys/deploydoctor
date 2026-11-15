@@ -1,3 +1,5 @@
+import { incidentPages } from "./incident-pages";
+import { consolidatedErrors } from "./seo-routes";
 /**
  * One short reference page per common Vercel deployment error, served at /errors/[slug].
  * Every fix is taken from the official Vercel or Next.js documentation listed in `docs`.
@@ -338,7 +340,10 @@ export const errorPages: ErrorPage[] = [
     ],
     relatedGuides: ["err-pnpm-outdated-lockfile-vercel", "pnpm-10-ignored-build-scripts-vercel"],
   },
+  ...incidentPages,
 ];
+
+export const activeErrorPages = errorPages.filter((page) => !consolidatedErrors[page.slug]);
 
 export function errorPageBySlug(slug: string): ErrorPage | undefined {
   return errorPages.find((page) => page.slug === slug);
@@ -346,5 +351,5 @@ export function errorPageBySlug(slug: string): ErrorPage | undefined {
 
 /** The other error pages shown at the bottom of a page: the rest of the list, in order. */
 export function otherErrorPages(page: ErrorPage): ErrorPage[] {
-  return errorPages.filter((other) => other.slug !== page.slug);
+  return activeErrorPages.filter((other) => other.slug !== page.slug);
 }

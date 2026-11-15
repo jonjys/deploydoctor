@@ -21,8 +21,8 @@ export function dateLocale(lang: Lang) {
 }
 
 const en = {
-  "meta.title": "DeployDoctor | GitHub deployment preflight",
-  "meta.desc": "Scan your GitHub repository for import, environment, build configuration and deployment risks. See source evidence and suggested fixes without running your code.",
+  "meta.title": "Vercel deploy failed? Free GitHub repo scan | DeployDoctor",
+  "meta.desc": "Find common reasons your Vercel deploy fails. Scan a public GitHub repo free for import, environment variable and build configuration risks without running code.",
   "lang.aria": "Language",
   "nav.scan": "Scan",
   "nav.pricing": "Pricing",
@@ -571,7 +571,7 @@ const en = {
 export type MessageKey = keyof typeof en;
 
 const sv: Record<MessageKey, string> = {
-  "meta.title": "DeployDoctor | Kontrollera GitHub-repot före deploy",
+  "meta.title": "Vercel-deploy misslyckas? Gratis GitHub-skanning | DeployDoctor",
   "meta.desc": "Skanna ditt GitHub-repo efter risker i importer, miljövariabler, byggkonfiguration och deploy. Se fynd och föreslagna åtgärder utan att köra koden.",
   "lang.aria": "Språk",
   "nav.scan": "Skanna",

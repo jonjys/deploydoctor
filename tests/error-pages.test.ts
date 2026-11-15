@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { errorPageBySlug, errorPages, otherErrorPages, type ErrorPage } from "../src/lib/error-pages";
+import { errorPageBySlug, errorPages, activeErrorPages, otherErrorPages, type ErrorPage } from "../src/lib/error-pages";
 import { guideBySlug } from "../src/lib/guides";
 import { plans } from "../src/lib/plans";
 import sitemap from "../src/app/sitemap";
@@ -43,7 +43,7 @@ test("the pages cover the errors the site targets", () => {
 });
 
 test("every page cites official documentation and no source is repeated within a page", () => {
-  const hosts = new Set(["vercel.com", "nextjs.org", "docs.github.com"]);
+  const hosts = new Set(["vercel.com", "nextjs.org", "docs.github.com", "supabase.com", "www.prisma.io", "docs.lovable.dev", "support.bolt.new", "v0.app"]);
   for (const page of errorPages) {
     assert.ok(page.docs.length >= 1, `${page.slug} cites a source`);
     assert.ok(page.docs.some((doc) => new URL(doc.url).hostname !== "docs.github.com"), `${page.slug} cites Vercel or Next.js`);
@@ -98,7 +98,8 @@ test("related guides exist, and the other-pages list excludes the page itself", 
   for (const page of errorPages) {
     for (const slug of page.relatedGuides) assert.ok(guideBySlug(slug), `${page.slug} links an existing guide: ${slug}`);
     const others = otherErrorPages(page);
-    assert.equal(others.length, errorPages.length - 1);
+    assert.equal(others.length, activeErrorPages.filter((other) => other.slug !== page.slug).length);
+    assert.ok(others.every((other) => activeErrorPages.includes(other)));
     assert.ok(!others.some((other) => other.slug === page.slug));
   }
   assert.equal(errorPageBySlug("does-not-exist"), undefined);
@@ -108,7 +109,7 @@ test("the sitemap lists the index and every error page once, and robots does not
   const urls = sitemap().map((entry) => entry.url);
   assert.equal(new Set(urls).size, urls.length, "sitemap urls are unique");
   assert.ok(urls.some((url) => url.endsWith("/errors")));
-  for (const page of errorPages) assert.ok(urls.some((url) => url.endsWith(`/errors/${page.slug}`)), page.slug);
+  for (const page of activeErrorPages) assert.ok(urls.some((url) => url.endsWith(`/errors/${page.slug}`)), page.slug);
   const previous = process.env.VERCEL_ENV;
   process.env.VERCEL_ENV = "production";
   try {

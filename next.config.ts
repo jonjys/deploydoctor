@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
+import { consolidatedErrors } from "./src/lib/seo-routes";
+
 const nextConfig: NextConfig = {
   async redirects() {
-    return [{ source: "/partner", destination: "/partners", permanent: false }];
+    return [{ source: "/partner", destination: "/partners", permanent: false }, ...Object.entries(consolidatedErrors).map(([error, guide]) => ({ source: `/errors/${error}`, destination: `/guides/${guide}`, permanent: true }))];
   },
   async headers() {
     const rules: Awaited<ReturnType<NonNullable<NextConfig["headers"]>>> = [
