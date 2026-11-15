@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { RepoForm } from "@/components/repo-form";
 import { ScanActivitySection } from "@/components/scan-activity-section";
 import { CommunityReviews } from "@/components/community-reviews";
@@ -119,6 +120,13 @@ export default async function Home() {
       <Suspense fallback={null}><ScanActivitySection /></Suspense>
       <Suspense fallback={null}><CommunityReviews /></Suspense>
     </details>
-    <footer className={styles.footer}><Link href="/">DeployDoctor</Link><span>{sv ? "Av NyttoLabs · Läs mer om begränsningarna i varje rapport." : "By NyttoLabs · Each report explains its limitations."}</span><LegalLinks /></footer>
+    <footer className={styles.footer}>
+      <Link href="/">DeployDoctor</Link>
+      <span>{sv ? "Av NyttoLabs · Läs mer om begränsningarna i varje rapport." : "By NyttoLabs · Each report explains its limitations."}</span>
+      <LegalLinks />
+      <a href="https://launchbuff.com/products/deploydoctor-ztqlq6" target="_blank" rel="noopener noreferrer" title="Featured on LaunchBuff">
+        <Image src="https://launchbuff.com/badge-featured-dark.svg" alt="Featured on LaunchBuff" width={256} height={80} unoptimized style={{ display: "block", maxWidth: "100%", height: "auto" }} />
+      </a>
+    </footer>
   </main>;
 }
