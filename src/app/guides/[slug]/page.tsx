@@ -20,7 +20,8 @@ export async function generateMetadata({ params }: GuideProps): Promise<Metadata
     title: `${guide.title} | DeployDoctor`,
     description: guide.description,
     alternates: { canonical: `/guides/${guide.slug}` },
-    openGraph: { type: "article", siteName: "DeployDoctor", url: `/guides/${guide.slug}`, title: guide.title, description: guide.description },
+    twitter: { card: "summary_large_image", title: guide.title, description: guide.description, images: ["/og.png"] },
+    openGraph: { type: "article", siteName: "DeployDoctor", url: `/guides/${guide.slug}`, title: guide.title, description: guide.description, images: [{ url: "/og.png", width: 1200, height: 630, alt: guide.title }] },
   };
 }
 
@@ -30,7 +31,7 @@ export default async function GuidePage({ params }: GuideProps) {
   if (!guide) notFound();
   const schema = {
     "@context": "https://schema.org", "@type": "TechArticle", headline: guide.title, description: guide.description,
-    dateModified: guide.updated, url: `${SITE_URL}/guides/${guide.slug}`,
+    dateModified: guide.updated, url: `${SITE_URL}/guides/${guide.slug}`, citation: guide.docs?.map((doc) => doc.url),
     author: { "@type": "Organization", name: "DeployDoctor" }, publisher: { "@type": "Organization", name: "Nytto Labs" },
   };
   const others = relatedGuides(guide);
@@ -49,6 +50,7 @@ export default async function GuidePage({ params }: GuideProps) {
             {section.code && <pre><code>{section.code}</code></pre>}
           </section>
         ))}
+        {guide.docs && <section><h2>Sources</h2><ul>{guide.docs.map((doc) => <li key={doc.url}><a href={doc.url} rel="noopener noreferrer">{doc.label}</a></li>)}</ul></section>}
         <aside className="guide-cta">
           <div>
             <h2>Check common deployment risks before you push</h2>

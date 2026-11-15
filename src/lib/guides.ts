@@ -1,4 +1,6 @@
 /** Search-intent troubleshooting guides. Some checks are static, while others require live runtime validation. */
+import { errorPages } from "./error-pages";
+import { consolidatedErrors } from "./seo-routes";
 import { seoGuides } from "./seo-guides";
 
 export type Guide = {
@@ -8,10 +10,11 @@ export type Guide = {
   updated: string;
   /** The report check this guide explains, used for the related-check line. */
   check: string;
+  docs?: Array<{ label: string; url: string }>;
   sections: Array<{ heading: string; body: string[]; code?: string }>;
 };
 
-export const guides: Guide[] = [
+const baseGuides: Guide[] = [
   {
     slug: "nextjs-works-locally-fails-on-vercel",
     title: "Next.js works locally but fails on Vercel: the five usual causes",
@@ -52,7 +55,7 @@ export const guides: Guide[] = [
     check: "Environment variables",
     sections: [
       { heading: "Where Vercel reads variables from", body: [
-        "Vercel never reads .env, .env.local or .env.production from your repository. Everything comes from the project settings under Environment Variables, scoped per environment: Production, Preview and Development. A variable added for Production only is undefined in every Preview deployment.",
+        "A local .env.local file is normally gitignored and is not present in a clean deployment. Configure secrets in Vercel project settings, scoped to Production, Preview or Development. Frameworks may also load committed .env files; never commit secrets to make a deployment work. A variable added for Production only is undefined in every Preview deployment.",
       ] },
       { heading: "NEXT_PUBLIC variables are inlined at build time", body: [
         "Anything prefixed NEXT_PUBLIC_ is replaced in the client bundle when next build runs. Adding the variable after the build and redeploying from cache keeps the old undefined value. Use Redeploy without build cache, or push a commit.",
@@ -67,7 +70,7 @@ export const guides: Guide[] = [
   },
   {
     slug: "module-not-found-vercel-case-sensitive-imports",
-    title: "Module not found on Vercel but it works locally: case sensitive imports",
+    title: "Module not found on Vercel: missing packages and case sensitive imports",
     description: "The import resolves on macOS and fails on Vercel with Module not found. Why Linux cares about casing, how to find the mismatch, and how to rename a file by case in git.",
     updated: "2026-10-05",
     check: "Broken imports",
@@ -148,7 +151,7 @@ export const guides: Guide[] = [
   },
   {
     slug: "vercel-404-not-found-ready-deployment",
-    title: "Vercel 404 NOT_FOUND on a Ready deployment: check the Framework Preset first",
+    title: "Vercel 404 NOT_FOUND after deploy: framework, output and routing",
     description: "The build is green, the deployment says Ready, and every URL returns 404 NOT_FOUND with nothing in the logs. The usual cause is a project setting, not your code. How to find it and stop it from coming back.",
     updated: "2026-10-10",
     check: "Build configuration",
@@ -287,6 +290,19 @@ export const guides: Guide[] = [
   },
   ...seoGuides,
 ];
+
+/** Consolidate the former short reference into its existing troubleshooting guide. */
+export const guides: Guide[] = baseGuides.map((guide) => {
+  const reference = errorPages.find((page) => consolidatedErrors[page.slug] === guide.slug);
+  if (!reference) return guide;
+  return { ...guide, updated: "2026-11-15", docs: reference.docs,
+    sections: [...guide.sections, ...reference.sections.map((section) => ({
+      heading: `Error reference: ${section.heading}`,
+      body: [...(section.body || []), ...(section.steps || []).map((step, i) => `${i + 1}. ${step}`)],
+      ...(section.code ? { code: section.code } : {}),
+    })), { heading: "What the repository scan cannot verify", body: [reference.scanNote] }],
+  };
+});
 
 export function guideBySlug(slug: string): Guide | undefined {
   return guides.find((guide) => guide.slug === slug);

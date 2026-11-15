@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { RepoForm } from "@/components/repo-form";
@@ -17,11 +18,13 @@ import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
 import styles from "./home-refresh.module.css";
 
 /** Who runs DeployDoctor and what it is, for Google and AI assistants. No prices, so it cannot go stale. */
+export const metadata: Metadata = { alternates: { canonical: "/" } };
+
 const SCHEMA = { "@context": "https://schema.org", "@graph": [
   { "@type": "Organization", "@id": "https://nyttolabs.com/#org", name: "Nytto Labs", url: "https://nyttolabs.com", email: "support@nyttolabs.com",
     address: { "@type": "PostalAddress", addressLocality: "Tullinge", addressCountry: "SE" } },
   { "@type": "SoftwareApplication", name: "DeployDoctor", url: SITE_URL, applicationCategory: "DeveloperApplication", operatingSystem: "Web",
-    description: "Finds what will break a deploy before the host builds it, and checks a live site for leaked keys, EU rules, VAT number and AI search.",
+    description: "Scans GitHub repositories for common Vercel deployment risks in imports, environment variables, dependencies and build configuration. Source code is read without being executed.",
     publisher: { "@id": "https://nyttolabs.com/#org" }, offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free daily scan and free live site check." } },
 ] };
 
@@ -35,8 +38,8 @@ export default async function Home() {
     <SiteNav current="scan" />
     <section className={styles.hero} aria-labelledby="hero-title">
       <div className={styles.pulse}><span aria-hidden="true">●</span> {sv ? "FÖR DIG SOM BYGGER OCH LANSERAR" : "FOR BUILDERS WHO SHIP"}</div>
-      <h1 id="hero-title">{sv ? <>Hitta problemet.<br /><em>Ta nästa steg.</em></> : <>Find the problem.<br /><em>Make the next move.</em></>}</h1>
-      <p className={styles.intro}>{sv ? "Skanna kod före deploy, kolla en liveapp eller felsök en misslyckad build. Börja där du är." : "Scan code before you deploy, check a live app, or diagnose a failed build. Start where you are."}</p>
+      <h1 id="hero-title">{sv ? <>Varför misslyckas din<br /><em>Vercel-deploy?</em></> : <>Why your deploy<br /><em>fails on Vercel.</em></>}</h1>
+      <p className={styles.intro}>{sv ? "Gratis GitHub-skanning efter vanliga Vercel-fel i importer, miljövariabler och byggkonfiguration. Har builden redan misslyckats? Felsök loggen." : "Free GitHub repo scan for common Vercel build errors: missing modules, environment variables and build configuration. Already have a failed build? Diagnose the log."}</p>
 
       <div className={styles.scanner} id="scan-repository">
         <div className={styles.scannerHead}>
@@ -68,6 +71,12 @@ export default async function Home() {
         <summary>{sv ? "Visa exempelrapporter" : "See sample scan reports"} <span aria-hidden="true">⌄</span></summary>
         <div className={styles.exampleLinks}>{EXAMPLE_REPORTS.map(ex => <Link key={ex.id} href={`/r/${ex.id}`}>{t(ex.key)} ↗</Link>)}</div>
       </details>
+    </section>
+
+    <section className="guide-more" aria-label="Vercel deployment troubleshooting">
+      <h2>{sv ? "Hitta ditt deployproblem" : "Find your Vercel deployment problem"}</h2>
+      <p><Link href="/errors">Vercel errors and fixes</Link> · <Link href="/guides">Deployment guides</Link></p>
+      <ul><li><Link href="/errors/prisma-p1001-supabase-vercel">Prisma P1001 with Supabase</Link></li><li><Link href="/errors/supabase-sb-secret-401">Supabase sb_secret returns 401</Link></li><li><Link href="/errors/lovable-vercel-build-failed">Lovable app will not build on Vercel</Link></li><li><Link href="/errors/bolt-vercel-build-failed">Bolt export fails on Vercel</Link></li><li><Link href="/errors/v0-vercel-build-failed">v0 works in preview but fails in production</Link></li></ul>
     </section>
 
     <div className={styles.returning}><RecentScans /></div>
