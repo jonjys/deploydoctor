@@ -18,7 +18,6 @@ import { getT } from "@/lib/lang";
 import { fixPullRequestsEnabled } from "@/lib/fix-pr/github-app";
 import styles from "./home-refresh.module.css";
 
-/** Who runs DeployDoctor and what it is, for Google and AI assistants. No prices, so it cannot go stale. */
 export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 const SCHEMA = { "@context": "https://schema.org", "@graph": [
@@ -60,6 +59,11 @@ export default async function Home() {
           <span className={styles.step}>03 / {sv ? "BYGGFEL" : "FAILED BUILD"}</span>
           <span className={styles.pathTitle}>{sv ? "Fixa en build" : "Fix a failed build"} <span aria-hidden="true">↗</span></span>
           <span className={styles.pathCopy}>{fixOn ? (sv ? "Diagnos gratis. Stödda pull request fixar kan köpas separat." : "Free diagnosis. Supported PR repairs offered separately.") : (sv ? "Gratis diagnos. Automatisk PR reparation kräver separat aktivering." : "Free diagnosis. Automated PR repair is not enabled yet.")}</span>
+        </Link>
+        <Link href="/ai-check" className={styles.path}>
+          <span className={styles.step}>04 / AI</span>
+          <span className={styles.pathTitle}>{sv ? "AI-check" : "AI check"} <span aria-hidden="true">↗</span></span>
+          <span className={styles.pathCopy}>{sv ? "Klistra in text. Se om den ser skriven av en modell ut." : "Paste text. See if it looks model-written."}</span>
         </Link>
       </div>
       <p className={styles.scannerNote}>{sv ? "Builden failar och du måste skeppa i dag? Vi fixar den inom 24 timmar eller så får du pengarna tillbaka. " : "Build failing and you need to ship today? We fix it within 24 hours or you get a full refund. "}<a href="https://buy.stripe.com/bJebJ0eCt0cu3ag2UJ8og2I" target="_blank" rel="noopener noreferrer">{sv ? "Deploy Rescue, €49" : "Deploy Rescue, €49"} ↗</a></p>
@@ -103,6 +107,7 @@ export default async function Home() {
     <details className={styles.moreTools}>
       <summary><span><strong>{sv ? "Fler verktyg och resurser" : "More tools and resources"}</strong><small>{sv ? "CI, AI plugin, diagnoser, guider och statistik" : "CI, AI plugin, diagnosis, guides and statistics"}</small></span><span aria-hidden="true">+</span></summary>
       <div className={styles.resourceGrid}>
+        <Link href="/ai-check">AI-check ↗</Link>
         <Link href="/site-check">Site Check ↗</Link>
         <Link href="/webhook-replay-lab">Webhook Replay Lab ↗</Link>
         <Link href="/launch-readiness">Launch Readiness ↗</Link>
