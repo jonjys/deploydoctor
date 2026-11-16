@@ -51,6 +51,11 @@ export default async function Home() {
         <p className={styles.scannerNote}>{sv ? "Läser koden utan att köra den. Resultat med bevis och förslag på nästa steg." : "Reads repository source without running it. Evidence and suggested next steps, not a deployment guarantee."}</p>
       </div>
       <div className={styles.paths} aria-label={sv ? "Andra sätt att börja" : "Other starting points"}>
+        <Link href="/is-this-repo-safe" className={`${styles.path} ${styles.pathWide}`}>
+          <span className={styles.step}>{sv ? "NYTT / INNAN DU LADDAR NER" : "NEW / BEFORE YOU DOWNLOAD"}</span>
+          <span className={styles.pathTitle}>{sv ? "Är det här GitHub-repot säkert?" : "Is this GitHub repo safe?"} <span aria-hidden="true">↗</span></span>
+          <span className={styles.pathCopy}>{sv ? "Ska du ladda ner ett gratis AI-verktyg, en mod eller en bot från GitHub? Kolla att den inte stjäl lösenord eller nycklar först." : "About to download a free AI tool, mod or bot from GitHub? Check it does not steal passwords or keys first."}</span>
+        </Link>
         <Link href="/safe" className={styles.path}>
           <span className={styles.step}>02 / {sv ? "LIVEAPP" : "LIVE APP"}</span>
           <span className={styles.pathTitle}>{sv ? "Är min app säker?" : "Is my app safe?"} <span aria-hidden="true">↗</span></span>

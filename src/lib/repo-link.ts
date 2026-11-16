@@ -20,7 +20,7 @@ const RESERVED = new Set([
   "rescue-kit", "stats", "growth", "badge", "score", "launch-readiness", "webhook-replay-lab", "platforms", "deploy-handoff",
   "fix", "rescue",
   // Agency partner page. /partner redirects here; neither segment is a GitHub owner.
-  "partner", "partners",
+  "partner", "partners", "is-this-repo-safe",
 ]);
 
 /** Where a path that names no repository is sent: one segment matches no route, so it renders the app's not-found page. */

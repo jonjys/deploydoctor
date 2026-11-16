@@ -179,36 +179,11 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
     })).catch(() => []);
     if (rows[0]) return { canonicalUrl, results: rows[0].results, isPrivate: false };
   }
-  const lease = await acquireWork([], "repository-download", 3, 50);
-  let archive;
-  try {
-    const archivePath = `${repoPath}/tarball/${commitSha}`;
-    const redirect = await githubResponse(archivePath, token, userToken, "manual");
-    if (redirect.status !== 302) {
-      if (ref && redirect.status === 404) throw new GitHubApiError(`Branch or commit "${ref}" was not found in the repository.`, 404, "gh.refNotFound");
-      const rateLimited = redirect.headers.get("x-ratelimit-remaining") === "0" || redirect.headers.has("retry-after");
-      const failure = githubFailure(redirect.status, { userToken, rateLimited });
-      throw new GitHubApiError(failure.message, failure.status, failure.key);
-    }
-    const location = new URL(redirect.headers.get("location") ?? "");
-    if (location.protocol !== "https:" || location.hostname !== "codeload.github.com" || location.username || location.password || location.port) {
-      throw new Error("Unexpected repository archive host.");
-    }
-    // The signed redirect is sufficient for private archives; never forward our token to another host.
-    const signal = AbortSignal.timeout(35_000);
-    const downloaded = await fetch(location, { redirect: "error", cache: "no-store", signal });
-    if (!downloaded.ok || !downloaded.body) throw new Error("Could not download repository archive.");
-    archive = await readRepositoryArchive(downloaded.body, (file, size) =>
+  const archive = await downloadRepositoryArchive(repoPath, commitSha, token, userToken, ref, (file, size) =>
       (ROOT_LOCKFILE.test(file) && size <= MAX_LOCKFILE_BYTES) || (size <= MAX_FILE_BYTES &&
       // Nested tsconfig files resolve a nested app's aliases; Astro pages can opt out of prerendering in their frontmatter.
       (SOURCE_FILE.test(file) || BUILD_FILE.test(file) || HOST_CONFIG_FILE.test(file) || /(?:^|\/)package\.json$/.test(file) || /^vercel\.json$/.test(file) || /(?:^|\/)(?:tsconfig|jsconfig)\.json$/.test(file) || ASTRO_PAGE.test(file) || file === ".gitignore"
-        || /\.prisma$/.test(file) || MIGRATION_FILE.test(file) || MISNAMED_ENV_TEMPLATE.test(file) || /(?:^|\/)\.env(?:\..+)?$/.test(file))), priorityFor, signal);
-  } catch (error) {
-    if (error instanceof GitHubApiError) throw error;
-    throw new GitHubApiError("Repository archive could not be read within safety limits.", 422, "gh.archiveLimit");
-  } finally {
-    if (lease) await releaseWork(lease);
-  }
+        || /\.prisma$/.test(file) || MIGRATION_FILE.test(file) || MISNAMED_ENV_TEMPLATE.test(file) || /(?:^|\/)\.env(?:\..+)?$/.test(file))), priorityFor);
   const { entries, contents } = archive;
   const sourceFiles = entries.filter(entry => entry.type === "blob" && SOURCE_FILE.test(entry.path));
   const reasons = new Set<string>();
@@ -243,6 +218,39 @@ export async function analyzeGitHubRepository(repoUrl: string, options: { privat
     }).catch(() => console.error("Public scan cache write failed"));
   }
   return { canonicalUrl, results, isPrivate: repository.private };
+}
+
+/**
+ * Download one commit's tarball through GitHub's signed codeload redirect and read the selected files into memory.
+ * Never extracted to disk and never executed. Shared by the deploy scan and the repository safety check.
+ */
+export async function downloadRepositoryArchive(repoPath: string, commitSha: string, token: string | undefined, userToken: boolean, ref: string | undefined,
+  select: (path: string, size: number) => boolean, priority: (path: string) => number) {
+  const lease = await acquireWork([], "repository-download", 3, 50);
+  try {
+    const archivePath = `${repoPath}/tarball/${commitSha}`;
+    const redirect = await githubResponse(archivePath, token, userToken, "manual");
+    if (redirect.status !== 302) {
+      if (ref && redirect.status === 404) throw new GitHubApiError(`Branch or commit "${ref}" was not found in the repository.`, 404, "gh.refNotFound");
+      const rateLimited = redirect.headers.get("x-ratelimit-remaining") === "0" || redirect.headers.has("retry-after");
+      const failure = githubFailure(redirect.status, { userToken, rateLimited });
+      throw new GitHubApiError(failure.message, failure.status, failure.key);
+    }
+    const location = new URL(redirect.headers.get("location") ?? "");
+    if (location.protocol !== "https:" || location.hostname !== "codeload.github.com" || location.username || location.password || location.port) {
+      throw new Error("Unexpected repository archive host.");
+    }
+    // The signed redirect is sufficient for private archives; never forward our token to another host.
+    const signal = AbortSignal.timeout(35_000);
+    const downloaded = await fetch(location, { redirect: "error", cache: "no-store", signal });
+    if (!downloaded.ok || !downloaded.body) throw new Error("Could not download repository archive.");
+    return await readRepositoryArchive(downloaded.body, select, priority, signal);
+  } catch (error) {
+    if (error instanceof GitHubApiError) throw error;
+    throw new GitHubApiError("Repository archive could not be read within safety limits.", 422, "gh.archiveLimit");
+  } finally {
+    if (lease) await releaseWork(lease);
+  }
 }
 
 async function readRootFile(repoPath: string, file: string, token?: string): Promise<string | null> {
