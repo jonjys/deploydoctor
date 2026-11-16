@@ -7,6 +7,7 @@ Reads GitHub API files. Never clones, installs, builds or executes repository co
 - [Product](https://deploydoctor.nyttolabs.com/): public repository scan.
 - [Exact platform and language coverage](https://deploydoctor.nyttolabs.com/platforms): rules and explicit limitations.
 - [AI plugin](https://deploydoctor.nyttolabs.com/ai-plugin): tools, connection, limits, privacy and support.
+- [Is this GitHub repo safe?](https://deploydoctor.nyttolabs.com/is-this-repo-safe): reads a public repository (never runs it) for malware tricks: install hooks that download and run code, decoded/encoded execution, credential and wallet theft paths, Discord/Telegram webhooks, hidden off-screen code, committed executables and README lures.
 - [Is my app safe?](https://deploydoctor.nyttolabs.com/safe): one verdict for a live app. Public checks (secret keys in the JavaScript, source maps, security headers) run on any https site; Supabase table exposure (row counts via HEAD, never rows) and public .env/.git files run only after the owner verifies with /.well-known/deploydoctor.txt or a meta tag.
 - [Live leak check](https://deploydoctor.nyttolabs.com/leak-check): reads the HTML and same-origin JavaScript of a public https site and reports secret-shaped keys (masked) that build-time variables put in the browser bundle.
 - [Live site check](https://deploydoctor.nyttolabs.com/site-check): the leak check plus privacy, terms, returns and contact pages, the footer VAT number checked in VIES, and AI-crawler blocks and schema.org data on a live site. Nothing is saved.

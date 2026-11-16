@@ -43,3 +43,8 @@ export function appSafetyRules(identity: string): BudgetRule[] {
   return [{ key: `safe:${identity}:minute`, limit: 3, seconds: 60 }, { key: `safe:${identity}:day`, limit: 20, seconds: 86400 },
     { key: "safe:site:minute", limit: 30, seconds: 60 }];
 }
+/** "Is this repo safe?" downloads one public tarball per check: a handful per visitor, a ceiling for the site. */
+export function repoSafetyRules(identity: string): BudgetRule[] {
+  return [{ key: `reposafe:${identity}:minute`, limit: 4, seconds: 60 }, { key: `reposafe:${identity}:day`, limit: 30, seconds: 86400 },
+    { key: "reposafe:site:minute", limit: 30, seconds: 60 }];
+}
