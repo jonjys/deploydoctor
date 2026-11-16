@@ -891,7 +891,8 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .plan-locked p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
 .plan-locked em { font-style: normal; font-weight: 700; color: var(--ink); white-space: nowrap; }
 .plan-unlock, .plan-tools { margin-top: 18px; padding: 18px 20px; border-radius: 10px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px; }
-.plan-unlock { background: var(--ink); color: var(--paper); }
+.plan-unlock { background: #10231c; color: #f4f2eb; border: 1px solid #10231c; }
+@media (prefers-color-scheme: dark) { .plan-unlock { background: #16241f; border-color: #2b3a34; } }
 .plan-unlock p { margin: 4px 0 0; color: inherit; opacity: 0.8; font-size: 13px; max-width: 520px; }
 .plan-unlock .cta-button { background: var(--acid); color: #10231c; border-color: var(--acid); }
 .plan-tools { border: 1px solid var(--line); background: var(--paper); }
