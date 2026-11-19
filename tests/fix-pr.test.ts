@@ -9,7 +9,7 @@ import { sealQuote } from "../src/lib/patch/quote";
 import { PullRequestApiError, type GitRequest } from "../src/lib/patch/pull-request";
 import { FIX_AMOUNT, FIX_APP, FIX_PROMO_CAP } from "../src/lib/fix-pr/constants";
 import { handleFixEvent } from "../src/lib/fix-pr/events";
-import { githubAppJwt, readStatusEvent, verifyGithubWebhook } from "../src/lib/fix-pr/github-app";
+import { acceptFreshInstallation, githubAppJwt, readStatusEvent, verifyGithubWebhook } from "../src/lib/fix-pr/github-app";
 import { openGatedFixPullRequest, readGatedFixPatch } from "../src/lib/fix-pr/open";
 import { deliveryImpossible, refundForBuild, vercelOutcome } from "../src/lib/fix-pr/outcome";
 import { fixCheckoutParams, validateFixPayment } from "../src/lib/fix-pr/payments";
@@ -217,7 +217,7 @@ test("without a configured Fix GitHub App nothing is offered, charged or promo-c
   const { fixPullRequestsEnabled, fixAppFromEnv } = await import("../src/lib/fix-pr/github-app");
   const pem = "-----BEGIN PRIVATE KEY-----\nfixture\n-----END PRIVATE KEY-----";
   assert.equal(fixPullRequestsEnabled(fixAppFromEnv({} as NodeJS.ProcessEnv)), false);
-  assert.equal(fixPullRequestsEnabled(fixAppFromEnv({ GITHUB_FIX_APP_ID: "123", GITHUB_FIX_APP_SLUG: "deploydoctor-fix", GITHUB_FIX_APP_PRIVATE_KEY: pem } as unknown as NodeJS.ProcessEnv)), false, "no webhook secret: refunds could not be triggered");
+  assert.equal(fixPullRequestsEnabled(fixAppFromEnv({ GITHUB_FIX_APP_ID: "123", GITHUB_FIX_APP_SLUG: "deploydoctor-fix", GITHUB_FIX_APP_PRIVATE_KEY: pem } as unknown as NodeJS.ProcessEnv)), true, "the app key is enough to open a pull request");
   assert.equal(fixPullRequestsEnabled(fixAppFromEnv({ GITHUB_FIX_APP_ID: "123", GITHUB_FIX_APP_SLUG: "deploydoctor-fix", GITHUB_FIX_APP_PRIVATE_KEY: pem, GITHUB_FIX_WEBHOOK_SECRET: "x".repeat(32) } as unknown as NodeJS.ProcessEnv)), true);
   const { createRequire } = await import("node:module");
   const require = createRequire(import.meta.url);
@@ -235,4 +235,14 @@ test("without a configured Fix GitHub App nothing is offered, charged or promo-c
   } finally {
     for (const [key, value] of Object.entries(saved)) if (value !== undefined) process.env[key] = value;
   }
+});
+
+test("a setup redirect can claim only this app's installation from the last 15 minutes", () => {
+  const now = Date.parse("2026-11-19T12:00:00Z");
+  const fresh = { id: 42, app_id: 5657324, updated_at: "2026-11-19T11:50:00Z" };
+  assert.equal(acceptFreshInstallation(fresh, 42, "5657324", now), 42);
+  assert.equal(acceptFreshInstallation({ ...fresh, updated_at: "2026-11-19T10:00:00Z" }, 42, "5657324", now), null);
+  assert.equal(acceptFreshInstallation({ ...fresh, app_id: 1 }, 42, "5657324", now), null);
+  assert.equal(acceptFreshInstallation({ ...fresh, id: 7 }, 42, "5657324", now), null);
+  assert.equal(acceptFreshInstallation({ ...fresh, suspended_at: "2026-11-19T11:55:00Z" }, 42, "5657324", now), null);
 });

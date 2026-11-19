@@ -42,17 +42,33 @@ export function fixAppCanInstall(app: FixAppEnv | null): boolean {
   return Boolean(app?.slug && app.appId && app.privateKey.includes("BEGIN"));
 }
 
+/** How long after GitHub updates an installation the setup redirect may still claim it. */
+export const INSTALL_FRESH_MS = 15 * 60_000;
+
+/**
+ * The setup redirect's installation id, accepted only when it is this app and GitHub touched it just now.
+ * An older installation id pasted into the return URL is refused.
+ */
+export function acceptFreshInstallation(body: unknown, claimed: number, appId: string, now = Date.now()): number | null {
+  if (!body || typeof body !== "object" || !Number.isInteger(claimed) || claimed <= 0) return null;
+  const item = body as { id?: number; app_id?: number; updated_at?: string; created_at?: string; suspended_at?: string | null };
+  if (item.id !== claimed || String(item.app_id) !== appId || item.suspended_at) return null;
+  const touched = Date.parse(item.updated_at || item.created_at || "");
+  if (!Number.isFinite(touched) || touched > now + 60_000 || now - touched > INSTALL_FRESH_MS) return null;
+  return claimed;
+}
+
 export function fixAppCanAuthorize(app: FixAppEnv | null): boolean {
   return Boolean(app && /^[A-Za-z0-9._-]{5,100}$/.test(app.clientId) && app.clientSecret.length >= 20 && /^[a-z0-9-]{1,100}$/.test(app.slug));
 }
 
 /**
- * Fix pull requests are offered, charged and promo-claimed only when the Fix GitHub App can open a pull request
- * (app id, slug and private key) and its webhook can report failed checks for automatic refunds.
- * Without it the diagnosis stays free and nothing is sold.
+ * Fix pull requests are offered when the app id, slug and private key can open one.
+ * A webhook secret still signs automatic refunds, but a missing secret does not hide the offer:
+ * the daily job refunds a paid fix that never became a pull request.
  */
 export function fixPullRequestsEnabled(app: FixAppEnv | null = fixAppFromEnv()): boolean {
-  return fixAppCanInstall(app) && (app?.webhookSecret.length ?? 0) >= 16;
+  return fixAppCanInstall(app);
 }
 
 export const FIX_DISABLED_MESSAGE = "Fix pull requests are not switched on yet. The diagnosis is free and nothing was charged.";
