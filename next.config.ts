@@ -1,10 +1,13 @@
 import type { NextConfig } from "next";
 
+import { vercelAppHostGuard } from "./src/lib/indexing";
 import { consolidatedErrors } from "./src/lib/seo-routes";
+import { SITE_URL } from "./src/lib/site";
 
 const nextConfig: NextConfig = {
   async redirects() {
-    return [{ source: "/partner", destination: "/partners", permanent: false }, ...Object.entries(consolidatedErrors).map(([error, guide]) => ({ source: `/errors/${error}`, destination: `/guides/${guide}`, permanent: true }))];
+    const pages = [{ source: "/partner", destination: "/partners", permanent: false }, ...Object.entries(consolidatedErrors).map(([error, guide]) => ({ source: `/errors/${error}`, destination: `/guides/${guide}`, permanent: true }))];
+    return [...pages, ...vercelAppHostGuard(SITE_URL).redirects];
   },
   async headers() {
     const rules: Awaited<ReturnType<NonNullable<NextConfig["headers"]>>> = [
@@ -19,6 +22,8 @@ const nextConfig: NextConfig = {
     // Preview and any non-production deploy stay out of Google. Production does not send this header.
     if (process.env.VERCEL_ENV !== "production") {
       rules.unshift({ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex" }] });
+    } else {
+      rules.push(...vercelAppHostGuard(SITE_URL).headers);
     }
     return rules;
   },
