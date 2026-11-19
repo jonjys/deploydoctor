@@ -18,6 +18,21 @@ export function siteRobots(): Metadata["robots"] {
 
 export const privateNoindex = { index: false, follow: false } as const;
 
+const vercelAppHost = [{ type: "host" as const, value: "(?<host>.*\\.vercel\\.app)" }];
+
+/**
+ * Production copies on *.vercel.app are not a second site. Send them to the
+ * canonical domain, and noindex them if a request is still served there.
+ * Preview deployments are unchanged so a preview URL keeps working.
+ */
+export function vercelAppHostGuard(siteUrl: string) {
+  if (!isProductionDeployment()) return { redirects: [], headers: [] };
+  return {
+    redirects: [{ source: "/:path*", has: vercelAppHost, destination: `${siteUrl}/:path*`, permanent: true as const }],
+    headers: [{ source: "/:path*", has: vercelAppHost, headers: [{ key: "X-Robots-Tag", value: "noindex" }] }],
+  };
+}
+
 /** robots.txt: production may be crawled and points at the sitemap. Previews may not. */
 export function robotsPolicy(siteUrl: string): MetadataRoute.Robots {
   return {

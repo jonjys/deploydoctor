@@ -90,12 +90,12 @@ export async function generateMetadata({ params }: PageProps<"/r/[id]">): Promis
   const description = t("report.metaDesc", { n: report.results.summary.red });
   // The image comes from opengraph-image.tsx next to this file; the title and url must be per report too,
   // otherwise a shared link unfurls as the home page.
-  // Private reports replace the root robots tag with noindex. Public reports omit it
-  // and inherit the root tag: index on production, noindex on preview.
+  // Every report stays out of search, public or private. This replaces the root
+  // index tag. /r/ stays allowed in robots.txt so a shared link can still unfurl.
   return {
     title,
     description,
-    ...(report.is_private ? { robots: privateNoindex } : {}),
+    robots: privateNoindex,
     openGraph: { type: "article", siteName: "DeployDoctor", url: `/r/${id}`, title, description },
     twitter: { card: "summary_large_image", title, description },
   };

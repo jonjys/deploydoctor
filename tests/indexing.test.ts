@@ -5,7 +5,7 @@ import { join } from "node:path";
 import nextConfig from "../next.config";
 import robots from "../src/app/robots";
 import sitemap from "../src/app/sitemap";
-import { isProductionDeployment, robotsPolicy, siteRobots } from "../src/lib/indexing";
+import { isProductionDeployment, robotsPolicy, siteRobots, vercelAppHostGuard } from "../src/lib/indexing";
 import { SITE_URL } from "../src/lib/site";
 
 const read = (file: string) => readFileSync(join(process.cwd(), file), "utf8");
@@ -74,8 +74,9 @@ test("X-Robots-Tag noindex covers /api always and the whole host only outside pr
 
   const production = await headersFor("production");
   assert.equal(noindex(production, "/api/:path*"), true);
-  assert.equal(noindex(production, "/:path*"), undefined);
-  assert.equal(production.some((rule) => rule.source === "/:path*"), false);
+  assert.equal(production.some((rule) => rule.source === "/:path*" && !rule.has), false);
+  const vercelHost = production.find((rule) => rule.source === "/:path*" && rule.has?.some((item) => item.type === "host"));
+  assert.equal(vercelHost?.headers.some((header) => header.key === "X-Robots-Tag" && header.value === "noindex"), true);
 
   for (const env of ["preview", undefined]) {
     const rules = await headersFor(env);
@@ -84,9 +85,35 @@ test("X-Robots-Tag noindex covers /api always and the whole host only outside pr
   }
 });
 
-test("private reports keep noindex, the deactivated audit stays unpublished, and Deploy Rescue is a static new-tab link", () => {
+test("production *.vercel.app hosts redirect to the canonical site and stay noindex", async () => {
+  const previous = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = "production";
+  try {
+    const guard = vercelAppHostGuard(SITE_URL);
+    assert.equal(guard.redirects[0]?.destination, `${SITE_URL}/:path*`);
+    assert.equal(guard.redirects[0]?.permanent, true);
+    assert.match(String(guard.redirects[0]?.has[0]?.value), /vercel\\\.app/);
+    assert.equal(guard.headers[0]?.headers[0]?.value, "noindex");
+    const redirects = await nextConfig.redirects!();
+    assert.ok(redirects.some((rule) => rule.destination === `${SITE_URL}/:path*`));
+    assert.ok(redirects.some((rule) => rule.source === "/partner"));
+  } finally {
+    if (previous === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previous;
+  }
+  process.env.VERCEL_ENV = "preview";
+  try {
+    assert.deepEqual(vercelAppHostGuard(SITE_URL), { redirects: [], headers: [] });
+  } finally {
+    if (previous === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previous;
+  }
+});
+
+test("every report stays noindex, the deactivated audit stays unpublished, and Deploy Rescue is a static new-tab link", () => {
   const report = read("src/app/r/[id]/page.tsx");
-  assert.match(report, /report\.is_private \? \{ robots: privateNoindex \}/);
+  assert.match(report, /robots: privateNoindex/);
+  assert.doesNotMatch(report, /is_private \? \{ robots: privateNoindex \}/);
   assert.doesNotMatch(report, /robots: \{ index: false, follow: false \}/);
 
   const page = read("src/app/page.tsx");
