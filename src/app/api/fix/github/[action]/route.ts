@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { githubJson } from "@/lib/github-connect";
-import { verifiedInstallation } from "@/lib/fix-pr/installations";
+import { confirmedInstallation, verifiedInstallation } from "@/lib/fix-pr/installations";
 import { matchesState, nonce, openGitHub, pkceChallenge, sealGitHub } from "@/lib/github-connect-crypto";
 import { repoFromPath } from "@/lib/repo-link";
 import { signingSecret } from "@/lib/session-token";
@@ -67,11 +67,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ acti
   jar.delete(FIX_FLOW_COOKIE);
   if (!flow || flow.expiresAt <= Date.now() || !matchesState(search.get("state"), flow.state)) return json({ error: "GitHub authorization expired. Connect again." }, 400);
   if (action === "installed") {
-    // installation_id in this redirect is attacker-controllable. It is never trusted here: the user authorizes,
-    // and the callback keeps it only if GitHub lists it among that user's own installations of this app.
+    // installation_id in this redirect is attacker-controllable. With an OAuth client secret the user authorizes
+    // and the callback keeps the id only if GitHub lists it among that user's installations. Without that secret,
+    // the app key accepts the id only when GitHub itself updated this app's installation in the last 15 minutes.
     const claimed = Number(search.get("installation_id"));
-    if (!fixAppCanAuthorize(app)) return json({ error: "Set the Fix app OAuth client id and secret." }, 503);
-    return authorize(flow.repo, Number.isInteger(claimed) && claimed > 0 ? claimed : undefined);
+    if (fixAppCanAuthorize(app)) return authorize(flow.repo, Number.isInteger(claimed) && claimed > 0 ? claimed : undefined);
+    if (!fixAppCanInstall(app) || !Number.isInteger(claimed) || claimed <= 0) return json({ error: "GitHub did not confirm an installation." }, 400);
+    const installationId = await confirmedInstallation(claimed, app);
+    if (!installationId) return json({ error: "GitHub installation could not be verified. Install the app again." }, 400);
+    jar.set(FIX_INSTALL_COOKIE, sealGitHub({ installationId, expiresAt: Date.now() + 8 * 3600_000 }, "fix-install", secret), { ...fixCookieOptions, maxAge: 8 * 3600 });
+    return redirect(back(origin, flow.repo, "connected"));
   }
   if (search.has("error")) return redirect(back(origin, flow.repo, "cancelled"));
   const code = search.get("code");
