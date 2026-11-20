@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { analyzeRepoSafety, SAFETY_FILE, safetyPriority } from "../src/lib/repo-safety";
+import { analyzeRepoSafety, safetyBadge, SAFETY_FILE, safetyPriority } from "../src/lib/repo-safety";
 
 // Suspicious strings are assembled at runtime so this file itself never looks like malware to a scanner.
 const WEBHOOK = ["https://discord", ".com/api/web", "hooks/123456789012345678/abcDEF"].join("");
@@ -88,4 +88,25 @@ test("the API is same-origin and rate limited, and the page states that a static
   assert.match(route, /acquireWork\(repoSafetyRules\(/);
   const page = readFileSync(new URL("../src/app/is-this-repo-safe/page.tsx", import.meta.url), "utf8");
   assert.match(page, /cannot prove/);
+});
+
+test("the README badge says only what the last check found, with its date", () => {
+  const counts = { high: 0, medium: 0, low: 0, info: 0 };
+  assert.deepEqual(safetyBadge(null), { right: "not checked yet", color: "neutral" });
+  assert.deepEqual(safetyBadge({ verdict: "no-red-flags", counts, checkedAt: "2026-11-20T10:00:00Z" }), { right: "no red flags · 2026-11-20", color: "green" });
+  assert.deepEqual(safetyBadge({ verdict: "check", counts }), { right: "read before running", color: "yellow" });
+  assert.deepEqual(safetyBadge({ verdict: "red-flags", counts: { ...counts, high: 2 }, checkedAt: "2026-11-20T10:00:00Z" }), { right: "2 red flags · 2026-11-20", color: "red" });
+});
+
+test("badges, link previews and repository pages read the stored check and never download a repository", () => {
+  for (const file of ["../src/app/badge/safe/[owner]/[repo]/route.ts", "../src/app/api/repo-safety-card/route.tsx", "../src/app/is-this-repo-safe/[owner]/[repo]/page.tsx"]) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.match(source, /cachedRepoSafety\(/, file);
+    assert.doesNotMatch(source, /checkRepoSafety|downloadRepositoryArchive/, file);
+  }
+  const fetcher = readFileSync(new URL("../src/lib/repo-safety-fetch.ts", import.meta.url), "utf8");
+  assert.match(fetcher, /await storeRepoSafety\(result\)/);
+  const result = readFileSync(new URL("../src/app/is-this-repo-safe/repo-safety-result.tsx", import.meta.url), "utf8");
+  assert.match(result, /\/badge\/safe\/\$\{report\.repo\}\.svg/);
+  assert.match(result, /report\.verdict !== "red-flags"/, "no badge offer for a repository with red flags");
 });

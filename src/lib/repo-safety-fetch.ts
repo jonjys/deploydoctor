@@ -1,6 +1,7 @@
 import "server-only";
 import { downloadRepositoryArchive, githubRequest, parseGitHubRepoUrl, resolveCommitSha, GitHubApiError } from "@/lib/github";
 import { repoFromPath } from "@/lib/repo-link";
+import { storeRepoSafety } from "@/lib/repo-safety-store";
 import { analyzeRepoSafety, SAFETY_FILE, safetyPriority, type RepoSafetyReport } from "@/lib/repo-safety";
 
 const MAX_FILE_BYTES = 400_000;
@@ -17,6 +18,9 @@ export async function checkRepoSafety(repoUrl: string): Promise<RepoSafetyReport
   const ownerInfo = repo.owner?.login ? await githubRequest<{ created_at?: string }>(`/users/${encodeURIComponent(repo.owner.login)}`, token).catch(() => null) : null;
   const sha = await resolveCommitSha(repoPath, repo.default_branch, token);
   const archive = await downloadRepositoryArchive(repoPath, sha, token, false, undefined, (file, size) => size <= MAX_FILE_BYTES && SAFETY_FILE.test(file), safetyPriority);
-  return analyzeRepoSafety({ repo: repo.full_name, entries: archive.entries, contents: archive.contents, partial: archive.truncated,
+  const report = analyzeRepoSafety({ repo: repo.full_name, entries: archive.entries, contents: archive.contents, partial: archive.truncated,
     meta: { fullName: repo.full_name, createdAt: repo.created_at, stars: repo.stargazers_count, ownerCreatedAt: ownerInfo?.created_at, archived: repo.archived, fork: repo.fork } });
+  const result = { ...report, checkedAt: new Date().toISOString(), commit: sha.slice(0, 7) };
+  await storeRepoSafety(result);
+  return result;
 }
