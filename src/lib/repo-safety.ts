@@ -18,6 +18,9 @@ export type RepoSafetyReport = {
   filesRead: number;
   filesInRepo: number;
   partial: boolean;
+  /** When the check ran and which commit it read; set by the fetcher, absent in pure analysis. */
+  checkedAt?: string;
+  commit?: string;
 };
 
 /** Files worth reading for this check: code, scripts, manifests, docs and CI. */
@@ -154,4 +157,13 @@ export function analyzeRepoSafety(input: { repo: string; entries: Array<{ path: 
   const headline = counts.high ? `${counts.high} red flag${counts.high === 1 ? "" : "s"}: don't run it until you have read these lines`
     : counts.medium ? "A few things to read before you run it" : "No red flags in these checks";
   return { repo: input.repo, verdict, headline, findings, counts, filesRead: input.contents.size, filesInRepo: blobs.length, partial: input.partial };
+}
+
+/** The README badge's right half for a stored result: only what the last check found, with its date. */
+export function safetyBadge(report: Pick<RepoSafetyReport, "verdict" | "counts" | "checkedAt"> | null): { right: string; color: "green" | "yellow" | "red" | "neutral" } {
+  if (!report) return { right: "not checked yet", color: "neutral" };
+  const date = report.checkedAt ? ` · ${report.checkedAt.slice(0, 10)}` : "";
+  if (report.verdict === "red-flags") return { right: `${report.counts.high} red flag${report.counts.high === 1 ? "" : "s"}${date}`, color: "red" };
+  if (report.verdict === "check") return { right: `read before running${date}`, color: "yellow" };
+  return { right: `no red flags${date}`, color: "green" };
 }

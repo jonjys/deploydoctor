@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { SiteNav } from "@/components/site-nav";
+import { repoFromPath } from "@/lib/repo-link";
 import { RepoSafetyForm } from "./repo-safety-form";
 
 export const metadata: Metadata = {
@@ -11,6 +13,8 @@ export const metadata: Metadata = {
 
 export default async function RepoSafetyPage({ searchParams }: { searchParams: Promise<{ repo?: string }> }) {
   const { repo } = await searchParams;
+  const named = typeof repo === "string" ? repoFromPath([repo.trim().replace(/^https?:\/\/(?:www\.)?github\.com\//i, "")]) : null;
+  if (named) redirect(`/is-this-repo-safe/${named}`);
   const initial = typeof repo === "string" ? repo.slice(0, 300) : "";
   return <main className="site-shell"><SiteNav /><article className="guide leak-page">
     <p className="section-kicker">BEFORE YOU DOWNLOAD</p>
