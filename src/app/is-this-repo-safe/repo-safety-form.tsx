@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { RepoSafetyReport } from "@/lib/repo-safety";
+import type { DependencyReport, DependencyTeaser } from "@/lib/dependency-safety";
 import { RepoSafetyResult } from "./repo-safety-result";
 
 export function RepoSafetyForm({ initial, autorun = true }: { initial: string; autorun?: boolean }) {
   const [repo, setRepo] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState<RepoSafetyReport | null>(null);
+  const [report, setReport] = useState<(RepoSafetyReport & { dependencies?: DependencyReport | DependencyTeaser | null }) | null>(null);
   const started = useRef(false);
 
   async function run(value = repo) {
@@ -18,7 +19,7 @@ export function RepoSafetyForm({ initial, autorun = true }: { initial: string; a
       const body = await response.json().catch(() => ({}));
       if (!response.ok) setError(body.error ?? "The check could not finish.");
       else {
-        setReport(body as RepoSafetyReport);
+        setReport(body as RepoSafetyReport & { dependencies?: DependencyReport | DependencyTeaser | null });
         // Each repository has its own page, so the address can be shared and the stored result loads there next time.
         try { window.history.replaceState(null, "", `/is-this-repo-safe/${(body as RepoSafetyReport).repo}`); } catch { /* ignore */ }
       }
@@ -42,7 +43,7 @@ export function RepoSafetyForm({ initial, autorun = true }: { initial: string; a
 
       {error && <p className="leak-error" role="alert">{error}</p>}
 
-      {report && <RepoSafetyResult report={report} />}
+      {report && <RepoSafetyResult report={report} dependencies={report.dependencies} />}
     </div>
   );
 }

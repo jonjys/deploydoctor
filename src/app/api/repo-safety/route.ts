@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { boundedBody } from "@/lib/bounded-body";
 import { sameOrigin } from "@/lib/stripe";
-import { hashRequestIp } from "@/lib/access";
+import { activePlan, hashRequestIp, requestCustomer } from "@/lib/access";
+import { teaser } from "@/lib/dependency-safety";
 import { acquireWork, releaseWork, workLimitResponse } from "@/lib/work-budget";
 import { repoSafetyRules } from "@/lib/budget-policy";
 import { langFromRequest } from "@/lib/i18n";
@@ -20,7 +21,11 @@ export async function POST(request: Request) {
     const parsed = z.object({ repo: z.string().min(3).max(300) }).safeParse(JSON.parse(await boundedBody(request, 1000)));
     if (!parsed.success) return Response.json({ error: "Paste a GitHub repository link." }, { status: 400, headers });
     lease = await acquireWork(repoSafetyRules(hashRequestIp(request)), "reposafe:active", 4, 70);
-    return Response.json(await checkRepoSafety(parsed.data.repo), { headers });
+    const { report, dependencies } = await checkRepoSafety(parsed.data.repo);
+    // The code check is free. The dependency check's details are part of the pass; without one, only the counts.
+    const { customer } = await requestCustomer(request).catch(() => ({ customer: null }));
+    const paid = Boolean(await activePlan(customer).catch(() => null));
+    return Response.json({ ...report, dependencies: dependencies ? (paid ? dependencies : teaser(dependencies)) : null }, { headers });
   } catch (error) {
     const lang = langFromRequest(request);
     const limited = workLimitResponse(error, lang);

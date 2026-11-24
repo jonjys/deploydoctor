@@ -953,3 +953,8 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 
 /* Is this GitHub repo safe? */
 .repo-safety-excerpt { margin: 8px 0 0; padding: 10px 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Dependency check under "Is this GitHub repo safe?" */
+.dep-check { margin: 26px 0 18px; padding-top: 20px; border-top: 1px solid var(--line); }
+.dep-check h2 { margin: 4px 0 6px; }
+.dep-check .plan-unlock { margin-top: 14px; }
