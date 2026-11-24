@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { cookieOptions, SESSION_COOKIE, activePlan } from "@/lib/access";
 import { handleBillingEvent } from "@/lib/billing-events";
-import { confirmFallbackEvent, scanRepoFromContext } from "@/lib/checkout-guard";
+import { confirmFallbackEvent, safetyRepoFromContext, scanRepoFromContext } from "@/lib/checkout-guard";
 import { digest, signSession } from "@/lib/session-token";
 import { objectId, sameOrigin, stripeClient } from "@/lib/stripe";
 import { langFromRequest, t } from "@/lib/i18n";
@@ -43,7 +43,8 @@ export async function POST(request: Request) {
     const pending = !repair && !plan;
     if (!pending) console.log("dd-funnel", JSON.stringify({ step: "paid", plan: checkout.metadata.plan ?? null, reason: via }));
     const repo = scanRepoFromContext(checkout.metadata.context);
-    return Response.json({ pending, href: "/account", repair, ...(repo ? { repo } : {}) });
+    const safetyRepo = safetyRepoFromContext(checkout.metadata.context);
+    return Response.json({ pending, href: "/account", repair, ...(repo ? { repo } : {}), ...(safetyRepo ? { safetyRepo } : {}) });
   } catch {
     return Response.json({ error: t(lang, "pay.confirmFailed") }, { status: 503 });
   }

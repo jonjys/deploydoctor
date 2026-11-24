@@ -7,7 +7,7 @@ import { cachedRepoSafety } from "@/lib/repo-safety-store";
 import { RepoSafetyForm } from "../../repo-safety-form";
 import { RepoSafetyResult } from "../../repo-safety-result";
 
-type Params = { params: Promise<{ owner: string; repo: string }> };
+type Params = { params: Promise<{ owner: string; repo: string }>; searchParams?: Promise<{ check?: string }> };
 
 async function named({ params }: Params) {
   const { owner, repo } = await params;
@@ -33,14 +33,16 @@ export default async function RepoSafetyRepoPage(props: Params) {
   const name = await named(props);
   if (!name) notFound();
   const stored = await cachedRepoSafety(name).catch(() => null);
+  // ?check=1 (after buying a pass) runs a fresh check right away so the dependency details load.
+  const fresh = (await props.searchParams)?.check === "1";
   return <main className="site-shell"><SiteNav /><article className="guide leak-page">
     <p className="section-kicker"><Link href="/is-this-repo-safe">IS THIS GITHUB REPO SAFE?</Link></p>
     <h1>Is {name} safe to run?</h1>
     <p className="guide-lead">A read of the repository&apos;s code for the tricks malware repos use, before you download or run it. Nothing is run.</p>
-    {stored ? <>
+    {stored && !fresh ? <>
       <RepoSafetyResult report={stored} />
       <h2>Check it again</h2>
-      <p>Repositories change. Run a new check on the latest commit:</p>
+      <p>Repositories change. Run a new check on the latest commit, including its npm dependencies:</p>
       <RepoSafetyForm initial={name} autorun={false} />
     </> : <RepoSafetyForm initial={name} />}
   </article></main>;

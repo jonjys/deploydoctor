@@ -18,6 +18,12 @@ export function scanRepoFromContext(context: string | null | undefined): string 
   return /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)$/.exec(context ?? "")?.[1];
 }
 
+/** owner/name when a pass was bought to unlock a repository's dependency check ("safety:owner/name"). */
+export function safetyRepoFromContext(context: string | null | undefined): string | undefined {
+  const repo = /^safety:([\w.-]+\/[\w.-]+)$/.exec(context ?? "")?.[1];
+  return repo && !repo.split("/").some(part => /^\.+$/.test(part)) ? repo : undefined;
+}
+
 /**
  * The checkout.session.completed event the confirm route applies itself when the buyer is back before the webhook.
  * Its own id keeps it apart from the real event, and dating it to the session's creation means every real event

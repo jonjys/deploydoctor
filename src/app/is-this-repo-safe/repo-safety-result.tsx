@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { CopyTextButton } from "@/components/copy-text-button";
 import type { RepoSafetyReport, Severity } from "@/lib/repo-safety";
+import type { DependencyReport, DependencyTeaser } from "@/lib/dependency-safety";
+import { DependencySection } from "./dependency-section";
 
 const VERDICT = {
   "red-flags": { className: "is-bad", line: "Do not download or run it until you have read the lines below." },
@@ -12,7 +14,7 @@ const LABEL: Record<Severity, string> = { high: "Red flag", medium: "Read this",
 const SITE = "https://deploydoctor.nyttolabs.com";
 
 /** One safety result. Used by the form after a check and by the repository's own page from the stored check. */
-export function RepoSafetyResult({ report }: { report: RepoSafetyReport }) {
+export function RepoSafetyResult({ report, dependencies }: { report: RepoSafetyReport; dependencies?: DependencyReport | DependencyTeaser | null }) {
   const verdict = VERDICT[report.verdict];
   const page = `${SITE}/is-this-repo-safe/${report.repo}`;
   const badge = `[![DeployDoctor safety](${SITE}/badge/safe/${report.repo}.svg)](${page})`;
@@ -36,6 +38,7 @@ export function RepoSafetyResult({ report }: { report: RepoSafetyReport }) {
           ))}
         </ol>
       )}
+      {dependencies && <DependencySection repo={report.repo} dependencies={dependencies} />}
       <p className="plugin-line">A static check reads code for known tricks. It cannot prove a program is safe, and new tricks appear every week. If in doubt, run it in a virtual machine or not at all.</p>
       {report.verdict !== "red-flags" && (
         <div className="safe-verify">
