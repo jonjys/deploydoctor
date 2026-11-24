@@ -11,8 +11,10 @@ export function DependencySection({ repo, dependencies }: { repo: string; depend
   return (
     <section className="dep-check" aria-labelledby="dep-check-title">
       <p className="section-kicker">DEPENDENCIES</p>
-      <h2 id="dep-check-title">{flagged ? `${flagged} of its packages need a look` : "No red flags in its packages"}</h2>
-      <p className="plugin-line">{scope}. Checked for known malware and security advisories, look-alike names, unexpected install scripts and packages almost nobody uses.</p>
+      <h2 id="dep-check-title">{flagged ? `${flagged} of its packages need a look` : dependencies.lockfile ? "No red flags in its packages" : "No red flags in its direct packages"}</h2>
+      <p className="plugin-line">{scope}. {dependencies.lockfile
+        ? "Checked for known malware and security advisories, look-alike names, unexpected install scripts and packages almost nobody uses."
+        : "Without a committed lockfile the exact versions are unknown, so malware and security advisories could not be checked. Look-alike names and packages almost nobody uses were."}</p>
       {"locked" in dependencies ? (
         flagged ? (
           <div className="plan-unlock">
