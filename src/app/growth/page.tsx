@@ -10,6 +10,7 @@ import { FindingStats } from "@/components/finding-stats";
 import { scanInsights } from "@/lib/scan-insights-store";
 import { scansInWindow } from "@/lib/scan-insights";
 import { readGrowthReport } from "@/lib/growth-data";
+import { fixDiagnostics } from "@/lib/fix-pr/diagnostics";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -53,7 +54,7 @@ export default async function GrowthPage({
     </section>
   </main>;
   const days = params.days === "7" ? 7 : 30;
-  const [report, insights, github] = await Promise.all([readGrowthReport(days), scanInsights(), githubApp()]);
+  const [report, insights, github, fix] = await Promise.all([readGrowthReport(days), scanInsights(), githubApp(), fixDiagnostics()]);
   const scans = insights ? scansInWindow(insights, report.started, report.ended) : null;
   const guidePages = report.traffic?.pages.filter((page) => page.path.startsWith("/guides/")).sort((a, b) => b.pageviews - a.pageviews) ?? [];
   const maxViews = Math.max(1, ...(report.traffic?.days.map((row) => row.pageviews) ?? []));
@@ -69,6 +70,14 @@ export default async function GrowthPage({
       </div>
     </header>
     <section className="growth-card"><h2>GitHub private scans</h2>{github ? <p>GitHub connection is configured. Customers can connect GitHub and select repositories without creating personal access tokens.</p> : <><p>One-time owner activation is required. Register a read-only GitHub App through the guided flow. GitHub credentials are returned directly to the server and encrypted. Customers will not need to create tokens.</p><form action="/growth/github/setup" method="post"><button className="cta-button" type="submit">Activate GitHub connection →</button></form></>}</section>
+    <section className="growth-card" id="growth-fix-pr"><h2>Fix PR ($5): {fix.enabled ? "on" : "off"}</h2>
+      <p>{fix.enabled ? "Fix pull requests are offered and can be bought." : "Fix pull requests are not offered yet. Every line marked ✗ below must be fixed in Vercel (Settings, Environment Variables, Production), then redeploy."}</p>
+      <ul className="growth-checklist">
+        {fix.checks.map(check => <li key={check.label}><strong>{check.ok ? "✓" : "✗"} {check.label}</strong>{!check.ok && <span> {check.fix}</span>}</li>)}
+        <li><strong>{fix.identity.ok ? "✓" : "✗"} GitHub accepts the private key</strong><span> {fix.identity.detail}</span></li>
+      </ul>
+      <p className="growth-note">No key or secret is shown here, only whether each requirement holds.</p>
+    </section>
     <p className="growth-note">Period: {report.started.slice(0,10)} to {report.ended.slice(0,10)} UTC. Metrics are fetched when you refresh this page, not streamed.</p>
     <nav className="growth-section-nav" aria-label="Dashboard sections"><a href="#growth-overview">Overview</a><a href="#growth-findings">Scan findings</a><a href="#growth-acquisition">Traffic and guides</a><a href="#growth-experiments">Campaigns</a><a href="#growth-projections">Simulator</a><Link href="/stats">Public stats ↗</Link></nav>
     <section id="growth-overview" className="growth-metrics" aria-label="Growth metrics">
